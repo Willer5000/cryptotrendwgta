@@ -1,0 +1,9 @@
+flask
+gunicorn
+pandas
+numpy
+requests
+plotly
+redis
+python-dotenv
+ta
