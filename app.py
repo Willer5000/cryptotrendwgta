@@ -11,14 +11,29 @@ from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-# Configuración Redis mejorada
+# Configuración Redis mejorada para Render
 def get_redis_connection():
-    redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+    redis_url = os.getenv('REDIS_URL')
+    if not redis_url:
+        print("⚠️ REDIS_URL no configurada. Usando modo sin Redis.")
+        return None
+    
+    print(f"🔗 Conectando a Redis: {redis_url}")
     try:
-        return redis.Redis.from_url(redis_url, socket_timeout=5, socket_connect_timeout=5)
-    except redis.ConnectionError:
+        r = redis.Redis.from_url(
+            redis_url,
+            socket_timeout=5,
+            socket_connect_timeout=5,
+            decode_responses=False
+        )
+        r.ping()  # Test de conexión
+        print("✅ Conexión Redis exitosa")
+        return r
+    except Exception as e:
+        print(f"❌ Error conectando a Redis: {str(e)}")
         return None
 
+# Inicializar conexión Redis
 r = get_redis_connection()
 
 # Mapeo de timeframes
@@ -166,12 +181,12 @@ def get_top_symbols():
     cache_key = "top_symbols"
     
     if r:
-        cached = r.get(cache_key)
-        if cached:
-            try:
+        try:
+            cached = r.get(cache_key)
+            if cached:
                 return json.loads(cached)
-            except:
-                pass
+        except Exception as e:
+            print(f"Redis error: {str(e)}")
     
     try:
         url = "https://api.kucoin.com/api/v1/market/allTickers"
@@ -191,7 +206,10 @@ def get_top_symbols():
         symbols = [ticker['symbol'] for ticker in sorted_tickers]
         
         if r:
-            r.setex(cache_key, 3600, json.dumps(symbols))
+            try:
+                r.setex(cache_key, 3600, json.dumps(symbols))
+            except Exception as e:
+                print(f"Redis set error: {str(e)}")
         return symbols
     except Exception as e:
         print(f"Error getting top symbols: {str(e)}")
@@ -201,12 +219,12 @@ def fetch_ohlcv(symbol, timeframe, limit=500):
     cache_key = f"{symbol}_{timeframe}"
     
     if r:
-        cached = r.get(cache_key)
-        if cached:
-            try:
+        try:
+            cached = r.get(cache_key)
+            if cached:
                 return pd.read_json(cached)
-            except:
-                pass
+        except Exception as e:
+            print(f"Redis get error: {str(e)}")
     
     kucoin_tf = {
         '15m': '15min',
@@ -249,8 +267,11 @@ def fetch_ohlcv(symbol, timeframe, limit=500):
         
         # Guardar en caché solo si tenemos datos válidos
         if not df.empty and r:
-            r.setex(cache_key, 600, df.to_json())
-            
+            try:
+                r.setex(cache_key, 600, df.to_json())
+            except Exception as e:
+                print(f"Redis set error: {str(e)}")
+                
         return df
     except Exception as e:
         print(f"Error fetching data for {symbol} {timeframe}: {str(e)}")
@@ -306,18 +327,21 @@ def recommendations():
         
         # Intentar obtener de caché si Redis está disponible
         if r:
-            cached = r.get(cache_key)
-            if cached:
-                try:
+            try:
+                cached = r.get(cache_key)
+                if cached:
                     all_recs = json.loads(cached)
-                except:
-                    pass
+            except Exception as e:
+                print(f"Redis get error: {str(e)}")
         
         # Generar nuevas recomendaciones si no hay caché
         if not all_recs:
             all_recs = generate_recommendations(timeframe)
             if r and all_recs:
-                r.setex(cache_key, 600, json.dumps(all_recs))
+                try:
+                    r.setex(cache_key, 600, json.dumps(all_recs))
+                except Exception as e:
+                    print(f"Redis set error: {str(e)}")
         
         # Filtrado seguro
         filtered = []
@@ -343,7 +367,7 @@ def heatmap_data():
         data = []
         
         for tf in timeframes:
-            recs = generate_recommendations(tf)
+            recs = generate_recommendations(tf) or []
             for rec in recs:
                 try:
                     data.append({
@@ -360,5 +384,15 @@ def heatmap_data():
         print(f"Error in heatmap endpoint: {str(e)}")
         return jsonify([])
 
+@app.route('/status')
+def status():
+    redis_status = "active" if r and r.ping() else "inactive"
+    return jsonify({
+        "status": "online",
+        "redis": redis_status,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
 if __name__ == '__main__':
-    app.run(debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
