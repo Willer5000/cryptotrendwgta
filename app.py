@@ -14,29 +14,22 @@ app = Flask(__name__)
 # Configuración Redis mejorada para Render
 def get_redis_connection():
     redis_url = os.getenv('REDIS_URL')
-    
-    # Intenta obtener de variables de entorno alternativas
-    if not redis_url:
-        redis_url = os.getenv('REDISCLOUD_URL')
-    
-    if not redis_url:
+    if redis_url:
+        try:
+            r = redis.Redis.from_url(
+                redis_url,
+                socket_timeout=5,
+                socket_connect_timeout=5,
+                decode_responses=False
+            )
+            r.ping()  # Test de conexión
+            print("✅ Conexión Redis exitosa")
+            return r
+        except Exception as e:
+            print(f"❌ Error conectando a Redis: {str(e)}")
+            return None
+    else:
         print("⚠️ REDIS_URL no configurada. Usando modo sin Redis.")
-        return None
-    
-    print(f"🔗 Conectando a Redis: {redis_url}")
-    try:
-        r = redis.Redis.from_url(
-            redis_url,
-            socket_timeout=5,
-            socket_connect_timeout=5,
-            decode_responses=False,
-            ssl_cert_reqs=None  # Importante para conexiones SSL
-        )
-        r.ping()  # Test de conexión
-        print("✅ Conexión Redis exitosa")
-        return r
-    except Exception as e:
-        print(f"❌ Error conectando a Redis: {str(e)}")
         return None
 
 # Inicializar conexión Redis
@@ -55,7 +48,7 @@ TIMEFRAME_MAP = {
 
 # 1. Funciones de indicadores corregidas
 def ema_macro_signal(df):
-    if len(df) < 100:
+    if len(df) < 200:
         return 0
     
     try:
@@ -66,34 +59,35 @@ def ema_macro_signal(df):
             return 0
             
         return 1 if ema100.iloc[-1] > ema200.iloc[-1] else -1
-    except Exception:
+    except Exception as e:
+        print(f"Error en EMA: {str(e)}")
         return 0
 
 def volume_profile_signal(df, bins=20):
-    if len(df) < 50:
+    if len(df) < 100:
         return 0
         
     try:
         typical_price = (df['high'] + df['low'] + df['close']) / 3
-        min_tp = typical_price.min()
-        max_tp = typical_price.max()
+        min_tp, max_tp = typical_price.min(), typical_price.max()
         
-        if min_tp >= max_tp:
+        if min_tp == max_tp:
             return 0
             
         bin_size = (max_tp - min_tp) / bins
         bin_edges = np.linspace(min_tp, max_tp, bins + 1)
         
-        hist, _ = np.histogram(typical_price, bins=bin_edges, weights=df['volume'])
+        hist, bin_edges = np.histogram(typical_price, bins=bin_edges, weights=df['volume'])
         max_vol_index = np.argmax(hist)
-        poc = bin_edges[max_vol_index]
+        poc = bin_edges[max_vol_index] + bin_size / 2
         
         return 1 if df['close'].iloc[-1] > poc else -1
-    except Exception:
+    except Exception as e:
+        print(f"Error en Volume Profile: {str(e)}")
         return 0
 
 def adaptive_rsi_value(df):
-    if len(df) < 20:
+    if len(df) < 30:
         return 50
         
     try:
@@ -104,18 +98,11 @@ def adaptive_rsi_value(df):
             return 50
             
         mean_close = df['close'].mean()
-        
-        # Evitar división por cero
-        if mean_close == 0:
-            return rsi.iloc[-1]
-            
         volatility_factor = atr.iloc[-1] / mean_close
         
-        # Limitar factor de volatilidad
-        volatility_factor = min(volatility_factor, 0.5)  # Máximo 50% de ajuste
-        
         return rsi.iloc[-1] * (1 + volatility_factor)
-    except Exception:
+    except Exception as e:
+        print(f"Error en RSI: {str(e)}")
         return 50
 
 # 2. Sistema de puntuación mejorado
@@ -150,15 +137,8 @@ def calculate_score(symbol, df):
 # 3. Gestión de riesgo robusta
 def calculate_risk_parameters(df, direction):
     try:
-        # Calcular ATR con ventana más pequeña si es necesario
-        atr_window = min(14, len(df) - 1)
-        if atr_window < 5:
-            atr_value = df['high'].iloc[-1] - df['low'].iloc[-1]
-        else:
-            atr = ta.volatility.average_true_range(
-                df['high'], df['low'], df['close'], window=atr_window)
-            atr_value = atr.iloc[-1]
-        
+        atr = ta.volatility.average_true_range(
+            df['high'], df['low'], df['close'], window=14).iloc[-1]
         close = df['close'].iloc[-1]
         
         # Asegurar mínimo 5 velas disponibles
@@ -166,17 +146,17 @@ def calculate_risk_parameters(df, direction):
         
         if direction == 'LONG':
             entry = close * 1.001
-            sl = min(df['low'].iloc[-lookback:].min(), close - (atr_value * 1.5))
-            tp1 = close + (atr_value * 1)
-            tp2 = close + (atr_value * 2)
-            tp3 = close + (atr_value * 3)
+            sl = min(df['low'].iloc[-lookback:].min(), close - (atr * 1.5))
+            tp1 = close + (atr * 1)
+            tp2 = close + (atr * 2)
+            tp3 = close + (atr * 3)
             rr = abs((entry - sl) / (tp3 - entry)) if (tp3 - entry) > 0 else 1
         else:  # SHORT
             entry = close * 0.999
-            sl = max(df['high'].iloc[-lookback:].max(), close + (atr_value * 1.5))
-            tp1 = close - (atr_value * 1)
-            tp2 = close - (atr_value * 2)
-            tp3 = close - (atr_value * 3)
+            sl = max(df['high'].iloc[-lookback:].max(), close + (atr * 1.5))
+            tp1 = close - (atr * 1)
+            tp2 = close - (atr * 2)
+            tp3 = close - (atr * 3)
             rr = abs((entry - sl) / (entry - tp3)) if (entry - tp3) > 0 else 1
         
         return {
@@ -190,7 +170,7 @@ def calculate_risk_parameters(df, direction):
     except Exception as e:
         print(f"Error calculating risk for {direction}: {str(e)}")
         return {
-            'entry': close,
+            'entry': 0,
             'stop_loss': 0,
             'tp1': 0,
             'tp2': 0,
@@ -202,7 +182,12 @@ def calculate_risk_parameters(df, direction):
 def get_top_symbols():
     cache_key = "top_symbols"
     
-    # Intento obtener de Redis si está disponible
+    # Usar símbolos predeterminados si Redis no está disponible
+    default_symbols = [
+        "BTC-USDT", "ETH-USDT", "BNB-USDT", "SOL-USDT", "XRP-USDT",
+        "ADA-USDT", "DOGE-USDT", "AVAX-USDT", "DOT-USDT", "LINK-USDT"
+    ]
+    
     if r:
         try:
             cached = r.get(cache_key)
@@ -210,66 +195,54 @@ def get_top_symbols():
                 return json.loads(cached)
         except Exception as e:
             print(f"Redis get error: {str(e)}")
-    
-    # Lista de símbolos de respaldo
-    backup_symbols = [
-        "BTC-USDT", "ETH-USDT", "BNB-USDT", "XRP-USDT", "ADA-USDT",
-        "SOL-USDT", "DOGE-USDT", "DOT-USDT", "TRX-USDT", "MATIC-USDT"
-    ]
+            return default_symbols
     
     try:
         url = "https://api.kucoin.com/api/v1/market/allTickers"
         response = requests.get(url, timeout=10)
+        response.raise_for_status()  # Lanza excepción para códigos 400-599
         
-        if response.status_code != 200:
-            print(f"KuCoin API error: {response.status_code}")
-            return backup_symbols
-            
         data = response.json()
         
         if data.get('code') != '200000':
             print(f"KuCoin API error: {data.get('msg')}")
-            return backup_symbols
+            return default_symbols
         
         tickers = data['data']['ticker']
         sorted_tickers = sorted(
             tickers, 
-            key=lambda x: float(x.get('vol', 0)), 
+            key=lambda x: float(x['vol']), 
             reverse=True
         )[:50]
         
-        symbols = [ticker['symbol'] for ticker in sorted_tickers if '-' in ticker['symbol']]
+        symbols = [ticker['symbol'] for ticker in sorted_tickers]
         
-        if not symbols:
-            return backup_symbols
-            
         if r:
             try:
                 r.setex(cache_key, 3600, json.dumps(symbols))
             except Exception as e:
                 print(f"Redis set error: {str(e)}")
-        
         return symbols
     except Exception as e:
         print(f"Error getting top symbols: {str(e)}")
-        return backup_symbols
+        return default_symbols
 
 def fetch_ohlcv(symbol, timeframe, limit=500):
+    # Manejar símbolos con formato incorrecto
+    if '-' not in symbol:
+        symbol = symbol.replace('USDT', '-USDT')
+    
     cache_key = f"{symbol}_{timeframe}"
     
-    # Intento obtener de Redis si está disponible
     if r:
         try:
             cached = r.get(cache_key)
             if cached:
-                df = pd.read_json(cached)
-                if not df.empty:
-                    return df
+                return pd.read_json(cached)
         except Exception as e:
             print(f"Redis get error: {str(e)}")
     
-    # Mapeo de timeframes
-    kucoin_tf_map = {
+    kucoin_tf = {
         '15m': '15min',
         '30m': '30min',
         '1h': '1hour',
@@ -277,31 +250,28 @@ def fetch_ohlcv(symbol, timeframe, limit=500):
         '4h': '4hour',
         '1d': '1day',
         '1w': '1week'
-    }
-    
-    kucoin_tf = kucoin_tf_map.get(timeframe, '1hour')
+    }.get(timeframe, '1hour')
     
     end_time = int(time.time())
-    start_time = end_time - (TIMEFRAME_MAP[timeframe] * limit * 1.5)
+    start_time = end_time - (TIMEFRAME_MAP[timeframe] * limit * 1.2)
     
     try:
-        url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}"
+        url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}&startAt={start_time}&endAt={end_time}"
         response = requests.get(url, timeout=15)
+        response.raise_for_status()
         
-        if response.status_code != 200:
-            print(f"KuCoin API error for {symbol}: {response.status_code}")
+        data = response.json()
+        if data.get('code') != '200000':
+            print(f"KuCoin candles error for {symbol} {timeframe}: {data.get('msg')}")
             return None
-        
-        data = response.json().get('data', [])
-        if not data:
+            
+        candles = data.get('data', [])
+        if not candles:
             print(f"No data for {symbol} {timeframe}")
             return None
         
         # Crear DataFrame con manejo de datos vacíos
-        columns = ['timestamp', 'open', 'close', 'high', 'low', 'volume']
-        df = pd.DataFrame(data, columns=columns)
-        
-        # Revertir orden y resetear índice
+        df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume'])
         df = df.iloc[::-1].reset_index(drop=True)
         
         # Convertir tipos de datos
@@ -312,7 +282,6 @@ def fetch_ohlcv(symbol, timeframe, limit=500):
         # Eliminar filas con valores nulos
         df = df.dropna()
         
-        # Limitar a 500 velas máximo
         if len(df) > limit:
             df = df.tail(limit)
         
@@ -336,7 +305,8 @@ def generate_recommendations(timeframe):
     for symbol in symbols:
         try:
             df = fetch_ohlcv(symbol, timeframe)
-            if df is None or len(df) < 30:
+            if df is None or len(df) < 50:
+                print(f"Not enough data for {symbol} in {timeframe}")
                 continue
                 
             score_data = calculate_score(symbol, df)
@@ -346,7 +316,7 @@ def generate_recommendations(timeframe):
                 risk_data = calculate_risk_parameters(df, score_data['direction'])
                 
                 # Solo agregar si tenemos datos de riesgo válidos
-                if risk_data['entry'] > 0 and risk_data['risk_reward'] > 0:
+                if risk_data['entry'] > 0:
                     recommendations.append({
                         **score_data,
                         **risk_data,
@@ -360,10 +330,14 @@ def generate_recommendations(timeframe):
     recommendations.sort(key=lambda x: x['confidence'], reverse=True)
     return recommendations[:10]
 
-# 6. Endpoints con manejo de errores mejorado
+# 6. Endpoints con manejo de errores
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/favicon.ico')
+def favicon():
+    return '', 404  # Resolver error 404 para favicon
 
 @app.route('/recommendations')
 def recommendations():
@@ -373,8 +347,27 @@ def recommendations():
         direction = request.args.get('direction', 'ALL')
         min_rr = float(request.args.get('min_rr', 1))
         
-        # Generar recomendaciones directamente sin caché si Redis falla
-        all_recs = generate_recommendations(timeframe)
+        cache_key = f"recs_{timeframe}"
+        all_recs = None
+        
+        # Intentar obtener de caché si Redis está disponible
+        if r:
+            try:
+                cached = r.get(cache_key)
+                if cached:
+                    all_recs = json.loads(cached)
+            except Exception as e:
+                print(f"Redis get error: {str(e)}")
+        
+        # Generar nuevas recomendaciones si no hay caché
+        if all_recs is None:
+            print(f"Generando nuevas recomendaciones para {timeframe}")
+            all_recs = generate_recommendations(timeframe) or []
+            if r and all_recs:
+                try:
+                    r.setex(cache_key, 600, json.dumps(all_recs))
+                except Exception as e:
+                    print(f"Redis set error: {str(e)}")
         
         # Filtrado seguro
         filtered = []
@@ -419,19 +412,19 @@ def heatmap_data():
 
 @app.route('/status')
 def status():
-    try:
-        redis_status = "active" if r and r.ping() else "inactive"
-        return jsonify({
-            "status": "online",
-            "redis": redis_status,
-            "timestamp": datetime.utcnow().isoformat()
-        })
-    except:
-        return jsonify({
-            "status": "online",
-            "redis": "inactive",
-            "timestamp": datetime.utcnow().isoformat()
-        })
+    redis_status = "inactive"
+    if r:
+        try:
+            if r.ping():
+                redis_status = "active"
+        except:
+            pass
+    
+    return jsonify({
+        "status": "online",
+        "redis": redis_status,
+        "timestamp": datetime.utcnow().isoformat()
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
