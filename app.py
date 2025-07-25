@@ -8,6 +8,7 @@ import ta
 import redis
 from flask import Flask, render_template, jsonify, request
 from datetime import datetime, timedelta
+import re
 
 app = Flask(__name__)
 
@@ -217,12 +218,15 @@ def get_top_symbols():
         
         symbols = [ticker['symbol'] for ticker in sorted_tickers]
         
+        # Filtrar símbolos con caracteres especiales
+        valid_symbols = [s for s in symbols if re.match(r'^[A-Z0-9-]+$', s)]
+        
         if r:
             try:
-                r.setex(cache_key, 3600, json.dumps(symbols))
+                r.setex(cache_key, 3600, json.dumps(valid_symbols))
             except Exception as e:
                 print(f"Redis set error: {str(e)}")
-        return symbols
+        return valid_symbols
     except Exception as e:
         print(f"Error getting top symbols: {str(e)}")
         return default_symbols
@@ -231,6 +235,11 @@ def fetch_ohlcv(symbol, timeframe, limit=500):
     # Manejar símbolos con formato incorrecto
     if '-' not in symbol:
         symbol = symbol.replace('USDT', '-USDT')
+    
+    # Filtrar símbolos con caracteres especiales
+    if not re.match(r'^[A-Z0-9-]+$', symbol):
+        print(f"Símbolo inválido omitido: {symbol}")
+        return None
     
     cache_key = f"{symbol}_{timeframe}"
     
@@ -256,7 +265,7 @@ def fetch_ohlcv(symbol, timeframe, limit=500):
     start_time = end_time - (TIMEFRAME_MAP[timeframe] * limit * 1.2)
     
     try:
-        url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}&startAt={start_time}&endAt={end_time}"
+        url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}&startAt={int(start_time)}&endAt={int(end_time)}"
         response = requests.get(url, timeout=15)
         response.raise_for_status()
         
@@ -293,6 +302,13 @@ def fetch_ohlcv(symbol, timeframe, limit=500):
                 print(f"Redis set error: {str(e)}")
                 
         return df
+    except requests.exceptions.HTTPError as e:
+        # Manejar específicamente errores 400
+        if e.response.status_code == 400:
+            print(f"Símbolo no soportado o parámetros inválidos: {symbol} - {timeframe}")
+        else:
+            print(f"HTTP error for {symbol} {timeframe}: {str(e)}")
+        return None
     except Exception as e:
         print(f"Error fetching data for {symbol} {timeframe}: {str(e)}")
         return None
@@ -328,7 +344,7 @@ def generate_recommendations(timeframe):
     
     # Ordenar por confianza y limitar a 10
     recommendations.sort(key=lambda x: x['confidence'], reverse=True)
-    return recommendations[:10]
+    return recommendations[:10] if recommendations else []
 
 # 6. Endpoints con manejo de errores
 @app.route('/')
