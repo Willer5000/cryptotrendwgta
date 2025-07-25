@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <style>
-        /* Estilos mejorados */
         :root {
             --primary: #0d6efd;
             --secondary: #6c757d;
@@ -106,26 +105,6 @@
             border-left: 4px solid var(--primary);
         }
         
-        .indicator-card {
-            border-left: 4px solid var(--primary);
-        }
-        
-        .strategy-card {
-            border-left: 4px solid var(--success);
-        }
-        
-        .risk-card {
-            border-left: 4px solid var(--danger);
-        }
-        
-        .author-card {
-            background: linear-gradient(135deg, #1a2a6c, #b21f1f);
-            color: white;
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-        }
-        
         .loading-spinner {
             display: flex;
             justify-content: center;
@@ -157,6 +136,11 @@
         .status-offline {
             background-color: var(--danger);
             color: white;
+        }
+        
+        .status-loading {
+            background-color: var(--warning);
+            color: black;
         }
         
         footer {
@@ -581,6 +565,11 @@
             // Función para obtener datos
             function fetchData() {
                 showLoadingState(true);
+                
+                // Actualizar estado a cargando
+                statusIndicator.className = 'status-indicator status-loading';
+                statusIndicator.innerHTML = '<i class="fas fa-sync-alt fa-spin me-1"></i> Actualizando...';
+                
                 const params = new URLSearchParams({
                     timeframe: timeframeSelect.value,
                     min_confidence: confidenceSlider.value,
@@ -618,6 +607,10 @@
                         statusIndicator.className = 'status-indicator status-offline';
                         statusIndicator.innerHTML = '<i class="fas fa-circle me-1"></i> Sistema temporalmente fuera de línea';
                         showLoadingState(false);
+                        
+                        // Mostrar mensaje de error en la tabla
+                        const tableBody = document.getElementById('recommendationTable');
+                        tableBody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">Error cargando datos. Intente nuevamente en unos minutos.</td></tr>';
                     });
             }
             
