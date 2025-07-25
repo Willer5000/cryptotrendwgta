@@ -46,20 +46,18 @@ TIMEFRAME_MAP = {
     '1w': 7*24*60*60
 }
 
-# Cargar símbolos populares desde archivo
-def load_popular_symbols():
-    try:
-        with open('popular_symbols.txt', 'r') as f:
-            symbols = [line.strip() for line in f.readlines() if line.strip()]
-            print(f"✅ Cargados {len(symbols)} símbolos populares")
-            return symbols
-    except Exception as e:
-        print(f"❌ Error cargando símbolos populares: {str(e)}")
-        # Lista de respaldo si el archivo no existe
-        return [
-            "BTC-USDT", "ETH-USDT", "BNB-USDT", "SOL-USDT", "XRP-USDT",
-            "ADA-USDT", "AVAX-USDT", "DOGE-USDT", "DOT-USDT", "LINK-USDT"
-        ]
+# Lista local de criptomonedas populares
+POPULAR_SYMBOLS = []
+try:
+    with open('top_symbols.txt', 'r') as f:
+        POPULAR_SYMBOLS = [line.strip() for line in f.readlines() if line.strip()]
+    print(f"✅ Cargados {len(POPULAR_SYMBOLS)} símbolos populares")
+except Exception as e:
+    print(f"❌ Error cargando top_symbols.txt: {str(e)}")
+    POPULAR_SYMBOLS = [
+        "BTC-USDT", "ETH-USDT", "BNB-USDT", "SOL-USDT", "XRP-USDT",
+        "ADA-USDT", "DOGE-USDT", "AVAX-USDT", "DOT-USDT", "LINK-USDT"
+    ]
 
 # 1. Funciones de indicadores corregidas
 def ema_macro_signal(df):
@@ -193,19 +191,47 @@ def calculate_risk_parameters(df, direction):
             'risk_reward': 0
         }
 
-# 4. Fuente de datos con manejo de errores mejorado
+# 4. Fuente de datos con lista local
 def get_top_symbols():
-    # Usar siempre la lista de símbolos populares
-    symbols = load_popular_symbols()
-    print(f"🔢 Usando {len(symbols)} símbolos populares")
+    cache_key = "top_symbols"
+    
+    # Usar siempre la lista local como respaldo principal
+    symbols = POPULAR_SYMBOLS[:50]  # Limitar a 50 símbolos
+    
+    if r:
+        try:
+            # Intentar actualizar desde KuCoin si Redis está disponible
+            url = "https://api.kucoin.com/api/v1/market/allTickers"
+            response = requests.get(url, timeout=10)
+            data = response.json()
+            
+            if data.get('code') == '200000':
+                tickers = data['data']['ticker']
+                sorted_tickers = sorted(
+                    tickers, 
+                    key=lambda x: float(x['vol']), 
+                    reverse=True
+                )[:100]  # Tomar top 100 por volumen
+                
+                # Filtrar solo símbolos populares conocidos
+                kucoin_symbols = [ticker['symbol'] for ticker in sorted_tickers]
+                valid_symbols = [s for s in kucoin_symbols if s in POPULAR_SYMBOLS]
+                
+                # Usar los símbolos de KuCoin si son válidos
+                if valid_symbols:
+                    symbols = valid_symbols[:50]
+                    r.setex(cache_key, 3600, json.dumps(symbols))
+        except Exception as e:
+            print(f"Error actualizando símbolos desde KuCoin: {str(e)}")
+    
     return symbols
 
 def fetch_ohlcv(symbol, timeframe, limit=500):
-    # Manejar símbolos con formato incorrecto
-    if '-' not in symbol:
-        symbol = symbol.replace('USDT', '-USDT')
+    # Limpiar símbolo
+    clean_symbol = symbol.replace(' ', '').replace('-', '').upper() + '-USDT'
+    clean_symbol = clean_symbol.replace('--', '-')
     
-    cache_key = f"{symbol}_{timeframe}"
+    cache_key = f"{clean_symbol}_{timeframe}"
     
     if r:
         try:
@@ -229,37 +255,37 @@ def fetch_ohlcv(symbol, timeframe, limit=500):
     start_time = end_time - (TIMEFRAME_MAP[timeframe] * limit * 1.2)
     
     try:
-        url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}&startAt={start_time}&endAt={end_time}"
+        url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={clean_symbol}&startAt={start_time}&endAt={end_time}"
         response = requests.get(url, timeout=15)
-        response.raise_for_status()
+        
+        # Si hay error 400, probar con símbolo alternativo
+        if response.status_code == 400:
+            # Intentar sin el sufijo USDT
+            alt_symbol = clean_symbol.replace('-USDT', '')
+            url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={alt_symbol}&startAt={start_time}&endAt={end_time}"
+            response = requests.get(url, timeout=15)
+            
+        if response.status_code != 200:
+            return None
         
         data = response.json()
-        if data.get('code') != '200000':
-            print(f"KuCoin candles error for {symbol} {timeframe}: {data.get('msg')}")
-            return None
-            
-        candles = data.get('data', [])
-        if not candles:
-            print(f"No data for {symbol} {timeframe}")
+        if data.get('code') != '200000' or not data.get('data'):
             return None
         
-        # Crear DataFrame con manejo de datos vacíos
-        df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume'])
+        # Crear DataFrame
+        df = pd.DataFrame(data['data'], columns=['timestamp', 'open', 'close', 'high', 'low', 'volume'])
         df = df.iloc[::-1].reset_index(drop=True)
         
         # Convertir tipos de datos
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', errors='coerce')
         for col in ['open', 'close', 'high', 'low', 'volume']:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-        
-        # Eliminar filas con valores nulos
-        df = df.dropna()
+            df[col] = df[col].astype(float)
         
         if len(df) > limit:
             df = df.tail(limit)
         
-        # Guardar en caché solo si tenemos datos válidos
-        if not df.empty and r:
+        # Guardar en caché
+        if r:
             try:
                 r.setex(cache_key, 600, df.to_json())
             except Exception as e:
@@ -267,10 +293,10 @@ def fetch_ohlcv(symbol, timeframe, limit=500):
                 
         return df
     except Exception as e:
-        print(f"Error fetching data for {symbol} {timeframe}: {str(e)}")
+        print(f"Error fetching data for {clean_symbol} {timeframe}: {str(e)}")
         return None
 
-# 5. Procesamiento principal con redundancia
+# 5. Procesamiento principal optimizado
 def generate_recommendations(timeframe):
     symbols = get_top_symbols()
     recommendations = []
@@ -278,13 +304,13 @@ def generate_recommendations(timeframe):
     for symbol in symbols:
         try:
             df = fetch_ohlcv(symbol, timeframe)
-            if df is None or len(df) < 50:
+            if df is None or len(df) < 100:
                 continue
                 
             score_data = calculate_score(symbol, df)
             
             # Solo considerar señales válidas
-            if score_data['direction'] in ['LONG', 'SHORT']:
+            if score_data['direction'] in ['LONG', 'SHORT'] and score_data['confidence'] > 50:
                 risk_data = calculate_risk_parameters(df, score_data['direction'])
                 
                 # Solo agregar si tenemos datos de riesgo válidos
@@ -302,7 +328,7 @@ def generate_recommendations(timeframe):
     recommendations.sort(key=lambda x: x['confidence'], reverse=True)
     return recommendations[:10]
 
-# 6. Endpoints con manejo de errores
+# 6. Endpoints con manejo de errores mejorado
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -315,14 +341,14 @@ def favicon():
 def recommendations():
     try:
         timeframe = request.args.get('timeframe', '1h')
-        min_confidence = float(request.args.get('min_confidence', 0))
+        min_confidence = float(request.args.get('min_confidence', 50))
         direction = request.args.get('direction', 'ALL')
         min_rr = float(request.args.get('min_rr', 1))
         
         cache_key = f"recs_{timeframe}"
         all_recs = None
         
-        # Intentar obtener de caché si Redis está disponible
+        # Intentar obtener de caché
         if r:
             try:
                 cached = r.get(cache_key)
@@ -332,8 +358,7 @@ def recommendations():
                 print(f"Redis get error: {str(e)}")
         
         # Generar nuevas recomendaciones si no hay caché
-        if all_recs is None:
-            print(f"Generando nuevas recomendaciones para {timeframe}")
+        if not all_recs:
             all_recs = generate_recommendations(timeframe) or []
             if r and all_recs:
                 try:
@@ -341,16 +366,13 @@ def recommendations():
                 except Exception as e:
                     print(f"Redis set error: {str(e)}")
         
-        # Filtrado seguro
-        filtered = []
-        for rec in all_recs:
-            try:
-                if (rec['confidence'] >= min_confidence and
-                    (direction == 'ALL' or rec['direction'] == direction) and
-                    rec['risk_reward'] >= min_rr):
-                    filtered.append(rec)
-            except:
-                continue
+        # Filtrado
+        filtered = [
+            rec for rec in all_recs 
+            if rec['confidence'] >= min_confidence and
+               (direction == 'ALL' or rec['direction'] == direction) and
+               rec['risk_reward'] >= min_rr
+        ]
         
         return jsonify(filtered)
     
@@ -395,7 +417,7 @@ def status():
     return jsonify({
         "status": "online",
         "redis": redis_status,
-        "symbols": len(get_top_symbols()),
+        "symbol_count": len(POPULAR_SYMBOLS),
         "timestamp": datetime.utcnow().isoformat()
     })
 
