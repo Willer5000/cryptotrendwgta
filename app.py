@@ -46,6 +46,21 @@ TIMEFRAME_MAP = {
     '1w': 7*24*60*60
 }
 
+# Cargar símbolos populares desde archivo
+def load_popular_symbols():
+    try:
+        with open('popular_symbols.txt', 'r') as f:
+            symbols = [line.strip() for line in f.readlines() if line.strip()]
+            print(f"✅ Cargados {len(symbols)} símbolos populares")
+            return symbols
+    except Exception as e:
+        print(f"❌ Error cargando símbolos populares: {str(e)}")
+        # Lista de respaldo si el archivo no existe
+        return [
+            "BTC-USDT", "ETH-USDT", "BNB-USDT", "SOL-USDT", "XRP-USDT",
+            "ADA-USDT", "AVAX-USDT", "DOGE-USDT", "DOT-USDT", "LINK-USDT"
+        ]
+
 # 1. Funciones de indicadores corregidas
 def ema_macro_signal(df):
     if len(df) < 200:
@@ -178,25 +193,17 @@ def calculate_risk_parameters(df, direction):
             'risk_reward': 0
         }
 
-# 4. Fuente de datos con lista predefinida
+# 4. Fuente de datos con manejo de errores mejorado
 def get_top_symbols():
-    # Leer símbolos desde archivo local
-    try:
-        with open('top_symbols.txt', 'r') as f:
-            symbols = [line.strip() for line in f.readlines() if line.strip()]
-            return symbols
-    except Exception as e:
-        print(f"Error leyendo top_symbols.txt: {str(e)}")
-        # Lista de respaldo si falla la lectura del archivo
-        return [
-            "BTC-USDT", "ETH-USDT", "BNB-USDT", "SOL-USDT", "XRP-USDT",
-            "ADA-USDT", "AVAX-USDT", "DOT-USDT", "DOGE-USDT", "TRX-USDT",
-            "LINK-USDT", "MATIC-USDT", "TON-USDT", "DAI-USDT", "LTC-USDT"
-        ]
+    # Usar siempre la lista de símbolos populares
+    symbols = load_popular_symbols()
+    print(f"🔢 Usando {len(symbols)} símbolos populares")
+    return symbols
 
 def fetch_ohlcv(symbol, timeframe, limit=500):
-    # Normalizar símbolo
-    symbol = symbol.replace('USDT', '-USDT') if 'USDT' in symbol and '-' not in symbol else symbol
+    # Manejar símbolos con formato incorrecto
+    if '-' not in symbol:
+        symbol = symbol.replace('USDT', '-USDT')
     
     cache_key = f"{symbol}_{timeframe}"
     
@@ -224,12 +231,6 @@ def fetch_ohlcv(symbol, timeframe, limit=500):
     try:
         url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}&startAt={start_time}&endAt={end_time}"
         response = requests.get(url, timeout=15)
-        
-        # Manejar errores específicos
-        if response.status_code == 400:
-            print(f"Símbolo no soportado: {symbol} en timeframe {timeframe}")
-            return None
-            
         response.raise_for_status()
         
         data = response.json()
@@ -283,7 +284,7 @@ def generate_recommendations(timeframe):
             score_data = calculate_score(symbol, df)
             
             # Solo considerar señales válidas
-            if score_data['direction'] in ['LONG', 'SHORT'] and score_data['confidence'] > 50:
+            if score_data['direction'] in ['LONG', 'SHORT']:
                 risk_data = calculate_risk_parameters(df, score_data['direction'])
                 
                 # Solo agregar si tenemos datos de riesgo válidos
@@ -321,9 +322,24 @@ def recommendations():
         cache_key = f"recs_{timeframe}"
         all_recs = None
         
-        # Generar nuevas recomendaciones
-        print(f"Generando nuevas recomendaciones para {timeframe}")
-        all_recs = generate_recommendations(timeframe) or []
+        # Intentar obtener de caché si Redis está disponible
+        if r:
+            try:
+                cached = r.get(cache_key)
+                if cached:
+                    all_recs = json.loads(cached)
+            except Exception as e:
+                print(f"Redis get error: {str(e)}")
+        
+        # Generar nuevas recomendaciones si no hay caché
+        if all_recs is None:
+            print(f"Generando nuevas recomendaciones para {timeframe}")
+            all_recs = generate_recommendations(timeframe) or []
+            if r and all_recs:
+                try:
+                    r.setex(cache_key, 600, json.dumps(all_recs))
+                except Exception as e:
+                    print(f"Redis set error: {str(e)}")
         
         # Filtrado seguro
         filtered = []
@@ -379,7 +395,7 @@ def status():
     return jsonify({
         "status": "online",
         "redis": redis_status,
-        "symbol_count": len(get_top_symbols()),
+        "symbols": len(get_top_symbols()),
         "timestamp": datetime.utcnow().isoformat()
     })
 
