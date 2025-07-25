@@ -4,6 +4,6 @@ pandas
 numpy
 requests
 plotly
-redis
+redis==4.5.5
 python-dotenv
 ta
