@@ -1,66 +1,91 @@
-from flask import Flask, render_template
-import sqlite3
 import os
-import json
-from datetime import datetime
+import time
+import threading
+from flask import Flask, render_template
+from utils.kucoin_api import fetch_crypto_data
+from utils.technical_analysis import analyze_crypto
+from utils.telegram_alerts import send_telegram_alert
 
 app = Flask(__name__)
-DATABASE = 'signals.db'
 
-# Inicializar la base de datos al inicio
-def init_db():
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS signals (
-        id INTEGER PRIMARY KEY,
-        symbol TEXT,
-        timeframe TEXT,
-        signal_type TEXT,
-        entry REAL,
-        sl REAL,
-        tp1 REAL,
-        tp2 REAL,
-        tp3 REAL,
-        timestamp DATETIME
-    )
-    ''')
-    conn.commit()
-    conn.close()
+# Configuración por defecto (basada en experiencia profesional)
+DEFAULT_SETTINGS = {
+    "trend_period": 20,
+    "sr_period": 14,
+    "adx_period": 14,
+    "adx_level": 25,
+    "ema_fast": 9,
+    "ema_slow": 20,
+    "divergence_period": 14,
+    "rsi_period": 14,
+    "volume_thresholds": {
+        "muy alto": 2.5,
+        "alto": 1.8,
+        "medio": 1.2,
+        "bajo": 0.8,
+        "muy bajo": 0.5
+    }
+}
 
-# Llamar a la inicialización al arrancar
-init_db()
+# Leer lista de criptomonedas
+with open('cryptos.txt', 'r') as f:
+    CRYPTOS = [line.strip() for line in f]
 
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
+# Almacenamiento de señales
+long_signals = []
+short_signals = []
+
+def update_signals():
+    global long_signals, short_signals
+    while True:
+        new_long = []
+        new_short = []
+        
+        for crypto in CRYPTOS:
+            try:
+                data = fetch_crypto_data(crypto)
+                analysis = analyze_crypto(data, DEFAULT_SETTINGS)
+                
+                if analysis['long_signal']:
+                    new_long.append({
+                        "crypto": crypto,
+                        "entry": analysis['entry_long'],
+                        "sl": analysis['sl_long'],
+                        "tp1": analysis['tp1_long'],
+                        "tp2": analysis['tp2_long'],
+                        "tp3": analysis['tp3_long']
+                    })
+                    # Enviar alerta si hay nueva señal
+                    send_telegram_alert(analysis, 'LONG')
+                
+                if analysis['short_signal']:
+                    new_short.append({
+                        "crypto": crypto,
+                        "entry": analysis['entry_short'],
+                        "sl": analysis['sl_short'],
+                        "tp1": analysis['tp1_short'],
+                        "tp2": analysis['tp2_short'],
+                        "tp3": analysis['tp3_short']
+                    })
+                    # Enviar alerta si hay nueva señal
+                    send_telegram_alert(analysis, 'SHORT')
+            
+            except Exception as e:
+                print(f"Error analyzing {crypto}: {str(e)}")
+        
+        long_signals = new_long
+        short_signals = new_short
+        time.sleep(900)  # Actualizar cada 15 minutos
 
 @app.route('/')
 def index():
-    conn = get_db_connection()
-    
-    # Obtener señales LONG
-    long_signals = conn.execute(
-        "SELECT * FROM signals WHERE signal_type = 'LONG' ORDER BY timestamp DESC"
-    ).fetchall()
-    
-    # Obtener señales SHORT
-    short_signals = conn.execute(
-        "SELECT * FROM signals WHERE signal_type = 'SHORT' ORDER BY timestamp DESC"
-    ).fetchall()
-    
-    conn.close()
-    
-    # Obtener última actualización
-    update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    return render_template(
-        'index.html',
-        long_signals=long_signals,
-        short_signals=short_signals,
-        update_time=update_time
-    )
+    return render_template('index.html', 
+                           long_signals=long_signals,
+                           short_signals=short_signals)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Iniciar hilo para actualización de señales
+    thread = threading.Thread(target=update_signals)
+    thread.daemon = True
+    thread.start()
+    app.run(port=5000)
