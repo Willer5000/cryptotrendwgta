@@ -1,1 +1,2 @@
-web: gunicorn app:app --workers 2 --timeout 120 --log-level warning
+web: gunicorn app:app
+worker: python scheduler.py
