@@ -7,6 +7,30 @@ from datetime import datetime
 app = Flask(__name__)
 DATABASE = 'signals.db'
 
+# Inicializar la base de datos al inicio
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS signals (
+        id INTEGER PRIMARY KEY,
+        symbol TEXT,
+        timeframe TEXT,
+        signal_type TEXT,
+        entry REAL,
+        sl REAL,
+        tp1 REAL,
+        tp2 REAL,
+        tp3 REAL,
+        timestamp DATETIME
+    )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Llamar a la inicialización al arrancar
+init_db()
+
 def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
