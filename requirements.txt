@@ -1,9 +1,10 @@
-flask
+Flask
 gunicorn
 pandas
 numpy
 requests
-plotly
-redis==4.5.5
-python-dotenv
 ta
+python-dotenv
+apscheduler
+plotly
+kaleido
