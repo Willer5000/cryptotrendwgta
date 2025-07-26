@@ -82,8 +82,9 @@ def analyze_symbol(symbol, timeframe):
     if df.empty or len(df) < 50:
         return None
     
-    # Convertir tipos
-    df = df.apply(pd.to_numeric, errors='ignore')
+    # Convertir tipos de datos correctamente
+    numeric_cols = ['open', 'close', 'high', 'low', 'volume', 'amount']
+    df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
     
     # Calcular indicadores
