@@ -4,181 +4,271 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WGTA Crypto Trading Indicator</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .signal-table {
-            font-size: 0.85rem;
-        }
-        .long-signal {
-            background-color: rgba(0, 200, 0, 0.1);
-        }
-        .short-signal {
-            background-color: rgba(255, 0, 0, 0.1);
-        }
-        .header-bg {
-            background: linear-gradient(135deg, #1a2a6c, #2a4d69);
-            color: white;
-        }
+        .card { margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .signal-card { transition: transform 0.3s; }
+        .signal-card:hover { transform: translateY(-5px); }
+        .table-responsive { max-height: 500px; overflow-y: auto; }
+        .volume-badge { padding: 5px 10px; border-radius: 10px; }
     </style>
 </head>
 <body>
-    <div class="container-fluid p-0">
-        <!-- Encabezado -->
-        <header class="header-bg py-3">
-            <div class="container">
-                <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <h1 class="mb-0">WGTA Crypto Trading Indicator</h1>
-                        <p class="mb-0">Sistema automatizado de trading para criptomonedas</p>
-                    </div>
-                    <div class="col-md-4 text-end">
-                        <p class="mb-0">Actualizado: {{ update_time }}</p>
-                        <a href="https://github.com/Willer5000" target="_blank" class="text-white">GitHub del Autor</a>
-                    </div>
+    <div class="container-fluid">
+        <header class="bg-primary text-white p-3 mb-4 rounded">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>WGTA Crypto Trading Indicator</h1>
+                    <p class="mb-0">Última actualización: {{ last_update }}</p>
+                </div>
+                <div>
+                    <a href="https://github.com/Willer5000" target="_blank" class="btn btn-light">
+                        GitHub del Autor
+                    </a>
+                    <a href="/manual" target="_blank" class="btn btn-outline-light ms-2">
+                        Manual Técnico
+                    </a>
                 </div>
             </div>
         </header>
 
-        <!-- Contenido Principal -->
-        <main class="container my-4">
-            <div class="row">
-                <div class="col-md-6">
-                    <h2 class="text-success">Señales LONG</h2>
-                    <div class="table-responsive">
-                        <table class="table table-hover signal-table">
-                            <thead class="table-success">
-                                <tr>
-                                    <th>#</th>
-                                    <th>Cripto</th>
-                                    <th>TF</th>
-                                    <th>Entrada</th>
-                                    <th>SL</th>
-                                    <th>TP1</th>
-                                    <th>TP2</th>
-                                    <th>TP3</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for signal in long_signals %}
-                                <tr class="long-signal">
-                                    <td>{{ loop.index }}</td>
-                                    <td>{{ signal.symbol }}</td>
-                                    <td>{{ signal.timeframe }}</td>
-                                    <td>{{ signal.entry }}</td>
-                                    <td>{{ signal.sl }}</td>
-                                    <td>{{ signal.tp1 }}</td>
-                                    <td>{{ signal.tp2 }}</td>
-                                    <td>{{ signal.tp3 }}</td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="8" class="text-center">No hay señales LONG activas</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+        <div class="row">
+            <!-- Panel de Control -->
+            <div class="col-lg-3">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Filtros de Trading</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="get">
+                            <div class="mb-3">
+                                <label class="form-label">Temporalidad</label>
+                                <select name="timeframe" class="form-select">
+                                    <option value="30min" {% if timeframe == '30min' %}selected{% endif %}>30 Minutos</option>
+                                    <option value="1h" {% if timeframe == '1h' %}selected{% endif %}>1 Hora</option>
+                                    <option value="2h" {% if timeframe == '2h' %}selected{% endif %}>2 Horas</option>
+                                    <option value="4h" {% if timeframe == '4h' %}selected{% endif %}>4 Horas</option>
+                                    <option value="1d" {% if timeframe == '1d' %}selected{% endif %}>1 Día</option>
+                                    <option value="1w" {% if timeframe == '1w' %}selected{% endif %}>1 Semana</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">EMA Rápida ({{ params.ema_fast }})</label>
+                                <input type="range" name="ema_fast" class="form-range" min="5" max="20" value="{{ params.ema_fast }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">EMA Lenta ({{ params.ema_slow }})</label>
+                                <input type="range" name="ema_slow" class="form-range" min="15" max="50" value="{{ params.ema_slow }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Periodo ADX ({{ params.adx_period }})</label>
+                                <input type="range" name="adx_period" class="form-range" min="10" max="25" value="{{ params.adx_period }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Nivel ADX ({{ params.adx_level }})</label>
+                                <input type="range" name="adx_level" class="form-range" min="20" max="30" value="{{ params.adx_level }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Periodo RSI ({{ params.rsi_period }})</label>
+                                <input type="range" name="rsi_period" class="form-range" min="10" max="20" value="{{ params.rsi_period }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Periodo Soportes/Resistencias ({{ params.s_r_period }})</label>
+                                <input type="range" name="s_r_period" class="form-range" min="10" max="50" value="{{ params.s_r_period }}">
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100">Aplicar Filtros</button>
+                        </form>
                     </div>
                 </div>
-
-                <div class="col-md-6">
-                    <h2 class="text-danger">Señales SHORT</h2>
-                    <div class="table-responsive">
-                        <table class="table table-hover signal-table">
-                            <thead class="table-danger">
-                                <tr>
-                                    <th>#</th>
-                                    <th>Cripto</th>
-                                    <th>TF</th>
-                                    <th>Entrada</th>
-                                    <th>SL</th>
-                                    <th>TP1</th>
-                                    <th>TP2</th>
-                                    <th>TP3</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for signal in short_signals %}
-                                <tr class="short-signal">
-                                    <td>{{ loop.index }}</td>
-                                    <td>{{ signal.symbol }}</td>
-                                    <td>{{ signal.timeframe }}</td>
-                                    <td>{{ signal.entry }}</td>
-                                    <td>{{ signal.sl }}</td>
-                                    <td>{{ signal.tp1 }}</td>
-                                    <td>{{ signal.tp2 }}</td>
-                                    <td>{{ signal.tp3 }}</td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="8" class="text-center">No hay señales SHORT activas</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                
+                <div class="card mt-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Resumen del Mercado</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="marketSummaryChart"></canvas>
                     </div>
                 </div>
             </div>
-
-            <!-- Información del Indicador -->
-            <div class="row mt-5">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header bg-primary text-white">
-                            <h3 class="mb-0">Manual Técnico y Estrategia</h3>
-                        </div>
-                        <div class="card-body">
-                            <h4>Parámetros Técnicos</h4>
-                            <ul>
-                                <li><strong>RSI Period:</strong> 14 (configurable)</li>
-                                <li><strong>ADX Period:</strong> 14, Nivel: 25</li>
-                                <li><strong>EMAs:</strong> Rápida (9), Lenta (20)</li>
-                                <li><strong>Soportes/Resistencias:</strong> Lookback de 100 velas</li>
-                                <li><strong>Divergencias:</strong> Lookback de 14 periodos</li>
-                                <li><strong>Volumen:</strong> Clasificado en 5 niveles</li>
-                            </ul>
-                            
-                            <h4>Estrategia Recomendada</h4>
-                            <p>Operar solo cuando se alinean múltiples confirmaciones:</p>
-                            <ol>
-                                <li>Tendencia clara (EMAs + ADX > 25)</li>
-                                <li>Divergencia en dirección de la tendencia</li>
-                                <li>Volumen por encima del promedio</li>
-                                <li>Precio cerca de soporte (LONG) o resistencia (SHORT)</li>
-                            </ol>
-                            
-                            <h4>Gestión de Riesgo</h4>
-                            <ul>
-                                <li>Stop Loss basado en 2xATR</li>
-                                <li>Take Profit escalonado (1xATR, 2xATR, 3xATR)</li>
-                                <li>Ratio riesgo/beneficio mínimo 1:3</li>
-                                <li>Máximo 2-3% de capital por operación</li>
-                            </ul>
-                        </div>
-                        <div class="card-footer text-muted">
-                            <small>Autor: Willer5000 | GitHub: <a href="https://github.com/Willer5000">https://github.com/Willer5000</a></small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-        <!-- Pie de Página -->
-        <footer class="bg-dark text-white py-3 mt-5">
-            <div class="container">
+            
+            <!-- Señales de Trading -->
+            <div class="col-lg-9">
                 <div class="row">
                     <div class="col-md-6">
-                        <h5>WGTA Trading Indicator</h5>
-                        <p>Sistema profesional para trading de criptomonedas</p>
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">Señales LONG ({{ long_signals|length }})</h5>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Cripto</th>
+                                            <th>Entrada</th>
+                                            <th>SL</th>
+                                            <th>TP1</th>
+                                            <th>TP2</th>
+                                            <th>TP3</th>
+                                            <th>Volumen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for signal in long_signals %}
+                                        <tr class="table-success">
+                                            <td>{{ loop.index }}</td>
+                                            <td><strong>{{ signal.crypto }}</strong></td>
+                                            <td>{{ signal.entry|round(4) }}</td>
+                                            <td>{{ signal.sl|round(4) }}</td>
+                                            <td>{{ signal.tp1|round(4) }}</td>
+                                            <td>{{ signal.tp2|round(4) }}</td>
+                                            <td>{{ signal.tp3|round(4) }}</td>
+                                            <td>
+                                                <span class="volume-badge bg-{{ 
+                                                    'danger' if signal.volume_class == 'Muy Alto' else 
+                                                    'warning' if signal.volume_class == 'Alto' else 
+                                                    'primary' if signal.volume_class == 'Medio' else 
+                                                    'secondary' 
+                                                }}">
+                                                    {{ signal.volume_class }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="8" class="text-center">No hay señales LONG</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-6 text-end">
-                        <p class="mb-0">Actualizado cada 15 minutos</p>
-                        <p class="mb-0">Datos proporcionados por KuCoin API</p>
+                    
+                    <div class="col-md-6">
+                        <div class="card border-danger">
+                            <div class="card-header bg-danger text-white">
+                                <h5 class="mb-0">Señales SHORT ({{ short_signals|length }})</h5>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Cripto</th>
+                                            <th>Entrada</th>
+                                            <th>SL</th>
+                                            <th>TP1</th>
+                                            <th>TP2</th>
+                                            <th>TP3</th>
+                                            <th>Volumen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for signal in short_signals %}
+                                        <tr class="table-danger">
+                                            <td>{{ loop.index }}</td>
+                                            <td><strong>{{ signal.crypto }}</strong></td>
+                                            <td>{{ signal.entry|round(4) }}</td>
+                                            <td>{{ signal.sl|round(4) }}</td>
+                                            <td>{{ signal.tp1|round(4) }}</td>
+                                            <td>{{ signal.tp2|round(4) }}</td>
+                                            <td>{{ signal.tp3|round(4) }}</td>
+                                            <td>
+                                                <span class="volume-badge bg-{{ 
+                                                    'danger' if signal.volume_class == 'Muy Alto' else 
+                                                    'warning' if signal.volume_class == 'Alto' else 
+                                                    'primary' if signal.volume_class == 'Medio' else 
+                                                    'secondary' 
+                                                }}">
+                                                    {{ signal.volume_class }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="8" class="text-center">No hay señales SHORT</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Distribución de Señales</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="signalsChart" height="100"></canvas>
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <footer class="mt-4 p-3 bg-light text-center rounded">
+            <p class="mb-0">WGTA Crypto Trading Indicator &copy; {{ now.year }} - 
+                <a href="https://github.com/Willer5000" target="_blank">GitHub del Autor</a>
+            </p>
         </footer>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Gráfico de distribución de señales
+        const signalsCtx = document.getElementById('signalsChart').getContext('2d');
+        new Chart(signalsCtx, {
+            type: 'bar',
+            data: {
+                labels: ['LONG', 'SHORT'],
+                datasets: [{
+                    label: 'Señales de Trading',
+                    data: [{{ long_signals|length }}, {{ short_signals|length }}],
+                    backgroundColor: [
+                        'rgba(40, 167, 69, 0.7)',
+                        'rgba(220, 53, 69, 0.7)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+        
+        // Gráfico de resumen del mercado
+        const marketCtx = document.getElementById('marketSummaryChart').getContext('2d');
+        new Chart(marketCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['LONG', 'SHORT', 'Neutral'],
+                datasets: [{
+                    data: [{{ long_signals|length }}, {{ short_signals|length }}, 0],
+                    backgroundColor: [
+                        'rgba(40, 167, 69, 0.7)',
+                        'rgba(220, 53, 69, 0.7)',
+                        'rgba(108, 117, 125, 0.7)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    </script>
 </body>
 </html>
