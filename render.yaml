@@ -1,7 +1,9 @@
 services:
   - type: web
-    name: crypto-trading-signals
-    env: python
-    plan: free
-    buildCommand: "./build.sh"
-    startCommand: "gunicorn app:app"
+    name: wgta-crypto-signals
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.16
