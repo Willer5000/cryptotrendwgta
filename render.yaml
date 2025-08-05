@@ -1,19 +1,9 @@
 services:
   - type: web
-    name: wgta-trading-indicator
+    name: wgta-crypto-indicator
     env: python
-    plan: free
-    buildCommand: "./build.sh"
-    startCommand: "gunicorn app:app"
+    buildCommand: ./build.sh
+    startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
-        value: 3.10.6
-
-  - type: worker
-    name: trading-worker
-    plan: free
-    buildCommand: "./build.sh"
-    startCommand: "python scheduler.py"
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.10.6
+        value: 3.9.13
