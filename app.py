@@ -1,91 +1,60 @@
 import os
 import time
-import threading
-from flask import Flask, render_template
-from utils.kucoin_api import fetch_crypto_data
-from utils.technical_analysis import analyze_crypto
-from utils.telegram_alerts import send_telegram_alert
+import pandas as pd
+from flask import Flask, render_template, request
+from utils.data_loader import DataLoader
+from utils.indicators import TradingSignals
 
 app = Flask(__name__)
+data_loader = DataLoader()
+signals_generator = TradingSignals()
 
-# Configuración por defecto (basada en experiencia profesional)
-DEFAULT_SETTINGS = {
-    "trend_period": 20,
-    "sr_period": 14,
-    "adx_period": 14,
-    "adx_level": 25,
-    "ema_fast": 9,
-    "ema_slow": 20,
-    "divergence_period": 14,
-    "rsi_period": 14,
-    "volume_thresholds": {
-        "muy alto": 2.5,
-        "alto": 1.8,
-        "medio": 1.2,
-        "bajo": 0.8,
-        "muy bajo": 0.5
-    }
-}
-
-# Leer lista de criptomonedas
-with open('cryptos.txt', 'r') as f:
-    CRYPTOS = [line.strip() for line in f]
-
-# Almacenamiento de señales
-long_signals = []
-short_signals = []
-
-def update_signals():
-    global long_signals, short_signals
-    while True:
-        new_long = []
-        new_short = []
-        
-        for crypto in CRYPTOS:
-            try:
-                data = fetch_crypto_data(crypto)
-                analysis = analyze_crypto(data, DEFAULT_SETTINGS)
+def get_signals(timeframe):
+    cryptos = data_loader.load_cryptos()
+    all_signals = []
+    
+    for crypto in cryptos:
+        try:
+            df = data_loader.get_data(crypto, timeframe)
+            if df is None or df.empty:
+                continue
                 
-                if analysis['long_signal']:
-                    new_long.append({
-                        "crypto": crypto,
-                        "entry": analysis['entry_long'],
-                        "sl": analysis['sl_long'],
-                        "tp1": analysis['tp1_long'],
-                        "tp2": analysis['tp2_long'],
-                        "tp3": analysis['tp3_long']
-                    })
-                    # Enviar alerta si hay nueva señal
-                    send_telegram_alert(analysis, 'LONG')
-                
-                if analysis['short_signal']:
-                    new_short.append({
-                        "crypto": crypto,
-                        "entry": analysis['entry_short'],
-                        "sl": analysis['sl_short'],
-                        "tp1": analysis['tp1_short'],
-                        "tp2": analysis['tp2_short'],
-                        "tp3": analysis['tp3_short']
-                    })
-                    # Enviar alerta si hay nueva señal
-                    send_telegram_alert(analysis, 'SHORT')
-            
-            except Exception as e:
-                print(f"Error analyzing {crypto}: {str(e)}")
-        
-        long_signals = new_long
-        short_signals = new_short
-        time.sleep(900)  # Actualizar cada 15 minutos
+            signals = signals_generator.generate(df, crypto, timeframe)
+            if signals:
+                all_signals.append(signals)
+        except Exception as e:
+            print(f"Error processing {crypto}: {str(e)}")
+    
+    return all_signals
 
 @app.route('/')
 def index():
-    return render_template('index.html', 
-                           long_signals=long_signals,
-                           short_signals=short_signals)
+    timeframe = request.args.get('timeframe', '4h')
+    
+    # Parámetros configurables
+    params = {
+        'ema_fast': int(request.args.get('ema_fast', 9)),
+        'ema_slow': int(request.args.get('ema_slow', 20)),
+        'adx_period': int(request.args.get('adx_period', 14)),
+        'adx_level': int(request.args.get('adx_level', 25)),
+        'rsi_period': int(request.args.get('rsi_period', 14)),
+        's_r_period': int(request.args.get('s_r_period', 20))
+    }
+    
+    signals_generator.update_params(params)
+    signals = get_signals(timeframe)
+    
+    long_signals = [s for s in signals if s['signal'] == 'LONG']
+    short_signals = [s for s in signals if s['signal'] == 'SHORT']
+    
+    return render_template(
+        'index.html',
+        long_signals=long_signals,
+        short_signals=short_signals,
+        params=params,
+        timeframe=timeframe,
+        last_update=time.strftime("%Y-%m-%d %H:%M:%S")
+    )
 
 if __name__ == '__main__':
-    # Iniciar hilo para actualización de señales
-    thread = threading.Thread(target=update_signals)
-    thread.daemon = True
-    thread.start()
-    app.run(port=5000)
+    app.run(debug=True)
