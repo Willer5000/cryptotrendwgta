@@ -1,6 +1,5 @@
-flask
-gunicorn
+Flask
 pandas
 numpy
 requests
-pytz
+gunicorn
