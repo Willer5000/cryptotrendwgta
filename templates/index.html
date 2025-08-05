@@ -3,130 +3,313 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Screener de Trading - wgta</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>wgta - Crypto Trading Signals</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #121212; color: #e0e0e0; }
+        .card { background-color: #1e1e1e; border: 1px solid #333; }
+        .table-dark { color: #e0e0e0; }
+        .signal-card { transition: transform 0.3s; }
+        .signal-card:hover { transform: translateY(-5px); }
+        footer { background-color: #0a0a0a; }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1><i class="fas fa-chart-line"></i> Crypto Screener - Estrategia wgta</h1>
-            <div class="last-update">
-                <i class="fas fa-sync-alt"></i> Última actualización: {{ last_update }}
+    <div class="container py-4">
+        <header class="text-center mb-5">
+            <h1 class="display-4 fw-bold text-warning">wgta Crypto Trading Signals</h1>
+            <p class="lead">Sistema profesional de detección de oportunidades de trading en criptomonedas</p>
+            <div class="d-flex justify-content-center gap-3 mb-3">
+                <span class="badge bg-success">LONG: {{ long_signals|length }}</span>
+                <span class="badge bg-danger">SHORT: {{ short_signals|length }}</span>
+                <span class="badge bg-info">CRIPTOMONEDAS: {{ cryptos_count }}</span>
             </div>
+            <p class="text-muted">Última actualización: {{ last_update }}</p>
         </header>
 
-        <div class="manual">
-            <h2><i class="fas fa-book"></i> Manual Técnico</h2>
-            <div class="strategy-info">
-                <h3>Estrategia de Trading</h3>
-                <p>Esta estrategia combina múltiples indicadores técnicos para identificar oportunidades de trading:</p>
-                <ul>
-                    <li><strong>Líneas de tendencia</strong>: Confirmadas con EMAs (9 y 20 períodos)</li>
-                    <li><strong>Divergencias</strong>: Detectadas con RSI (14 períodos)</li>
-                    <li><strong>Soportes/Resistencias</strong>: Calculados con ventana de 20 velas</li>
-                    <li><strong>Confirmación</strong>: Volumen significativo y ADX > 25</li>
-                </ul>
-                <p><strong>Recomendaciones:</strong></p>
-                <ul>
-                    <li>Operar en timeframe de 4h para mejores resultados</li>
-                    <li>Usar gestión de riesgo (máximo 1-2% por operación)</li>
-                    <li>Confirmar señales con múltiples timeframes</li>
-                </ul>
-            </div>
-        </div>
-
-        <div class="tables-container">
-            <div class="table-section">
-                <h2><i class="fas fa-arrow-up"></i> Señales LONG</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Cripto</th>
-                            <th>Entrada</th>
-                            <th>SL</th>
-                            <th>TP1</th>
-                            <th>TP2</th>
-                            <th>TP3</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for idx, signal in enumerate(long_signals) %}
-                        <tr>
-                            <td>{{ idx + 1 }}</td>
-                            <td>{{ signal.symbol }}</td>
-                            <td>{{ signal.entry }}</td>
-                            <td>{{ signal.sl }}</td>
-                            <td>{{ signal.tp1 }}</td>
-                            <td>{{ signal.tp2 }}</td>
-                            <td>{{ signal.tp3 }}</td>
-                        </tr>
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card signal-card h-100">
+                    <div class="card-header bg-success bg-gradient">
+                        <h3 class="card-title mb-0">Señales LONG</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if long_signals %}
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Cripto</th>
+                                        <th>Entrada</th>
+                                        <th>SL</th>
+                                        <th>TP1</th>
+                                        <th>TP2</th>
+                                        <th>TP3</th>
+                                        <th>RSI</th>
+                                        <th>Vol</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for idx, signal in long_signals %}
+                                    <tr>
+                                        <td>{{ idx }}</td>
+                                        <td class="fw-bold">{{ signal.symbol }}</td>
+                                        <td>{{ signal.entry }}</td>
+                                        <td class="text-danger">{{ signal.sl }}</td>
+                                        <td class="text-success">{{ signal.tp1 }}</td>
+                                        <td class="text-success">{{ signal.tp2 }}</td>
+                                        <td class="text-success">{{ signal.tp3 }}</td>
+                                        <td>{{ signal.rsi }}</td>
+                                        <td>
+                                            {% if signal.volume == "Muy Alto" %}
+                                                <span class="badge bg-danger">Muy Alto</span>
+                                            {% elif signal.volume == "Alto" %}
+                                                <span class="badge bg-warning">Alto</span>
+                                            {% else %}
+                                                <span class="badge bg-success">{{ signal.volume }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                         {% else %}
-                        <tr>
-                            <td colspan="7">No hay señales LONG en este momento</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        <div class="text-center py-4">
+                            <h4 class="text-muted">No hay señales LONG disponibles</h4>
+                            <p class="text-muted">El mercado no muestra oportunidades de compra claras</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
 
-            <div class="table-section">
-                <h2><i class="fas fa-arrow-down"></i> Señales SHORT</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Cripto</th>
-                            <th>Entrada</th>
-                            <th>SL</th>
-                            <th>TP1</th>
-                            <th>TP2</th>
-                            <th>TP3</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for idx, signal in enumerate(short_signals) %}
-                        <tr>
-                            <td>{{ idx + 1 }}</td>
-                            <td>{{ signal.symbol }}</td>
-                            <td>{{ signal.entry }}</td>
-                            <td>{{ signal.sl }}</td>
-                            <td>{{ signal.tp1 }}</td>
-                            <td>{{ signal.tp2 }}</td>
-                            <td>{{ signal.tp3 }}</td>
-                        </tr>
+            <div class="col-md-6">
+                <div class="card signal-card h-100">
+                    <div class="card-header bg-danger bg-gradient">
+                        <h3 class="card-title mb-0">Señales SHORT</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if short_signals %}
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Cripto</th>
+                                        <th>Entrada</th>
+                                        <th>SL</th>
+                                        <th>TP1</th>
+                                        <th>TP2</th>
+                                        <th>TP3</th>
+                                        <th>RSI</th>
+                                        <th>Vol</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for idx, signal in short_signals %}
+                                    <tr>
+                                        <td>{{ idx }}</td>
+                                        <td class="fw-bold">{{ signal.symbol }}</td>
+                                        <td>{{ signal.entry }}</td>
+                                        <td class="text-danger">{{ signal.sl }}</td>
+                                        <td class="text-success">{{ signal.tp1 }}</td>
+                                        <td class="text-success">{{ signal.tp2 }}</td>
+                                        <td class="text-success">{{ signal.tp3 }}</td>
+                                        <td>{{ signal.rsi }}</td>
+                                        <td>
+                                            {% if signal.volume == "Muy Alto" %}
+                                                <span class="badge bg-danger">Muy Alto</span>
+                                            {% elif signal.volume == "Alto" %}
+                                                <span class="badge bg-warning">Alto</span>
+                                            {% else %}
+                                                <span class="badge bg-success">{{ signal.volume }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                         {% else %}
-                        <tr>
-                            <td colspan="7">No hay señales SHORT en este momento</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        <div class="text-center py-4">
+                            <h4 class="text-muted">No hay señales SHORT disponibles</h4>
+                            <p class="text-muted">El mercado no muestra oportunidades de venta claras</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="info-box">
-            <h3><i class="fas fa-info-circle"></i> Sobre el Indicador</h3>
-            <p>Este indicador analiza las 150 principales criptomonedas cada 15 minutos usando la API pública de KuCoin. Las señales se generan basadas en:</p>
-            <ul>
-                <li>Convergencia de indicadores técnicos</li>
-                <li>Volumen significativo</li>
-                <li>Divergencias RSI</li>
-                <li>Niveles clave de soporte/resistencia</li>
-            </ul>
-            <p>Las operaciones se calculan con riesgo:beneficio mínimo de 1:3 usando ATR para determinar SL y TP.</p>
+        <div class="card mb-4">
+            <div class="card-header bg-primary bg-gradient">
+                <h3 class="card-title mb-0">Distribución de Señales</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <canvas id="longChart"></canvas>
+                    </div>
+                    <div class="col-md-6">
+                        <canvas id="shortChart"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <footer>
-            <p>Desarrollado por wgta - Estrategia de trading algorítmico</p>
-            <p>
-                <a href="https://github.com/Willer5000" target="_blank">
-                    <i class="fab fa-github"></i> GitHub
-                </a>
-            </p>
-        </footer>
+        <div class="card">
+            <div class="card-header bg-secondary bg-gradient">
+                <h3 class="card-title mb-0">Manual Técnico</h3>
+            </div>
+            <div class="card-body">
+                <h4 class="text-warning">Estrategia de Trading</h4>
+                <p>El sistema combina múltiples indicadores técnicos para identificar oportunidades:</p>
+                <ul>
+                    <li><strong>EMAs (9 y 20 períodos):</strong> Identificación de tendencias</li>
+                    <li><strong>ADX (14 períodos):</strong> Fuerza de la tendencia (>25 = tendencia fuerte)</li>
+                    <li><strong>RSI (14 períodos):</strong> Condiciones de sobrecompra/sobreventa</li>
+                    <li><strong>Soportes/Resistencias:</strong> Detectados con análisis de pivotes</li>
+                    <li><strong>Divergencias:</strong> Entre precio y RSI</li>
+                    <li><strong>Volumen:</strong> Clasificado según promedio histórico</li>
+                </ul>
+                
+                <h4 class="text-warning">Gestión de Riesgos</h4>
+                <p>Para cada operación:</p>
+                <ul>
+                    <li><strong>Stop Loss (SL):</strong> 3% del precio de entrada</li>
+                    <li><strong>Take Profit (TP):</strong> Objetivos en +3%, +6% y +9%</li>
+                    <li><strong>Ratio Riesgo/Beneficio:</strong> Mínimo 1:1</li>
+                </ul>
+                
+                <div class="alert alert-warning">
+                    <strong>Recomendaciones:</strong>
+                    <ul>
+                        <li>Operar solo con tendencia clara (ADX > 25)</li>
+                        <li>Confirmar señales con volumen "Alto" o "Muy Alto"</li>
+                        <li>Evitar operar contra la tendencia principal</li>
+                        <li>Diversificar entre 3-5 activos diferentes</li>
+                    </ul>
+                </div>
+                
+                <div class="text-center mt-4">
+                    <p class="mb-1">Desarrollado por <strong>wgta</strong></p>
+                    <a href="https://github.com/Willer5000" target="_blank" class="btn btn-outline-light">
+                        Ver en GitHub
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <footer class="py-3 text-center">
+        <div class="container">
+            <p class="mb-0">Sistema de Trading Automatizado &copy; 2023 - wgta</p>
+        </div>
+    </footer>
+
+    <script>
+        // Gráfico para señales LONG
+        const longCtx = document.getElementById('longChart').getContext('2d');
+        const longChart = new Chart(longCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Señales LONG'],
+                datasets: [{
+                    label: 'Señales Activas',
+                    data: [{{ long_signals|length }}],
+                    backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                    borderColor: 'rgba(40, 167, 69, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Distribución de Señales LONG',
+                        color: '#fff'
+                    },
+                    legend: {
+                        labels: {
+                            color: '#fff'
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#fff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#fff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Gráfico para señales SHORT
+        const shortCtx = document.getElementById('shortChart').getContext('2d');
+        const shortChart = new Chart(shortCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Señales SHORT'],
+                datasets: [{
+                    label: 'Señales Activas',
+                    data: [{{ short_signals|length }}],
+                    backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Distribución de Señales SHORT',
+                        color: '#fff'
+                    },
+                    legend: {
+                        labels: {
+                            color: '#fff'
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#fff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#fff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
 </body>
 </html>
