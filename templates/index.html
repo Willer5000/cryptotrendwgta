@@ -12,15 +12,20 @@
         .long-bg { background-color: #e8f5e9; }
         .short-bg { background-color: #ffebee; }
         .volume-high { color: #d32f2f; font-weight: bold; }
+        .volume-vhigh { color: #b71c1c; font-weight: bold; }
         .volume-medium { color: #f57c00; }
+        .volume-low { color: #5d4037; }
+        .card-header { font-weight: bold; }
+        .last-update { font-size: 0.85rem; }
     </style>
 </head>
 <body>
     <div class="container py-4">
-        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom">
+        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
             <div>
-                <h1>wgta Crypto Trading Signals</h1>
-                <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
+                <h1 class="mb-1">wgta Crypto Trading Signals</h1>
+                <p class="text-muted mb-0">Sistema automatizado de detección de oportunidades de trading</p>
+                <p class="last-update text-muted mb-0">Última actualización: {{ last_update }}</p>
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
@@ -50,24 +55,24 @@
                                     </select>
                                 </div>
                                 
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <label class="form-label">EMA Rápida</label>
                                     <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
                                 </div>
                                 
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <label class="form-label">EMA Lenta</label>
                                     <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
                                 </div>
                                 
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <label class="form-label">ADX Período</label>
                                     <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
                                 </div>
                                 
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <label class="form-label">ADX Nivel</label>
-                                    <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
+                                    <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" step="0.1">
                                 </div>
                                 
                                 <div class="col-md-3">
@@ -78,6 +83,11 @@
                                 <div class="col-md-3">
                                     <label class="form-label">S/R Ventana</label>
                                     <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
+                                </div>
+                                
+                                <div class="col-md-3">
+                                    <label class="form-label">Riesgo Máx. (%)</label>
+                                    <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1">
                                 </div>
                                 
                                 <div class="col-md-12 mt-4">
@@ -92,7 +102,7 @@
                 
                 <div class="card mb-4">
                     <div class="card-header bg-success text-white">
-                        <h2 class="h5 mb-0">Señales LONG</h2>
+                        <h2 class="h5 mb-0">Señales LONG ({{ long_signals|length }})</h2>
                     </div>
                     <div class="card-body">
                         {% if long_signals %}
@@ -121,7 +131,9 @@
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
                                         <td class="text-success">{{ signal.tp3 }}</td>
-                                        <td class="volume-high">{{ signal.volume }}</td>
+                                        <td class="volume-{{ 'vhigh' if signal.volume == 'Muy Alto' else 'high' }}">
+                                            {{ signal.volume }}
+                                        </td>
                                         <td>{{ signal.adx }}</td>
                                     </tr>
                                     {% endfor %}
@@ -138,7 +150,7 @@
                 
                 <div class="card">
                     <div class="card-header bg-danger text-white">
-                        <h2 class="h5 mb-0">Señales SHORT</h2>
+                        <h2 class="h5 mb-0">Señales SHORT ({{ short_signals|length }})</h2>
                     </div>
                     <div class="card-body">
                         {% if short_signals %}
@@ -167,7 +179,9 @@
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
                                         <td class="text-success">{{ signal.tp3 }}</td>
-                                        <td class="volume-high">{{ signal.volume }}</td>
+                                        <td class="volume-{{ 'vhigh' if signal.volume == 'Muy Alto' else 'high' }}">
+                                            {{ signal.volume }}
+                                        </td>
                                         <td>{{ signal.adx }}</td>
                                     </tr>
                                     {% endfor %}
@@ -201,23 +215,35 @@
                         <h3>Estrategia de Trading</h3>
                         <p>Este sistema detecta oportunidades basadas en:</p>
                         <ul>
-                            <li><strong>EMAs</strong>: Cruce de EMA9 y EMA20 para tendencia</li>
-                            <li><strong>ADX</strong>: >25 para tendencia fuerte</li>
-                            <li><strong>RSI</strong>: Divergencias para reversiones</li>
-                            <li><strong>Soportes/Resistencias</strong>: Quiebres con volumen</li>
+                            <li><strong>EMAs</strong>: Cruce de EMA rápida y lenta para determinar tendencia</li>
+                            <li><strong>ADX</strong>: >25 para confirmar fuerza de tendencia</li>
+                            <li><strong>RSI</strong>: Divergencias para detectar posibles reversiones</li>
+                            <li><strong>Soportes/Resistencias</strong>: Quiebres con volumen significativo</li>
+                            <li><strong>Volumen</strong>: Operar solo con volumen Alto o Muy Alto</li>
                         </ul>
                         
                         <h3>Recomendaciones</h3>
                         <ol>
                             <li>Operar solo con volumen Alto/Muy Alto</li>
-                            <li>Confirmar con temporalidad superior</li>
-                            <li>Usar gestión de riesgo (1:3 riesgo/beneficio)</li>
+                            <li>Confirmar señales con temporalidad superior</li>
+                            <li>Usar gestión de riesgo (1-2% por operación)</li>
                             <li>Tomar beneficios escalonadamente (TP1, TP2, TP3)</li>
+                            <li>Revisar noticias y contexto del mercado</li>
                         </ol>
                         
                         <div class="alert alert-primary">
                             <strong>Nota:</strong> Las criptomonedas son activos volátiles.
                             Este sistema es una herramienta de apoyo, no garantiza ganancias.
+                            Opere con responsabilidad.
+                        </div>
+                        
+                        <div class="text-center mt-3">
+                            <p class="mb-1">Desarrollado por wgta</p>
+                            <p class="mb-0">
+                                <a href="https://github.com/Willer5000" target="_blank">
+                                    https://github.com/Willer5000
+                                </a>
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -253,10 +279,22 @@
                     title: {
                         display: true,
                         text: 'Distribución de Señales (Top 20 Criptos)'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.label}: ${context.raw} criptos`;
+                            }
+                        }
                     }
                 }
             }
         });
+        
+        // Actualizar automáticamente cada 15 minutos
+        setTimeout(() => {
+            location.reload();
+        }, 900000); // 15 minutos
     </script>
 </body>
 </html>
