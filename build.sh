@@ -1,3 +1,2 @@
 #!/bin/bash
-echo "-----> Building application"
-pip install -r requirements.txt
+echo "No se requieren acciones de compilación especiales"
