@@ -1,7 +1,6 @@
-Flask
+flask
+gunicorn
 pandas
 numpy
 requests
-TA-Lib
-gunicorn
-python-dotenv
+pytz
