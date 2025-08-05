@@ -1,245 +1,218 @@
 import os
 import time
-import threading
 import requests
 import pandas as pd
 import numpy as np
-from flask import Flask, render_template
-from datetime import datetime, timedelta
+from flask import Flask, render_template, request
+from ta.trend import ADXIndicator, EMAIndicator
+from ta.momentum import RSIIndicator
+from ta.volatility import AverageTrueRange
 
 app = Flask(__name__)
 
 # Configuración
-TIME_INTERVALS = {
-    '30m': 1800,
-    '1h': 3600,
-    '2h': 7200,
-    '4h': 14400,
-    '1d': 86400,
-    '1w': 604800
+CRYPTOS_FILE = 'cryptos.txt'
+CACHE_TIME = 900  # 15 minutos
+DEFAULTS = {
+    'timeframe': '4h',
+    'ema_fast': 9,
+    'ema_slow': 20,
+    'adx_period': 14,
+    'adx_level': 25,
+    'rsi_period': 14,
+    'sr_window': 50
 }
-DEFAULT_CRYPTOS = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'AVAX', 'DOT', 'LINK']
-DATA_REFRESH = 900  # 15 minutos
 
-class CryptoAnalyzer:
-    def __init__(self):
-        self.cryptos = self.load_cryptos()
-        self.signals = {'LONG': [], 'SHORT': []}
-        self.last_update = None
-        self.lock = threading.Lock()
-        
-    def load_cryptos(self):
-        if os.path.exists('cryptos.txt'):
-            with open('cryptos.txt', 'r') as f:
-                return [line.strip() for line in f.readlines() if line.strip()]
-        return DEFAULT_CRYPTOS
+# Leer lista de criptomonedas
+def load_cryptos():
+    with open(CRYPTOS_FILE, 'r') as f:
+        return [line.strip() for line in f.readlines()]
+
+# Obtener datos de KuCoin
+def get_kucoin_data(symbol, timeframe):
+    tf_mapping = {
+        '30m': '30min',
+        '1h': '1hour',
+        '2h': '2hour',
+        '4h': '4hour',
+        '1d': '1day',
+        '1w': '1week'
+    }
+    kucoin_tf = tf_mapping[timeframe]
+    url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}"
+    response = requests.get(url)
     
-    def fetch_data(self, symbol, interval):
-        endpoint = "https://api.kucoin.com/api/v1/market/candles"
-        now = int(time.time())
-        start = now - TIME_INTERVALS[interval] * 200
-        params = {
-            'type': interval,
-            'symbol': f'{symbol}-USDT',
-            'startAt': start,
-            'endAt': now
-        }
-        try:
-            response = requests.get(endpoint, params=params)
-            data = response.json()
-            if data.get('code') == '200000' and data['data']:
-                df = pd.DataFrame(data['data'], columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
-                df = df.iloc[::-1].reset_index(drop=True)
-                return df.astype(float)
-        except Exception as e:
-            print(f"Error fetching {symbol}: {e}")
-        return None
+    if response.status_code == 200:
+        data = response.json()
+        if data['code'] == '200000':
+            candles = data['data']
+            df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
+            df = df.astype({'open': float, 'close': float, 'high': float, 'low': float, 'volume': float})
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+            return df.sort_values('timestamp')
+    return None
+
+# Calcular indicadores
+def calculate_indicators(df, params):
+    # EMAs
+    ema_fast = EMAIndicator(df['close'], window=params['ema_fast'])
+    df['ema_fast'] = ema_fast.ema_indicator()
     
-    def calculate_ema(self, prices, period):
-        return prices.ewm(span=period, adjust=False).mean()
+    ema_slow = EMAIndicator(df['close'], window=params['ema_slow'])
+    df['ema_slow'] = ema_slow.ema_indicator()
     
-    def calculate_adx(self, high, low, close, period=14):
-        plus_dm = high.diff()
-        minus_dm = -low.diff()
-        tr = pd.concat([high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1).max(axis=1)
-        
-        atr = tr.rolling(period).mean()
-        plus_di = 100 * (plus_dm.rolling(period).mean() / atr)
-        minus_di = 100 * (minus_dm.rolling(period).mean() / atr)
-        dx = 100 * abs((plus_di - minus_di) / (plus_di + minus_di))
-        return dx.rolling(period).mean()
+    # ADX
+    adx_ind = ADXIndicator(df['high'], df['low'], df['close'], window=params['adx_period'])
+    df['adx'] = adx_ind.adx()
     
-    def calculate_rsi(self, prices, period=14):
-        delta = prices.diff(1)
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.rolling(period).mean()
-        avg_loss = loss.rolling(period).mean()
-        rs = avg_gain / avg_loss
-        return 100 - (100 / (1 + rs))
+    # RSI
+    rsi = RSIIndicator(df['close'], window=params['rsi_period'])
+    df['rsi'] = rsi.rsi()
     
-    def find_support_resistance(self, df):
-        pivot_range = 5
-        highs = df['high']
-        lows = df['low']
-        
-        resistance = highs.rolling(window=pivot_range*2+1, center=True).max()
-        support = lows.rolling(window=pivot_range*2+1, center=True).min()
-        
-        current_price = df['close'].iloc[-1]
-        closest_res = resistance[resistance > current_price].min()
-        closest_sup = support[support < current_price].max()
-        
-        return closest_sup, closest_res
+    # ATR
+    atr = AverageTrueRange(df['high'], df['low'], df['close'], window=14)
+    df['atr'] = atr.average_true_range()
     
-    def analyze_symbol(self, symbol, interval):
-        df = self.fetch_data(symbol, interval)
-        if df is None or len(df) < 50:
-            return None, None
+    return df
+
+# Detectar soportes y resistencias
+def find_support_resistance(df, window):
+    df['high_roll'] = df['high'].rolling(window=window).max()
+    df['low_roll'] = df['low'].rolling(window=window).min()
+    
+    resistances = df[df['high'] == df['high_roll']]['high'].unique().tolist()
+    supports = df[df['low'] == df['low_roll']]['low'].unique().tolist()
+    
+    return supports, resistances
+
+# Clasificar volumen
+def classify_volume(current_vol, avg_vol):
+    ratio = current_vol / avg_vol
+    if ratio > 2.0: return 'Muy Alto'
+    if ratio > 1.5: return 'Alto'
+    if ratio > 1.0: return 'Medio'
+    if ratio > 0.5: return 'Bajo'
+    return 'Muy Bajo'
+
+# Detectar divergencias
+def detect_divergence(df, lookback=20):
+    last_close = df['close'].iloc[-1]
+    last_rsi = df['rsi'].iloc[-1]
+    
+    # Buscar máximos/mínimos recientes
+    max_idx = df['close'].tail(lookback).idxmax()
+    min_idx = df['close'].tail(lookback).idxmin()
+    
+    # Divergencia bajista
+    if max_idx != -1:
+        prev_high = df['close'].iloc[max_idx-1] if max_idx > 0 else 0
+        if last_close > df['close'].iloc[max_idx] and last_rsi < df['rsi'].iloc[max_idx] and last_rsi > 70:
+            return 'bearish'
+    
+    # Divergencia alcista
+    if min_idx != -1:
+        prev_low = df['close'].iloc[min_idx-1] if min_idx > 0 else 0
+        if last_close < df['close'].iloc[min_idx] and last_rsi > df['rsi'].iloc[min_idx] and last_rsi < 30:
+            return 'bullish'
+    
+    return None
+
+# Analizar una criptomoneda
+def analyze_crypto(symbol, params):
+    df = get_kucoin_data(f"{symbol}-USDT", params['timeframe'])
+    if df is None or len(df) < 100:
+        return None, None
+    
+    df = calculate_indicators(df, params)
+    supports, resistances = find_support_resistance(df, params['sr_window'])
+    
+    last = df.iloc[-1]
+    avg_vol = df['volume'].tail(20).mean()
+    volume_class = classify_volume(last['volume'], avg_vol)
+    divergence = detect_divergence(df)
+    
+    # Detectar quiebres
+    is_breakout = any(last['close'] > r * 1.005 for r in resistances)
+    is_breakdown = any(last['close'] < s * 0.995 for s in supports)
+    
+    # Determinar tendencia
+    trend = 'up' if last['ema_fast'] > last['ema_slow'] else 'down'
+    
+    # Señales LONG
+    long_signal = None
+    if (trend == 'up' and last['adx'] > params['adx_level'] and 
+        (is_breakout or divergence == 'bullish') and 
+        volume_class in ['Alto', 'Muy Alto']):
         
-        # Calcular indicadores
-        df['ema9'] = self.calculate_ema(df['close'], 9)
-        df['ema20'] = self.calculate_ema(df['close'], 20)
-        df['adx'] = self.calculate_adx(df['high'], df['low'], df['close'])
-        df['rsi'] = self.calculate_rsi(df['close'])
+        entry = min(r for r in resistances if r > last['close']) * 1.005 if resistances else last['close'] * 1.01
+        sl = max(s for s in supports if s < entry) * 0.995 if supports else entry * 0.98
+        risk = entry - sl
         
-        # Últimos valores
-        last = df.iloc[-1]
-        prev = df.iloc[-2]
-        
-        # Clasificación de volumen
-        avg_volume = df['volume'].mean()
-        vol_ratio = last['volume'] / avg_volume
-        if vol_ratio > 3: vol_class = "Muy Alto"
-        elif vol_ratio > 2: vol_class = "Alto"
-        elif vol_ratio > 1: vol_class = "Medio"
-        else: vol_class = "Bajo"
-        
-        # Detectar divergencias
-        bullish_div = (last['close'] < prev['close'] and last['rsi'] > prev['rsi'] and last['rsi'] < 30)
-        bearish_div = (last['close'] > prev['close'] and last['rsi'] < prev['rsi'] and last['rsi'] > 70)
-        
-        # Encontrar soportes y resistencias
-        support, resistance = self.find_support_resistance(df)
-        
-        # Señal LONG
-        long_signal = (
-            last['close'] > last['ema20'] and
-            last['ema9'] > last['ema20'] and
-            last['adx'] > 25 and
-            bullish_div and
-            support is not None and
-            last['close'] <= support * 1.01
-        )
-        
-        # Señal SHORT
-        short_signal = (
-            last['close'] < last['ema20'] and
-            last['ema9'] < last['ema20'] and
-            last['adx'] > 25 and
-            bearish_div and
-            resistance is not None and
-            last['close'] >= resistance * 0.99
-        )
-        
-        return {
+        long_signal = {
             'symbol': symbol,
-            'price': last['close'],
-            'support': support,
-            'resistance': resistance,
-            'volume_class': vol_class,
-            'long_signal': long_signal,
-            'short_signal': short_signal,
-            'rsi': last['rsi'],
-            'adx': last['adx']
-        }, df
-    
-    def calculate_risk_levels(self, signal_type, analysis):
-        if signal_type == 'LONG':
-            entry = analysis['support']
-            sl = entry * 0.97  # -3%
-            tp1 = entry * 1.03  # +3%
-            tp2 = entry * 1.06  # +6%
-            tp3 = entry * 1.09  # +9%
-        else:  # SHORT
-            entry = analysis['resistance']
-            sl = entry * 1.03  # +3%
-            tp1 = entry * 0.97  # -3%
-            tp2 = entry * 0.94  # -6%
-            tp3 = entry * 0.91  # -9%
-        
-        return {
             'entry': round(entry, 4),
             'sl': round(sl, 4),
-            'tp1': round(tp1, 4),
-            'tp2': round(tp2, 4),
-            'tp3': round(tp3, 4)
+            'tp1': round(entry + risk, 4),
+            'tp2': round(entry + risk * 2, 4),
+            'tp3': round(entry + risk * 3, 4),
+            'volume': volume_class,
+            'divergence': divergence == 'bullish',
+            'adx': round(last['adx'], 2)
         }
     
-    def update_signals(self):
-        while True:
-            start_time = time.time()
-            long_signals = []
-            short_signals = []
-            
-            for crypto in self.cryptos:
-                try:
-                    analysis, _ = self.analyze_symbol(crypto, '4h')
-                    if analysis:
-                        if analysis['long_signal']:
-                            risk_levels = self.calculate_risk_levels('LONG', analysis)
-                            long_signals.append({
-                                'symbol': crypto,
-                                **risk_levels,
-                                'rsi': round(analysis['rsi'], 2),
-                                'adx': round(analysis['adx'], 2),
-                                'volume': analysis['volume_class']
-                            })
-                        
-                        if analysis['short_signal']:
-                            risk_levels = self.calculate_risk_levels('SHORT', analysis)
-                            short_signals.append({
-                                'symbol': crypto,
-                                **risk_levels,
-                                'rsi': round(analysis['rsi'], 2),
-                                'adx': round(analysis['adx'], 2),
-                                'volume': analysis['volume_class']
-                            })
-                    
-                    time.sleep(0.1)  # Evitar rate limiting
-                except Exception as e:
-                    print(f"Error processing {crypto}: {e}")
-            
-            with self.lock:
-                self.signals['LONG'] = long_signals
-                self.signals['SHORT'] = short_signals
-                self.last_update = datetime.now()
-            
-            elapsed = time.time() - start_time
-            sleep_time = max(DATA_REFRESH - elapsed, 0)
-            time.sleep(sleep_time)
-
-analyzer = CryptoAnalyzer()
-
-@app.route('/')
-def index():
-    with analyzer.lock:
-        long_signals = analyzer.signals['LONG']
-        short_signals = analyzer.signals['SHORT']
-        last_update = analyzer.last_update.strftime("%Y-%m-%d %H:%M:%S") if analyzer.last_update else "Nunca"
+    # Señales SHORT
+    short_signal = None
+    if (trend == 'down' and last['adx'] > params['adx_level'] and 
+        (is_breakdown or divergence == 'bearish') and 
+        volume_class in ['Alto', 'Muy Alto']):
+        
+        entry = max(s for s in supports if s < last['close']) * 0.995 if supports else last['close'] * 0.99
+        sl = min(r for r in resistances if r > entry) * 1.005 if resistances else entry * 1.02
+        risk = sl - entry
+        
+        short_signal = {
+            'symbol': symbol,
+            'entry': round(entry, 4),
+            'sl': round(sl, 4),
+            'tp1': round(entry - risk, 4),
+            'tp2': round(entry - risk * 2, 4),
+            'tp3': round(entry - risk * 3, 4),
+            'volume': volume_class,
+            'divergence': divergence == 'bearish',
+            'adx': round(last['adx'], 2)
+        }
     
-    return render_template(
-        'index.html',
-        long_signals=enumerate(long_signals, 1),
-        short_signals=enumerate(short_signals, 1),
-        last_update=last_update,
-        cryptos_count=len(analyzer.cryptos)
-    )
+    return long_signal, short_signal
 
-def run_scheduler():
-    analyzer.update_signals()
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    params = DEFAULTS.copy()
+    
+    if request.method == 'POST':
+        for key in params:
+            if key in request.form:
+                params[key] = int(request.form[key])
+    
+    cryptos = load_cryptos()
+    long_signals = []
+    short_signals = []
+    
+    for crypto in cryptos[:20]:  # Limitar a 20 por recursos
+        long_signal, short_signal = analyze_crypto(crypto, params)
+        if long_signal:
+            long_signals.append(long_signal)
+        if short_signal:
+            short_signals.append(short_signal)
+    
+    # Ordenar por fuerza de tendencia (ADX)
+    long_signals.sort(key=lambda x: x['adx'], reverse=True)
+    short_signals.sort(key=lambda x: x['adx'], reverse=True)
+    
+    return render_template('index.html', 
+                           long_signals=long_signals, 
+                           short_signals=short_signals,
+                           params=params)
 
 if __name__ == '__main__':
-    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
-    scheduler_thread.start()
-    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
