@@ -1,10 +1,7 @@
 Flask
-gunicorn
 pandas
 numpy
 requests
-ta
+TA-Lib
+gunicorn
 python-dotenv
-apscheduler
-plotly
-kaleido
