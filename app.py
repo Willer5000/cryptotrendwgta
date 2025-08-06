@@ -4,10 +4,10 @@ import requests
 import pandas as pd
 import numpy as np
 from flask import Flask, render_template, request
-import json
-from datetime import datetime
+import logging
 
 app = Flask(__name__)
+app.logger.setLevel(logging.INFO)
 
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
@@ -20,14 +20,13 @@ DEFAULTS = {
     'adx_level': 25,
     'rsi_period': 14,
     'sr_window': 50,
-    'max_cryptos': 30  # Límite para Render gratuito
+    'lookback': 20
 }
 
 # Leer lista de criptomonedas
 def load_cryptos():
     with open(CRYPTOS_FILE, 'r') as f:
-        cryptos = [line.strip() for line in f.readlines()]
-    return cryptos
+        return [line.strip() for line in f.readlines()]
 
 # Obtener datos de KuCoin
 def get_kucoin_data(symbol, timeframe):
@@ -40,79 +39,93 @@ def get_kucoin_data(symbol, timeframe):
         '1w': '1week'
     }
     kucoin_tf = tf_mapping[timeframe]
-    url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}"
+    url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}-USDT"
     
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             data = response.json()
-            if data['code'] == '200000' and data['data']:
-                candles = data['data']
+            if data.get('code') == '200000':
+                candles = data.get('data', [])
+                if not candles:
+                    return None
+                
                 df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
-                
-                # Convertir tipos de datos
-                numeric_cols = ['open', 'close', 'high', 'low', 'volume']
-                df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
-                
-                # Convertir timestamp correctamente
+                # Convertir a float
+                for col in ['open', 'close', 'high', 'low', 'volume']:
+                    df[col] = df[col].astype(float)
+                # Convertir timestamp a entero y luego a datetime
                 df['timestamp'] = pd.to_datetime(df['timestamp'].astype(int), unit='s')
-                
                 return df.sort_values('timestamp')
     except Exception as e:
-        print(f"Error obteniendo datos para {symbol}: {str(e)}")
+        app.logger.error(f"Error getting data for {symbol}: {str(e)}")
     
     return None
 
 # Calcular EMA manualmente
-def calculate_ema(prices, window):
-    return prices.ewm(span=window, adjust=False).mean()
+def calculate_ema(series, window):
+    return series.ewm(span=window, adjust=False).mean()
+
+# Calcular ADX manualmente
+def calculate_adx(high, low, close, window):
+    # Calcular +DM y -DM
+    high_diff = high.diff()
+    low_diff = -low.diff()
+    plus_dm = np.where((high_diff > low_diff) & (high_diff > 0), high_diff, 0.0)
+    minus_dm = np.where((low_diff > high_diff) & (low_diff > 0), low_diff, 0.0)
+    
+    # Suavizar con EMA
+    atr = calculate_ema(calculate_tr(high, low, close), window)
+    plus_di = 100 * calculate_ema(pd.Series(plus_dm), window) / atr
+    minus_di = 100 * calculate_ema(pd.Series(minus_dm), window) / atr
+    
+    # Calcular DX y ADX
+    dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di)
+    adx = calculate_ema(pd.Series(dx), window)
+    return adx
+
+# Calcular True Range (para ATR y ADX)
+def calculate_tr(high, low, close):
+    tr1 = high - low
+    tr2 = np.abs(high - close.shift(1))
+    tr3 = np.abs(low - close.shift(1))
+    tr = np.max(np.array([tr1, tr2, tr3]), axis=0)
+    return tr
+
+# Calcular ATR manualmente
+def calculate_atr(high, low, close, window):
+    tr = calculate_tr(high, low, close)
+    return calculate_ema(pd.Series(tr), window)
 
 # Calcular RSI manualmente
-def calculate_rsi(prices, window=14):
-    delta = prices.diff(1)
-    gain = (delta.where(delta > 0, 0)).fillna(0)
-    loss = (-delta.where(delta < 0, 0)).fillna(0)
+def calculate_rsi(series, window):
+    delta = series.diff(1)
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
     
-    avg_gain = gain.rolling(window=window).mean()
-    avg_loss = loss.rolling(window=window).mean()
+    avg_gain = gain.rolling(window).mean()
+    avg_loss = loss.rolling(window).mean()
     
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# Calcular ADX manualmente
-def calculate_adx(high, low, close, window=14):
-    # Calcular +DM y -DM
-    plus_dm = high.diff()
-    minus_dm = -low.diff()
+# Calcular indicadores
+def calculate_indicators(df, params):
+    # EMAs
+    df['ema_fast'] = calculate_ema(df['close'], params['ema_fast'])
+    df['ema_slow'] = calculate_ema(df['close'], params['ema_slow'])
     
-    plus_dm[plus_dm < 0] = 0
-    minus_dm[minus_dm < 0] = 0
+    # ADX
+    df['adx'] = calculate_adx(df['high'], df['low'], df['close'], params['adx_period'])
     
-    # Calcular True Range
-    tr1 = high - low
-    tr2 = (high - close.shift(1)).abs()
-    tr3 = (low - close.shift(1)).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    # RSI
+    df['rsi'] = calculate_rsi(df['close'], params['rsi_period'])
     
-    # Calcular indicadores direccionales
-    plus_di = 100 * (plus_dm.ewm(alpha=1/window).mean() / tr.ewm(alpha=1/window).mean())
-    minus_di = 100 * (minus_dm.ewm(alpha=1/window).mean() / tr.ewm(alpha=1/window).mean())
+    # ATR
+    df['atr'] = calculate_atr(df['high'], df['low'], df['close'], 14)
     
-    # Calcular DX
-    dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di))
-    adx = dx.ewm(alpha=1/window).mean()
-    
-    return adx
-
-# Calcular ATR
-def calculate_atr(high, low, close, window=14):
-    tr1 = high - low
-    tr2 = (high - close.shift(1)).abs()
-    tr3 = (low - close.shift(1)).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.rolling(window).mean()
-    return atr
+    return df
 
 # Detectar soportes y resistencias
 def find_support_resistance(df, window):
@@ -126,8 +139,6 @@ def find_support_resistance(df, window):
 
 # Clasificar volumen
 def classify_volume(current_vol, avg_vol):
-    if avg_vol == 0:
-        return 'Muy Alto'
     ratio = current_vol / avg_vol
     if ratio > 2.0: return 'Muy Alto'
     if ratio > 1.5: return 'Alto'
@@ -136,30 +147,26 @@ def classify_volume(current_vol, avg_vol):
     return 'Muy Bajo'
 
 # Detectar divergencias
-def detect_divergence(df, lookback=20):
-    if len(df) < lookback + 10:
+def detect_divergence(df, lookback):
+    if len(df) < lookback:
         return None
-        
+    
     last_close = df['close'].iloc[-1]
     last_rsi = df['rsi'].iloc[-1]
     
     # Buscar máximos/mínimos recientes
-    recent_df = df.tail(lookback)
-    max_idx = recent_df['close'].idxmax()
-    min_idx = recent_df['close'].idxmin()
+    recent_data = df.tail(lookback)
+    max_idx = recent_data['close'].idxmax()
+    min_idx = recent_data['close'].idxmin()
     
     # Divergencia bajista
-    if max_idx != -1:
-        prev_high = df['close'].loc[max_idx]
-        prev_rsi_high = df['rsi'].loc[max_idx]
-        if last_close > prev_high and last_rsi < prev_rsi_high and last_rsi > 70:
+    if pd.notna(max_idx):
+        if last_close > df.loc[max_idx, 'close'] and last_rsi < df.loc[max_idx, 'rsi'] and last_rsi > 70:
             return 'bearish'
     
     # Divergencia alcista
-    if min_idx != -1:
-        prev_low = df['close'].loc[min_idx]
-        prev_rsi_low = df['rsi'].loc[min_idx]
-        if last_close < prev_low and last_rsi > prev_rsi_low and last_rsi < 30:
+    if pd.notna(min_idx):
+        if last_close < df.loc[min_idx, 'close'] and last_rsi > df.loc[min_idx, 'rsi'] and last_rsi < 30:
             return 'bullish'
     
     return None
@@ -167,27 +174,21 @@ def detect_divergence(df, lookback=20):
 # Analizar una criptomoneda
 def analyze_crypto(symbol, params):
     try:
-        df = get_kucoin_data(f"{symbol}-USDT", params['timeframe'])
+        df = get_kucoin_data(symbol, params['timeframe'])
         if df is None or len(df) < 100:
             return None, None
         
-        # Calcular indicadores manualmente
-        df['ema_fast'] = calculate_ema(df['close'], params['ema_fast'])
-        df['ema_slow'] = calculate_ema(df['close'], params['ema_slow'])
-        df['rsi'] = calculate_rsi(df['close'], params['rsi_period'])
-        df['adx'] = calculate_adx(df['high'], df['low'], df['close'], params['adx_period'])
-        df['atr'] = calculate_atr(df['high'], df['low'], df['close'])
-        
+        df = calculate_indicators(df, params)
         supports, resistances = find_support_resistance(df, params['sr_window'])
         
         last = df.iloc[-1]
         avg_vol = df['volume'].tail(20).mean()
         volume_class = classify_volume(last['volume'], avg_vol)
-        divergence = detect_divergence(df)
+        divergence = detect_divergence(df, params['lookback'])
         
         # Detectar quiebres
-        is_breakout = any(last['close'] > r * 1.005 for r in resistances)
-        is_breakdown = any(last['close'] < s * 0.995 for s in supports)
+        is_breakout = any(last['close'] > r * 1.005 for r in resistances) if resistances else False
+        is_breakdown = any(last['close'] < s * 0.995 for s in supports) if supports else False
         
         # Determinar tendencia
         trend = 'up' if last['ema_fast'] > last['ema_slow'] else 'down'
@@ -198,21 +199,22 @@ def analyze_crypto(symbol, params):
             (is_breakout or divergence == 'bullish') and 
             volume_class in ['Alto', 'Muy Alto']):
             
-            # Buscar la resistencia más cercana por encima
+            # Encontrar la resistencia más cercana por encima
             above_resistances = [r for r in resistances if r > last['close']]
             if above_resistances:
                 entry = min(above_resistances) * 1.005
             else:
                 entry = last['close'] * 1.01
-                
-            # Buscar soporte más cercano por debajo para SL
+            
+            # Encontrar el soporte más cercano por debajo
             below_supports = [s for s in supports if s < entry]
             if below_supports:
                 sl = max(below_supports) * 0.995
             else:
                 sl = entry * 0.98
-                
+            
             risk = entry - sl
+            
             long_signal = {
                 'symbol': symbol,
                 'entry': round(entry, 4),
@@ -222,7 +224,7 @@ def analyze_crypto(symbol, params):
                 'tp3': round(entry + risk * 3, 4),
                 'volume': volume_class,
                 'divergence': divergence == 'bullish',
-                'adx': round(last['adx'], 2) if not pd.isna(last['adx']) else 0
+                'adx': round(last['adx'], 2) if not np.isnan(last['adx']) else 0
             }
         
         # Señales SHORT
@@ -231,21 +233,22 @@ def analyze_crypto(symbol, params):
             (is_breakdown or divergence == 'bearish') and 
             volume_class in ['Alto', 'Muy Alto']):
             
-            # Buscar el soporte más cercano por debajo
+            # Encontrar el soporte más cercano por debajo
             below_supports = [s for s in supports if s < last['close']]
             if below_supports:
                 entry = max(below_supports) * 0.995
             else:
                 entry = last['close'] * 0.99
-                
-            # Buscar resistencia más cercana por encima para SL
+            
+            # Encontrar la resistencia más cercana por encima
             above_resistances = [r for r in resistances if r > entry]
             if above_resistances:
                 sl = min(above_resistances) * 1.005
             else:
                 sl = entry * 1.02
-                
+            
             risk = sl - entry
+            
             short_signal = {
                 'symbol': symbol,
                 'entry': round(entry, 4),
@@ -255,13 +258,12 @@ def analyze_crypto(symbol, params):
                 'tp3': round(entry - risk * 3, 4),
                 'volume': volume_class,
                 'divergence': divergence == 'bearish',
-                'adx': round(last['adx'], 2) if not pd.isna(last['adx']) else 0
+                'adx': round(last['adx'], 2) if not np.isnan(last['adx']) else 0
             }
         
         return long_signal, short_signal
-    
     except Exception as e:
-        print(f"Error analizando {symbol}: {str(e)}")
+        app.logger.error(f"Error analyzing {symbol}: {str(e)}")
         return None, None
 
 @app.route('/', methods=['GET', 'POST'])
@@ -271,7 +273,7 @@ def index():
     if request.method == 'POST':
         for key in params:
             if key in request.form:
-                # Asegurar que los valores numéricos sean enteros
+                # Convertir a int si es numérico, excepto timeframe
                 if key != 'timeframe':
                     params[key] = int(request.form[key])
                 else:
@@ -281,13 +283,8 @@ def index():
     long_signals = []
     short_signals = []
     
-    max_cryptos = params.pop('max_cryptos', 30)
-    
-    # Procesar criptos en grupos para evitar sobrecarga
-    for i, crypto in enumerate(cryptos):
-        if i >= max_cryptos:
-            break
-            
+    # Limitar a 20 criptos para no sobrecargar en la versión gratuita
+    for crypto in cryptos[:20]:
         long_signal, short_signal = analyze_crypto(crypto, params)
         if long_signal:
             long_signals.append(long_signal)
