@@ -12,25 +12,21 @@
         .long-bg { background-color: #e8f5e9; }
         .short-bg { background-color: #ffebee; }
         .volume-high { color: #d32f2f; font-weight: bold; }
-        .volume-vhigh { color: #b71c1c; font-weight: bold; }
         .volume-medium { color: #f57c00; }
-        .volume-low { color: #5d4037; }
         .card-header { font-weight: bold; }
-        .last-update { font-size: 0.85rem; }
     </style>
 </head>
 <body>
     <div class="container py-4">
         <header class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
             <div>
-                <h1 class="mb-1">wgta Crypto Trading Signals</h1>
+                <h1 class="mb-0">wgta Crypto Trading Signals</h1>
                 <p class="text-muted mb-0">Sistema automatizado de detección de oportunidades de trading</p>
-                <p class="last-update text-muted mb-0">Última actualización: {{ last_update }}</p>
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
-                <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary">
-                    GitHub
+                <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                    Ver en GitHub
                 </a>
             </div>
         </header>
@@ -42,59 +38,57 @@
                         <h2 class="h5 mb-0">Panel de Control</h2>
                     </div>
                     <div class="card-body">
-                        <form method="POST">
-                            <div class="row g-3">
-                                <div class="col-md-3">
-                                    <label class="form-label">Temporalidad</label>
-                                    <select name="timeframe" class="form-select">
-                                        {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
-                                        <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
-                                            {{ tf }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                
-                                <div class="col-md-2">
-                                    <label class="form-label">EMA Rápida</label>
-                                    <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
-                                </div>
-                                
-                                <div class="col-md-2">
-                                    <label class="form-label">EMA Lenta</label>
-                                    <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
-                                </div>
-                                
-                                <div class="col-md-2">
-                                    <label class="form-label">ADX Período</label>
-                                    <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
-                                </div>
-                                
-                                <div class="col-md-2">
-                                    <label class="form-label">ADX Nivel</label>
-                                    <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" step="0.1">
-                                </div>
-                                
-                                <div class="col-md-3">
-                                    <label class="form-label">RSI Período</label>
-                                    <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
-                                </div>
-                                
-                                <div class="col-md-3">
-                                    <label class="form-label">S/R Ventana</label>
-                                    <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
-                                </div>
-                                
-                                <div class="col-md-3">
-                                    <label class="form-label">Riesgo Máx. (%)</label>
-                                    <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1">
-                                </div>
-                                
-                                <div class="col-md-12 mt-4">
-                                    <button type="submit" class="btn btn-primary w-100">
-                                        Actualizar Datos
-                                    </button>
-                                </div>
+                        <form method="POST" class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Temporalidad</label>
+                                <select name="timeframe" class="form-select">
+                                    {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
+                                    <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
+                                        {{ tf }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">EMA Rápida</label>
+                                <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">EMA Lenta</label>
+                                <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">ADX Período</label>
+                                <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">ADX Nivel</label>
+                                <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">RSI Período</label>
+                                <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">S/R Ventana</label>
+                                <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">Divergencia Lookback</label>
+                                <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
+                            </div>
+                            
+                            <div class="col-md-12 mt-2">
+                                <button type="submit" class="btn btn-primary w-100 py-2">
+                                    Actualizar Datos
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -102,7 +96,7 @@
                 
                 <div class="card mb-4">
                     <div class="card-header bg-success text-white">
-                        <h2 class="h5 mb-0">Señales LONG ({{ long_signals|length }})</h2>
+                        <h2 class="h5 mb-0">Señales LONG</h2>
                     </div>
                     <div class="card-body">
                         {% if long_signals %}
@@ -131,9 +125,7 @@
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
                                         <td class="text-success">{{ signal.tp3 }}</td>
-                                        <td class="volume-{{ 'vhigh' if signal.volume == 'Muy Alto' else 'high' }}">
-                                            {{ signal.volume }}
-                                        </td>
+                                        <td class="volume-high">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
                                     </tr>
                                     {% endfor %}
@@ -150,7 +142,7 @@
                 
                 <div class="card">
                     <div class="card-header bg-danger text-white">
-                        <h2 class="h5 mb-0">Señales SHORT ({{ short_signals|length }})</h2>
+                        <h2 class="h5 mb-0">Señales SHORT</h2>
                     </div>
                     <div class="card-body">
                         {% if short_signals %}
@@ -179,9 +171,7 @@
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
                                         <td class="text-success">{{ signal.tp3 }}</td>
-                                        <td class="volume-{{ 'vhigh' if signal.volume == 'Muy Alto' else 'high' }}">
-                                            {{ signal.volume }}
-                                        </td>
+                                        <td class="volume-high">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
                                     </tr>
                                     {% endfor %}
@@ -203,52 +193,67 @@
                         <h2 class="h5 mb-0">Resumen del Mercado</h2>
                     </div>
                     <div class="card-body">
-                        <canvas id="marketChart"></canvas>
+                        <canvas id="marketChart" height="250"></canvas>
+                    </div>
+                </div>
+                
+                <div class="card mb-4">
+                    <div class="card-header bg-warning">
+                        <h2 class="h5 mb-0">Distribución de Señales</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-around text-center">
+                            <div>
+                                <h3 class="text-success">{{ long_signals|length }}</h3>
+                                <p class="mb-0">Señales LONG</p>
+                            </div>
+                            <div>
+                                <h3 class="text-danger">{{ short_signals|length }}</h3>
+                                <p class="mb-0">Señales SHORT</p>
+                            </div>
+                            <div>
+                                <h3>{{ 20 - long_signals|length - short_signals|length }}</h3>
+                                <p class="mb-0">Sin señal</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="card">
-                    <div class="card-header bg-warning">
+                    <div class="card-header bg-secondary text-white">
                         <h2 class="h5 mb-0">Manual Técnico</h2>
                     </div>
                     <div class="card-body">
-                        <h3>Estrategia de Trading</h3>
+                        <h5>Estrategia de Trading</h5>
                         <p>Este sistema detecta oportunidades basadas en:</p>
-                        <ul>
-                            <li><strong>EMAs</strong>: Cruce de EMA rápida y lenta para determinar tendencia</li>
-                            <li><strong>ADX</strong>: >25 para confirmar fuerza de tendencia</li>
-                            <li><strong>RSI</strong>: Divergencias para detectar posibles reversiones</li>
-                            <li><strong>Soportes/Resistencias</strong>: Quiebres con volumen significativo</li>
-                            <li><strong>Volumen</strong>: Operar solo con volumen Alto o Muy Alto</li>
+                        <ul class="mb-3">
+                            <li><strong>EMAs</strong>: Cruce de EMA rápida y lenta para tendencia</li>
+                            <li><strong>ADX</strong>: >25 para tendencia fuerte</li>
+                            <li><strong>RSI</strong>: Divergencias para reversiones</li>
+                            <li><strong>Soportes/Resistencias</strong>: Quiebres con volumen</li>
                         </ul>
                         
-                        <h3>Recomendaciones</h3>
-                        <ol>
+                        <h5>Recomendaciones</h5>
+                        <ol class="mb-3">
                             <li>Operar solo con volumen Alto/Muy Alto</li>
-                            <li>Confirmar señales con temporalidad superior</li>
-                            <li>Usar gestión de riesgo (1-2% por operación)</li>
-                            <li>Tomar beneficios escalonadamente (TP1, TP2, TP3)</li>
-                            <li>Revisar noticias y contexto del mercado</li>
+                            <li>Confirmar con temporalidad superior</li>
+                            <li>Usar gestión de riesgo (1:3 riesgo/beneficio)</li>
+                            <li>Tomar beneficios escalonadamente</li>
                         </ol>
                         
                         <div class="alert alert-primary">
                             <strong>Nota:</strong> Las criptomonedas son activos volátiles.
                             Este sistema es una herramienta de apoyo, no garantiza ganancias.
-                            Opere con responsabilidad.
-                        </div>
-                        
-                        <div class="text-center mt-3">
-                            <p class="mb-1">Desarrollado por wgta</p>
-                            <p class="mb-0">
-                                <a href="https://github.com/Willer5000" target="_blank">
-                                    https://github.com/Willer5000
-                                </a>
-                            </p>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+        
+        <footer class="mt-5 pt-3 text-center text-muted border-top">
+            <p>wgta Crypto Trading Signals &copy; {{ now.year }} - Todos los derechos reservados</p>
+            <p>Actualizado cada 15 minutos</p>
+        </footer>
     </div>
 
     <script>
@@ -259,11 +264,7 @@
             data: {
                 labels: ['LONG', 'SHORT', 'Neutral'],
                 datasets: [{
-                    data: [
-                        {{ long_signals|length }}, 
-                        {{ short_signals|length }}, 
-                        {{ 20 - long_signals|length - short_signals|length }}
-                    ],
+                    data: {{ chart_data.data | tojson }},
                     backgroundColor: [
                         'rgba(46, 204, 113, 0.7)',
                         'rgba(231, 76, 60, 0.7)',
@@ -279,22 +280,10 @@
                     title: {
                         display: true,
                         text: 'Distribución de Señales (Top 20 Criptos)'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `${context.label}: ${context.raw} criptos`;
-                            }
-                        }
                     }
                 }
             }
         });
-        
-        // Actualizar automáticamente cada 15 minutos
-        setTimeout(() => {
-            location.reload();
-        }, 900000); // 15 minutos
     </script>
 </body>
 </html>
