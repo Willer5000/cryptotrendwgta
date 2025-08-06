@@ -1,3 +1,3 @@
 #!/bin/bash
-pip install --upgrade pip
+echo "---- Starting Build ----"
 pip install -r requirements.txt
