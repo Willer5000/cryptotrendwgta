@@ -2,6 +2,4 @@ Flask
 pandas
 numpy
 requests
-pandas_ta
 gunicorn
-setuptools
