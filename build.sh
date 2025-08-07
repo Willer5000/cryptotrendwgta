@@ -1,3 +1,3 @@
 #!/bin/bash
-echo "Instalando dependencias..."
+echo "---- Building application ----"
 pip install -r requirements.txt
