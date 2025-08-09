@@ -14,11 +14,13 @@
         .short-bg { background-color: #ffebee; }
         .volume-high { color: #d32f2f; font-weight: bold; }
         .volume-medium { color: #f57c00; }
-        .chart-container { position: relative; height: 300px; margin-bottom: 20px; }
+        .chart-container { position: relative; height: 400px; margin-bottom: 20px; }
         .signal-table th { position: sticky; top: 0; background: white; z-index: 10; }
         .signal-table-container { max-height: 600px; overflow-y: auto; }
         .badge-long { background-color: #4CAF50; }
         .badge-short { background-color: #F44336; }
+        .grid-line { position: absolute; background: rgba(0,0,0,0.1); }
+        .quadrant-label { position: absolute; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -40,42 +42,106 @@
             </div>
         </header>
 
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-header bg-primary text-white">
-                        <h2 class="h5 mb-0"><i class="fas fa-chart-pie"></i> Resumen del Mercado</h2>
-                    </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="marketChart"></canvas>
-                        </div>
-                    </div>
-                </div>
+        <!-- Panel de Control con Filtros -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h2 class="h5 mb-0"><i class="fas fa-sliders-h"></i> Panel de Control</h2>
             </div>
-            
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-header bg-success text-white">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG</h2>
-                    </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="longStatsChart"></canvas>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Temporalidad</label>
+                            <select name="timeframe" class="form-select">
+                                {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
+                                <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
+                                    {{ tf }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">EMA Rápida</label>
+                            <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">EMA Lenta</label>
+                            <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">ADX Período</label>
+                            <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">ADX Nivel</label>
+                            <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">RSI Período</label>
+                            <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">S/R Ventana</label>
+                            <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">Divergencia Lookback</label>
+                            <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">Filtro Volumen</label>
+                            <select name="volume_filter" class="form-select">
+                                <option value="all" {% if params.volume_filter=='all' %}selected{% endif %}>Todos</option>
+                                <option value="Muy Alto" {% if params.volume_filter=='Muy Alto' %}selected{% endif %}>Muy Alto</option>
+                                <option value="Alto" {% if params.volume_filter=='Alto' %}selected{% endif %}>Alto</option>
+                                <option value="Medio" {% if params.volume_filter=='Medio' %}selected{% endif %}>Medio</option>
+                                <option value="Bajo" {% if params.volume_filter=='Bajo' %}selected{% endif %}>Bajo</option>
+                                <option value="Muy Bajo" {% if params.volume_filter=='Muy Bajo' %}selected{% endif %}>Muy Bajo</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-12 mt-4">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-sync"></i> Actualizar Parámetros
+                            </button>
                         </div>
                     </div>
-                </div>
+                </form>
             </div>
-            
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-header bg-danger text-white">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT</h2>
+        </div>
+
+        <!-- Gráfico de Dispersión de Probabilidades -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h2 class="h5 mb-0"><i class="fas fa-chart-scatter"></i> Probabilidades de Señales</h2>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="scatterChart"></canvas>
+                </div>
+                <div class="text-center mt-3">
+                    <div class="d-inline-block me-4">
+                        <span class="d-inline-block rounded-circle me-2" style="width: 12px; height: 12px; background-color: #00c853;"></span> Muy Alto
                     </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="shortStatsChart"></canvas>
-                        </div>
+                    <div class="d-inline-block me-4">
+                        <span class="d-inline-block rounded-circle me-2" style="width: 12px; height: 12px; background-color: #2979ff;"></span> Alto
+                    </div>
+                    <div class="d-inline-block me-4">
+                        <span class="d-inline-block rounded-circle me-2" style="width: 12px; height: 12px; background-color: #ffd600;"></span> Medio
+                    </div>
+                    <div class="d-inline-block me-4">
+                        <span class="d-inline-block rounded-circle me-2" style="width: 12px; height: 12px; background-color: #ff9100;"></span> Bajo
+                    </div>
+                    <div class="d-inline-block">
+                        <span class="d-inline-block rounded-circle me-2" style="width: 12px; height: 12px; background-color: #ff1744;"></span> Muy Bajo
                     </div>
                 </div>
             </div>
@@ -199,88 +265,165 @@
     </div>
 
     <script>
-        // Gráfico de resumen
-        const marketCtx = document.getElementById('marketChart').getContext('2d');
-        const marketChart = new Chart(marketCtx, {
-            type: 'doughnut',
+        // Gráfico de dispersión de probabilidades
+        const scatterData = {{ scatter_data | tojson }};
+        
+        // Mapeo de colores para volumen
+        const volumeColors = {
+            'Muy Alto': '#00c853',  // Verde
+            'Alto': '#2979ff',       // Azul
+            'Medio': '#ffd600',      // Amarillo
+            'Bajo': '#ff9100',       // Naranja
+            'Muy Bajo': '#ff1744'    // Rojo
+        };
+        
+        const scatterCtx = document.getElementById('scatterChart').getContext('2d');
+        const scatterChart = new Chart(scatterCtx, {
+            type: 'scatter',
             data: {
-                labels: ['LONG', 'SHORT', 'Neutral'],
                 datasets: [{
-                    data: [
-                        {{ long_signals|length }}, 
-                        {{ short_signals|length }}, 
-                        {{ 150 - long_signals|length - short_signals|length }}
-                    ],
-                    backgroundColor: [
-                        'rgba(46, 204, 113, 0.7)',
-                        'rgba(231, 76, 60, 0.7)',
-                        'rgba(149, 165, 166, 0.7)'
-                    ],
-                    borderWidth: 1
+                    label: 'Criptomonedas',
+                    data: scatterData.map(item => ({
+                        x: item.x,
+                        y: item.y,
+                        symbol: item.symbol,
+                        volume: item.volume
+                    })),
+                    backgroundColor: scatterData.map(item => volumeColors[item.volume]),
+                    pointRadius: 6,
+                    pointHoverRadius: 8
                 }]
             },
             options: {
                 responsive: true,
-                plugins: {
-                    legend: { position: 'bottom' },
-                    title: {
-                        display: true,
-                        text: 'Distribución de Señales'
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Probabilidad SHORT (%)',
+                            font: { size: 14, weight: 'bold' }
+                        },
+                        min: 0,
+                        max: 100,
+                        ticks: { stepSize: 20 },
+                        grid: { color: 'rgba(0, 0, 0, 0.1)' }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Probabilidad LONG (%)',
+                            font: { size: 14, weight: 'bold' }
+                        },
+                        min: 0,
+                        max: 100,
+                        ticks: { stepSize: 20 },
+                        grid: { color: 'rgba(0, 0, 0, 0.1)' }
                     }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.raw.symbol}: LONG ${context.raw.y.toFixed(1)}%, SHORT ${context.raw.x.toFixed(1)}%`;
+                            }
+                        }
+                    },
+                    legend: { display: false }
                 }
             }
         });
         
-        // Gráfico de estadísticas LONG
-        const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
-        const longStatsChart = new Chart(longStatsCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Distancia a Entrada'],
-                datasets: [{
-                    label: 'Distancia Promedio (%)',
-                    data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
-                    backgroundColor: 'rgba(46, 204, 113, 0.7)'
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: { beginAtZero: true }
-                },
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Estadísticas Señales LONG'
-                    }
-                }
-            }
-        });
+        // Dibujar cuadrícula y etiquetas de cuadrantes
+        function drawQuadrants() {
+            const canvas = document.getElementById('scatterChart');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // Limpiar elementos anteriores
+            const existingGrids = document.querySelectorAll('.grid-line, .quadrant-label');
+            existingGrids.forEach(el => el.remove());
+            
+            // Crear contenedor para elementos de superposición
+            const overlay = document.createElement('div');
+            overlay.style.position = 'absolute';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100%';
+            overlay.style.height = '100%';
+            overlay.style.pointerEvents = 'none';
+            canvas.parentNode.appendChild(overlay);
+            
+            // Líneas divisorias
+            const line1 = document.createElement('div');
+            line1.className = 'grid-line';
+            line1.style.left = '33.33%';
+            line1.style.top = '0';
+            line1.style.width = '1px';
+            line1.style.height = '100%';
+            overlay.appendChild(line1);
+            
+            const line2 = document.createElement('div');
+            line2.className = 'grid-line';
+            line2.style.left = '66.66%';
+            line2.style.top = '0';
+            line2.style.width = '1px';
+            line2.style.height = '100%';
+            overlay.appendChild(line2);
+            
+            const line3 = document.createElement('div');
+            line3.className = 'grid-line';
+            line3.style.top = '33.33%';
+            line3.style.left = '0';
+            line3.style.width = '100%';
+            line3.style.height = '1px';
+            overlay.appendChild(line3);
+            
+            const line4 = document.createElement('div');
+            line4.className = 'grid-line';
+            line4.style.top = '66.66%';
+            line4.style.left = '0';
+            line4.style.width = '100%';
+            line4.style.height = '1px';
+            overlay.appendChild(line4);
+            
+            // Etiquetas de cuadrantes
+            const quadrants = [
+                { text: 'Zona de Indecisión', left: '16%', top: '16%', color: '#9e9e9e' },
+                { text: 'Potencial SHORT', left: '50%', top: '16%', color: '#f44336' },
+                { text: 'SHORT Fuerte', left: '83%', top: '16%', color: '#d32f2f' },
+                { text: 'Potencial LONG', left: '16%', top: '50%', color: '#4caf50' },
+                { text: 'Zona Mixta', left: '50%', top: '50%', color: '#ff9800' },
+                { text: 'SHORT con LONG Débil', left: '83%', top: '50%', color: '#f44336' },
+                { text: 'LONG Fuerte', left: '16%', top: '83%', color: '#2e7d32' },
+                { text: 'LONG con SHORT Débil', left: '50%', top: '83%', color: '#4caf50' },
+                { text: 'Conflicto Fuerte', left: '83%', top: '83%', color: '#d32f2f' }
+            ];
+            
+            quadrants.forEach(q => {
+                const label = document.createElement('div');
+                label.className = 'quadrant-label';
+                label.textContent = q.text;
+                label.style.position = 'absolute';
+                label.style.left = q.left;
+                label.style.top = q.top;
+                label.style.transform = 'translate(-50%, -50%)';
+                label.style.color = q.color;
+                label.style.fontSize = '12px';
+                label.style.textAlign = 'center';
+                overlay.appendChild(label);
+            });
+        }
         
-        // Gráfico de estadísticas SHORT
-        const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
-        const shortStatsChart = new Chart(shortStatsCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Distancia a Entrada'],
-                datasets: [{
-                    label: 'Distancia Promedio (%)',
-                    data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
-                    backgroundColor: 'rgba(231, 76, 60, 0.7)'
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: { beginAtZero: true }
-                },
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Estadísticas Señales SHORT'
-                    }
-                }
-            }
+        // Inicializar cuadrícula
+        scatterChart.canvas.parentNode.style.position = 'relative';
+        scatterChart.update();
+        setTimeout(drawQuadrants, 500);
+        
+        // Redibujar cuadrícula al redimensionar
+        window.addEventListener('resize', () => {
+            setTimeout(drawQuadrants, 500);
         });
         
         // Auto-refresh cada 60 segundos
