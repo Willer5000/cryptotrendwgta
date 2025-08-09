@@ -15,7 +15,8 @@ import io
 import base64
 
 app = Flask(__name__)
-cache = Cache(app, config={'CACHE_TYPE': 'simple'})
+app.config['CACHE_TYPE'] = 'simple'
+cache = Cache(app)
 
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
@@ -30,7 +31,7 @@ DEFAULTS = {
     'sr_window': 50,
     'divergence_lookback': 20,
     'max_risk_percent': 1.5,
-    'support_resistance_percent': 2.0  # Para considerar "cerca" de soporte/resistencia
+    'support_resistance_percent': 2.0
 }
 
 # Leer lista de criptomonedas
@@ -52,16 +53,14 @@ def get_kucoin_data(symbol, timeframe):
     url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}-USDT"
     
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=15)
         if response.status_code == 200:
             data = response.json()
             if data.get('code') == '200000' and data.get('data'):
                 candles = data['data']
-                # KuCoin devuelve las velas en orden descendente, invertimos para tener ascendente
                 candles.reverse()
                 df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
                 df = df.astype({'open': float, 'close': float, 'high': float, 'low': float, 'volume': float})
-                # Convertir timestamp a entero para evitar el warning
                 df['timestamp'] = pd.to_datetime(df['timestamp'].astype(int), unit='s')
                 return df
     except Exception as e:
@@ -83,7 +82,7 @@ def calculate_rsi(series, window):
     
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    return rsi
+    return rsi.fillna(50)  # Valor neutro cuando no hay datos suficientes
 
 # Implementación manual de ADX
 def calculate_adx(high, low, close, window):
@@ -104,7 +103,7 @@ def calculate_adx(high, low, close, window):
     
     dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di)).replace([np.inf, -np.inf], 0)
     adx = dx.rolling(window).mean()
-    return adx, plus_di, minus_di
+    return adx.fillna(0), plus_di.fillna(0), minus_di.fillna(0)
 
 # Implementación manual de ATR
 def calculate_atr(high, low, close, window):
@@ -112,7 +111,7 @@ def calculate_atr(high, low, close, window):
     tr2 = (high - close.shift()).abs()
     tr3 = (low - close.shift()).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.rolling(window).mean()
+    atr = tr.rolling(window).mean().fillna(0)
     return atr
 
 # Calcular indicadores manualmente
@@ -170,11 +169,11 @@ def detect_divergence(df, lookback):
     recent = df.iloc[-lookback:]
     
     # Buscar máximos/mínimos recientes
-    max_idx = recent['close'].idxmax()
-    min_idx = recent['close'].idxmin()
+    max_idx = recent['close'].idxmax() if len(recent) > 0 else None
+    min_idx = recent['close'].idxmin() if len(recent) > 0 else None
     
     # Divergencia bajista
-    if not pd.isna(max_idx):
+    if max_idx is not None and not pd.isna(max_idx):
         price_high = df.loc[max_idx, 'close']
         rsi_high = df.loc[max_idx, 'rsi']
         current_price = df.iloc[-1]['close']
@@ -184,7 +183,7 @@ def detect_divergence(df, lookback):
             return 'bearish'
     
     # Divergencia alcista
-    if not pd.isna(min_idx):
+    if min_idx is not None and not pd.isna(min_idx):
         price_low = df.loc[min_idx, 'close']
         rsi_low = df.loc[min_idx, 'rsi']
         current_price = df.iloc[-1]['close']
@@ -197,6 +196,8 @@ def detect_divergence(df, lookback):
 
 # Verificar si el precio está cerca de un nivel
 def is_price_near_level(price, levels, percent=1.0):
+    if not levels:
+        return False
     for level in levels:
         if abs(price - level) / level <= percent / 100.0:
             return True
@@ -245,11 +246,11 @@ def calculate_probability(df, last, supports, resistances, volume_class, diverge
 
 # Analizar una criptomoneda
 def analyze_crypto(symbol, params):
-    df = get_kucoin_data(symbol, params['timeframe'])
-    if df is None or len(df) < 100:
-        return None, None, 0, 0
-    
     try:
+        df = get_kucoin_data(symbol, params['timeframe'])
+        if df is None or len(df) < 50:
+            return None, None, 0, 0, 'Muy Bajo'
+        
         df = calculate_indicators(df, params)
         supports, resistances = find_support_resistance(df, params['sr_window'])
         
@@ -326,10 +327,10 @@ def analyze_crypto(symbol, params):
                 'probability': short_prob
             }
         
-        return long_signal, short_signal, long_prob, short_prob
+        return long_signal, short_signal, long_prob, short_prob, volume_class
     except Exception as e:
         app.logger.error(f"Error analyzing {symbol}: {str(e)}")
-        return None, None, 0, 0
+        return None, None, 0, 0, 'Muy Bajo'
 
 # Tarea en segundo plano para actualizar datos
 def background_update():
@@ -343,23 +344,17 @@ def background_update():
                 scatter_data = []
                 
                 for crypto in cryptos:
-                    long_signal, short_signal, long_prob, short_prob = analyze_crypto(crypto, DEFAULTS)
+                    long_signal, short_signal, long_prob, short_prob, volume_class = analyze_crypto(crypto, DEFAULTS)
                     
-                    # Obtener datos para el gráfico de dispersión
-                    df = get_kucoin_data(crypto, DEFAULTS['timeframe'])
-                    if df is not None and len(df) > 0:
-                        last = df.iloc[-1]
-                        avg_vol = df['volume'].tail(20).mean()
-                        volume_class = classify_volume(last['volume'], avg_vol)
-                        volume_level = get_volume_level(volume_class)
-                        
-                        scatter_data.append({
-                            'symbol': crypto,
-                            'long_prob': long_prob,
-                            'short_prob': short_prob,
-                            'volume_class': volume_class,
-                            'volume_level': volume_level
-                        })
+                    volume_level = get_volume_level(volume_class)
+                    
+                    scatter_data.append({
+                        'symbol': crypto,
+                        'long_prob': long_prob,
+                        'short_prob': short_prob,
+                        'volume_class': volume_class,
+                        'volume_level': volume_level
+                    })
                     
                     if long_signal:
                         long_signals.append(long_signal)
@@ -433,11 +428,11 @@ def index():
                            signal_count=signal_count,
                            avg_adx_long=round(avg_adx_long, 2),
                            avg_adx_short=round(avg_adx_short, 2),
-                           scatter_labels=json.dumps(scatter_labels),
-                           scatter_long=json.dumps(scatter_long),
-                           scatter_short=json.dumps(scatter_short),
-                           scatter_volume=json.dumps(scatter_volume),
-                           scatter_volume_class=json.dumps(scatter_volume_class),
+                           scatter_labels=scatter_labels,
+                           scatter_long=scatter_long,
+                           scatter_short=scatter_short,
+                           scatter_volume=scatter_volume,
+                           scatter_volume_class=scatter_volume_class,
                            volume_filter=volume_filter)
 
 @app.route('/chart/<symbol>/<signal_type>')
