@@ -13,10 +13,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
+import math
 
 app = Flask(__name__)
-app.config['CACHE_TYPE'] = 'simple'
-cache = Cache(app)
+cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
@@ -31,7 +31,7 @@ DEFAULTS = {
     'sr_window': 50,
     'divergence_lookback': 20,
     'max_risk_percent': 1.5,
-    'support_resistance_percent': 2.0
+    'price_distance_threshold': 1.0  # 1% para considerar "cerca" de soporte/resistencia
 }
 
 # Leer lista de criptomonedas
@@ -53,14 +53,16 @@ def get_kucoin_data(symbol, timeframe):
     url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}-USDT"
     
     try:
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, timeout=10)
         if response.status_code == 200:
             data = response.json()
             if data.get('code') == '200000' and data.get('data'):
                 candles = data['data']
+                # KuCoin devuelve las velas en orden descendente, invertimos para tener ascendente
                 candles.reverse()
                 df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
                 df = df.astype({'open': float, 'close': float, 'high': float, 'low': float, 'volume': float})
+                # Convertir timestamp a entero para evitar el warning
                 df['timestamp'] = pd.to_datetime(df['timestamp'].astype(int), unit='s')
                 return df
     except Exception as e:
@@ -82,7 +84,7 @@ def calculate_rsi(series, window):
     
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    return rsi.fillna(50)  # Valor neutro cuando no hay datos suficientes
+    return rsi
 
 # Implementación manual de ADX
 def calculate_adx(high, low, close, window):
@@ -103,7 +105,7 @@ def calculate_adx(high, low, close, window):
     
     dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di)).replace([np.inf, -np.inf], 0)
     adx = dx.rolling(window).mean()
-    return adx.fillna(0), plus_di.fillna(0), minus_di.fillna(0)
+    return adx, plus_di, minus_di
 
 # Implementación manual de ATR
 def calculate_atr(high, low, close, window):
@@ -111,7 +113,7 @@ def calculate_atr(high, low, close, window):
     tr2 = (high - close.shift()).abs()
     tr3 = (low - close.shift()).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.rolling(window).mean().fillna(0)
+    atr = tr.rolling(window).mean()
     return atr
 
 # Calcular indicadores manualmente
@@ -152,14 +154,6 @@ def classify_volume(current_vol, avg_vol):
     if ratio > 0.5: return 'Bajo'
     return 'Muy Bajo'
 
-# Obtener nivel de volumen para el gráfico
-def get_volume_level(volume_class):
-    if volume_class == 'Muy Alto': return 4
-    if volume_class == 'Alto': return 3
-    if volume_class == 'Medio': return 2
-    if volume_class == 'Bajo': return 1
-    return 0
-
 # Detectar divergencias
 def detect_divergence(df, lookback):
     if len(df) < lookback + 1:
@@ -169,11 +163,11 @@ def detect_divergence(df, lookback):
     recent = df.iloc[-lookback:]
     
     # Buscar máximos/mínimos recientes
-    max_idx = recent['close'].idxmax() if len(recent) > 0 else None
-    min_idx = recent['close'].idxmin() if len(recent) > 0 else None
+    max_idx = recent['close'].idxmax()
+    min_idx = recent['close'].idxmin()
     
     # Divergencia bajista
-    if max_idx is not None and not pd.isna(max_idx):
+    if max_idx is not None:
         price_high = df.loc[max_idx, 'close']
         rsi_high = df.loc[max_idx, 'rsi']
         current_price = df.iloc[-1]['close']
@@ -183,7 +177,7 @@ def detect_divergence(df, lookback):
             return 'bearish'
     
     # Divergencia alcista
-    if min_idx is not None and not pd.isna(min_idx):
+    if min_idx is not None:
         price_low = df.loc[min_idx, 'close']
         rsi_low = df.loc[min_idx, 'rsi']
         current_price = df.iloc[-1]['close']
@@ -194,63 +188,73 @@ def detect_divergence(df, lookback):
     
     return None
 
-# Verificar si el precio está cerca de un nivel
-def is_price_near_level(price, levels, percent=1.0):
+# Calcular distancia al nivel más cercano
+def calculate_distance_to_level(price, levels, threshold_percent):
     if not levels:
         return False
-    for level in levels:
-        if abs(price - level) / level <= percent / 100.0:
-            return True
-    return False
+    min_distance = min(abs(price - level) for level in levels)
+    threshold = price * threshold_percent / 100
+    return min_distance <= threshold
 
-# Calcular puntuación para una cripto (probabilidad de señales)
-def calculate_probability(df, last, supports, resistances, volume_class, divergence, params):
-    long_prob = 0
-    short_prob = 0
+# Generar gráfico para una señal
+def generate_chart(df, signal, signal_type):
+    plt.figure(figsize=(12, 8))
     
-    # LONG: Tendencia alcista
-    if last['ema_fast'] > last['ema_slow']:
-        long_prob += 20
+    # Gráfico de precio
+    plt.subplot(3, 1, 1)
+    plt.plot(df['timestamp'], df['close'], label='Precio', color='blue')
+    plt.plot(df['timestamp'], df['ema_fast'], label=f'EMA {DEFAULTS["ema_fast"]}', color='orange', alpha=0.7)
+    plt.plot(df['timestamp'], df['ema_slow'], label=f'EMA {DEFAULTS["ema_slow"]}', color='green', alpha=0.7)
     
-    # SHORT: Tendencia bajista
-    if last['ema_fast'] < last['ema_slow']:
-        short_prob += 20
+    # Marcar entrada y SL
+    if signal_type == 'long':
+        plt.axhline(y=signal['entry'], color='green', linestyle='--', label='Entrada')
+        plt.axhline(y=signal['sl'], color='red', linestyle='--', label='Stop Loss')
+    else:
+        plt.axhline(y=signal['entry'], color='red', linestyle='--', label='Entrada')
+        plt.axhline(y=signal['sl'], color='green', linestyle='--', label='Stop Loss')
     
-    # ADX fuerte
-    if last['adx'] > params['adx_level']:
-        long_prob += 20
-        short_prob += 20
+    plt.title(f'{signal["symbol"]} - Precio y EMAs')
+    plt.legend()
+    plt.grid(True)
     
-    # Quiebre o divergencia para LONG
-    breakout_long = any(last['close'] > r * 1.005 for r in resistances) if resistances else False
-    if breakout_long or divergence == 'bullish':
-        long_prob += 30
+    # Gráfico de volumen
+    plt.subplot(3, 1, 2)
+    plt.bar(df['timestamp'], df['volume'], color=np.where(df['close'] > df['open'], 'green', 'red'))
+    plt.title('Volumen')
+    plt.grid(True)
     
-    # Quiebre o divergencia para SHORT
-    breakdown_short = any(last['close'] < s * 0.995 for s in supports) if supports else False
-    if breakdown_short or divergence == 'bearish':
-        short_prob += 30
+    # Gráfico de indicadores
+    plt.subplot(3, 1, 3)
+    plt.plot(df['timestamp'], df['rsi'], label='RSI', color='purple')
+    plt.axhline(y=70, color='red', linestyle='--', alpha=0.5)
+    plt.axhline(y=30, color='green', linestyle='--', alpha=0.5)
     
-    # Volumen
-    if volume_class in ['Alto', 'Muy Alto']:
-        long_prob += 20
-        short_prob += 20
+    plt.plot(df['timestamp'], df['adx'], label='ADX', color='brown')
+    plt.axhline(y=DEFAULTS['adx_level'], color='blue', linestyle='--', alpha=0.5)
     
-    # Precio cerca de soporte (LONG) o resistencia (SHORT)
-    if is_price_near_level(last['close'], supports, params['support_resistance_percent']):
-        long_prob += 10
-    if is_price_near_level(last['close'], resistances, params['support_resistance_percent']):
-        short_prob += 10
+    plt.title('Indicadores')
+    plt.legend()
+    plt.grid(True)
     
-    return min(long_prob, 100), min(short_prob, 100)
+    plt.tight_layout()
+    
+    # Convertir a base64
+    img = io.BytesIO()
+    plt.savefig(img, format='png')
+    img.seek(0)
+    plot_url = base64.b64encode(img.getvalue()).decode()
+    plt.close()
+    
+    return plot_url
 
-# Analizar una criptomoneda
+# Analizar una criptomoneda y calcular probabilidades
 def analyze_crypto(symbol, params):
+    df = get_kucoin_data(symbol, params['timeframe'])
+    if df is None or len(df) < 100:
+        return None, None, 0, 0, 'Muy Bajo'
+    
     try:
-        df = get_kucoin_data(symbol, params['timeframe'])
-        if df is None or len(df) < 50:
-            return None, None, 0, 0, 'Muy Bajo'
-        
         df = calculate_indicators(df, params)
         supports, resistances = find_support_resistance(df, params['sr_window'])
         
@@ -259,9 +263,6 @@ def analyze_crypto(symbol, params):
         volume_class = classify_volume(last['volume'], avg_vol)
         divergence = detect_divergence(df, params['divergence_lookback'])
         
-        # Calcular probabilidades
-        long_prob, short_prob = calculate_probability(df, last, supports, resistances, volume_class, divergence, params)
-        
         # Detectar quiebres
         is_breakout = any(last['close'] > r * 1.005 for r in resistances) if resistances else False
         is_breakdown = any(last['close'] < s * 0.995 for s in supports) if supports else False
@@ -269,12 +270,27 @@ def analyze_crypto(symbol, params):
         # Determinar tendencia
         trend = 'up' if last['ema_fast'] > last['ema_slow'] else 'down'
         
+        # Calcular probabilidades
+        long_prob = 0
+        short_prob = 0
+        
+        # Criterios para LONG
+        if trend == 'up': long_prob += 30
+        if last['adx'] > params['adx_level']: long_prob += 20
+        if is_breakout or divergence == 'bullish': long_prob += 25
+        if volume_class in ['Alto', 'Muy Alto']: long_prob += 15
+        if calculate_distance_to_level(last['close'], supports, params['price_distance_threshold']): long_prob += 10
+        
+        # Criterios para SHORT
+        if trend == 'down': short_prob += 30
+        if last['adx'] > params['adx_level']: short_prob += 20
+        if is_breakdown or divergence == 'bearish': short_prob += 25
+        if volume_class in ['Alto', 'Muy Alto']: short_prob += 15
+        if calculate_distance_to_level(last['close'], resistances, params['price_distance_threshold']): short_prob += 10
+        
         # Señales LONG
         long_signal = None
-        if (trend == 'up' and last['adx'] > params['adx_level'] and 
-            (is_breakout or divergence == 'bullish') and 
-            volume_class in ['Alto', 'Muy Alto']):
-            
+        if long_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
             # Encontrar la resistencia más cercana por encima
             next_resistances = [r for r in resistances if r > last['close']]
             entry = min(next_resistances) * 1.005 if next_resistances else last['close'] * 1.01
@@ -294,16 +310,12 @@ def analyze_crypto(symbol, params):
                 'divergence': divergence == 'bullish',
                 'adx': round(last['adx'], 2),
                 'price': round(last['close'], 4),
-                'distance': round(((entry - last['close']) / last['close']) * 100, 2),
-                'probability': long_prob
+                'distance': round(((entry - last['close']) / last['close']) * 100, 2)
             }
         
         # Señales SHORT
         short_signal = None
-        if (trend == 'down' and last['adx'] > params['adx_level'] and 
-            (is_breakdown or divergence == 'bearish') and 
-            volume_class in ['Alto', 'Muy Alto']):
-            
+        if short_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
             # Encontrar el soporte más cercano por debajo
             next_supports = [s for s in supports if s < last['close']]
             entry = max(next_supports) * 0.995 if next_supports else last['close'] * 0.99
@@ -323,8 +335,7 @@ def analyze_crypto(symbol, params):
                 'divergence': divergence == 'bearish',
                 'adx': round(last['adx'], 2),
                 'price': round(last['close'], 4),
-                'distance': round(((last['close'] - entry) / last['close']) * 100, 2),
-                'probability': short_prob
+                'distance': round(((last['close'] - entry) / last['close']) * 100, 2)
             }
         
         return long_signal, short_signal, long_prob, short_prob, volume_class
@@ -345,21 +356,18 @@ def background_update():
                 
                 for crypto in cryptos:
                     long_signal, short_signal, long_prob, short_prob, volume_class = analyze_crypto(crypto, DEFAULTS)
-                    
-                    volume_level = get_volume_level(volume_class)
-                    
-                    scatter_data.append({
-                        'symbol': crypto,
-                        'long_prob': long_prob,
-                        'short_prob': short_prob,
-                        'volume_class': volume_class,
-                        'volume_level': volume_level
-                    })
-                    
                     if long_signal:
                         long_signals.append(long_signal)
                     if short_signal:
                         short_signals.append(short_signal)
+                    
+                    # Datos para el gráfico de dispersión
+                    scatter_data.append({
+                        'symbol': crypto,
+                        'long_prob': long_prob,
+                        'short_prob': short_prob,
+                        'volume': volume_class
+                    })
                 
                 # Ordenar por fuerza de tendencia (ADX)
                 long_signals.sort(key=lambda x: x['adx'], reverse=True)
@@ -383,57 +391,25 @@ update_thread.start()
 
 @app.route('/')
 def index():
-    params = DEFAULTS.copy()
-    
-    # Si se envió el formulario de filtros
-    if request.method == 'GET' and request.args:
-        for key in params:
-            if key in request.args:
-                # Convertir a int si es numérico, de lo contrario dejar como está
-                if key != 'timeframe':
-                    try:
-                        params[key] = int(request.args[key])
-                    except:
-                        pass
-                else:
-                    params[key] = request.args[key]
-    
     long_signals = cache.get('long_signals') or []
     short_signals = cache.get('short_signals') or []
     scatter_data = cache.get('scatter_data') or []
     last_update = cache.get('last_update') or datetime.now()
-    
-    # Filtrar por volumen si se especifica
-    volume_filter = request.args.get('volume_filter', 'all')
-    if volume_filter != 'all':
-        scatter_data = [d for d in scatter_data if d['volume_class'] == volume_filter]
     
     # Estadísticas para gráficos
     signal_count = len(long_signals) + len(short_signals)
     avg_adx_long = np.mean([s['adx'] for s in long_signals]) if long_signals else 0
     avg_adx_short = np.mean([s['adx'] for s in short_signals]) if short_signals else 0
     
-    # Preparar datos para el gráfico de dispersión
-    scatter_labels = [d['symbol'] for d in scatter_data]
-    scatter_long = [d['long_prob'] for d in scatter_data]
-    scatter_short = [d['short_prob'] for d in scatter_data]
-    scatter_volume = [d['volume_level'] for d in scatter_data]
-    scatter_volume_class = [d['volume_class'] for d in scatter_data]
-    
     return render_template('index.html', 
-                           long_signals=long_signals[:50], 
-                           short_signals=short_signals[:50],
+                           long_signals=long_signals, 
+                           short_signals=short_signals,
                            last_update=last_update,
-                           params=params,
+                           params=DEFAULTS,
                            signal_count=signal_count,
                            avg_adx_long=round(avg_adx_long, 2),
                            avg_adx_short=round(avg_adx_short, 2),
-                           scatter_labels=scatter_labels,
-                           scatter_long=scatter_long,
-                           scatter_short=scatter_short,
-                           scatter_volume=scatter_volume,
-                           scatter_volume_class=scatter_volume_class,
-                           volume_filter=volume_filter)
+                           scatter_data=json.dumps(scatter_data))
 
 @app.route('/chart/<symbol>/<signal_type>')
 def get_chart(symbol, signal_type):
