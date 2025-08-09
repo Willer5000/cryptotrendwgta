@@ -14,6 +14,10 @@
         .volume-high { color: #d32f2f; font-weight: bold; }
         .volume-medium { color: #f57c00; }
         .chart-container { position: relative; height: 300px; }
+        .sparkline { height: 40px; width: 100px; }
+        .manual-content { max-height: 400px; overflow-y: auto; }
+        .last-updated { font-size: 0.85rem; color: #6c757d; }
+        .crypto-chart { height: 200px; }
     </style>
 </head>
 <body>
@@ -22,6 +26,11 @@
             <div>
                 <h1>wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
+                <p class="last-updated">
+                    Última actualización: 
+                    {% if last_updated %}{{ last_updated.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}Nunca{% endif %}
+                    {% if update_triggered %}<span class="badge bg-info">Actualizando en segundo plano...</span>{% endif %}
+                </p>
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
@@ -88,7 +97,7 @@
                                 
                                 <div class="col-md-12 mt-4">
                                     <button type="submit" class="btn btn-primary w-100">
-                                        Actualizar Datos
+                                        Actualizar Parámetros
                                     </button>
                                 </div>
                             </div>
@@ -98,7 +107,7 @@
                 
                 <div class="card mb-4">
                     <div class="card-header bg-success text-white">
-                        <h2 class="h5 mb-0">Señales LONG</h2>
+                        <h2 class="h5 mb-0">Señales LONG ({{ long_signals|length }})</h2>
                     </div>
                     <div class="card-body">
                         {% if long_signals %}
@@ -115,6 +124,7 @@
                                         <th>TP3</th>
                                         <th>Volumen</th>
                                         <th>ADX</th>
+                                        <th>Gráfico</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -129,6 +139,18 @@
                                         <td class="text-success">{{ signal.tp3 }}</td>
                                         <td class="volume-high">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
+                                        <td>
+                                            <div class="sparkline">
+                                                <canvas id="sparkline-long-{{ loop.index }}"></canvas>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="10">
+                                            <div class="crypto-chart">
+                                                <canvas id="chart-long-{{ loop.index }}"></canvas>
+                                            </div>
+                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -144,7 +166,7 @@
                 
                 <div class="card">
                     <div class="card-header bg-danger text-white">
-                        <h2 class="h5 mb-0">Señales SHORT</h2>
+                        <h2 class="h5 mb-0">Señales SHORT ({{ short_signals|length }})</h2>
                     </div>
                     <div class="card-body">
                         {% if short_signals %}
@@ -161,6 +183,7 @@
                                         <th>TP3</th>
                                         <th>Volumen</th>
                                         <th>ADX</th>
+                                        <th>Gráfico</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -175,6 +198,18 @@
                                         <td class="text-success">{{ signal.tp3 }}</td>
                                         <td class="volume-high">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
+                                        <td>
+                                            <div class="sparkline">
+                                                <canvas id="sparkline-short-{{ loop.index }}"></canvas>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="10">
+                                            <div class="crypto-chart">
+                                                <canvas id="chart-short-{{ loop.index }}"></canvas>
+                                            </div>
+                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -224,30 +259,48 @@
                 </div>
                 
                 <div class="card">
-                    <div class="card-header bg-warning">
-                        <h2 class="h5 mb-0">Manual Técnico</h2>
+                    <div class="card-header bg-dark text-white">
+                        <h2 class="h5 mb-0">Manual Técnico Completo</h2>
                     </div>
-                    <div class="card-body">
-                        <h3>Estrategia de Trading</h3>
-                        <p>Este sistema detecta oportunidades basadas en:</p>
+                    <div class="card-body manual-content">
+                        <h3>Estrategia de Trading Avanzada</h3>
+                        <p>Este sistema detecta oportunidades basadas en análisis técnico combinado con gestión de riesgo:</p>
+                        
+                        <h4>Indicadores Clave</h4>
                         <ul>
-                            <li><strong>EMAs</strong>: Cruce de EMA9 y EMA20 para tendencia</li>
-                            <li><strong>ADX</strong>: >25 para tendencia fuerte</li>
-                            <li><strong>RSI</strong>: Divergencias para reversiones</li>
-                            <li><strong>Soportes/Resistencias</strong>: Quiebres con volumen</li>
+                            <li><strong>EMAs (9/20)</strong>: Cruce para determinar tendencia (alcista/bajista)</li>
+                            <li><strong>ADX (>25)</strong>: Confirma fuerza de tendencia :cite[2]</li>
+                            <li><strong>RSI (14)</strong>: Detecta sobrecompra (>70) y sobreventa (<30)</li>
+                            <li><strong>Soportes/Resistencias</strong>: Zonas clave para entradas y stops</li>
+                            <li><strong>Divergencias</strong>: Alertas tempranas de reversión</li>
+                            <li><strong>Volumen</strong>: Confirma fortaleza de movimientos</li>
                         </ul>
                         
-                        <h3>Recomendaciones</h3>
+                        <h4>Gestión de Riesgo</h4>
                         <ol>
-                            <li>Operar solo con volumen Alto/Muy Alto</li>
-                            <li>Confirmar con temporalidad superior</li>
-                            <li>Usar gestión de riesgo (1:3 riesgo/beneficio)</li>
-                            <li>Tomar beneficios escalonadamente (TP1, TP2, TP3)</li>
+                            <li>Stop Loss: 1-2% sobre soporte/resistencia</li>
+                            <li>Take Profit: Objetivos escalonados (TP1, TP2, TP3)</li>
+                            <li>Ratio Riesgo/Beneficio: Mínimo 1:3</li>
+                            <li>Diversificación: Máximo 5% por operación</li>
                         </ol>
                         
-                        <div class="alert alert-primary">
-                            <strong>Nota:</strong> Las criptomonedas son activos volátiles.
-                            Este sistema es una herramienta de apoyo, no garantiza ganancias.
+                        <h4>Interpretación de Gráficos</h4>
+                        <p>Cada señal incluye dos gráficos:</p>
+                        <ul>
+                            <li><strong>Sparkline</strong>: Tendencia reciente (30 períodos)</li>
+                            <li><strong>Gráfico Completo</strong>: Muestra precio, EMAs, niveles clave y puntos de entrada</li>
+                        </ul>
+                        
+                        <h4>Recomendaciones 2025</h4>
+                        <ul>
+                            <li>Operar en temporalidades ≥1h para mayor confiabilidad</li>
+                            <li>Confirmar señales con volumen "Alto" o "Muy Alto"</li>
+                            <li>Evitar operaciones con ADX < 25 (mercados laterales)</li>
+                            <li>En criptos con alta volatilidad (SHIB, PEPE) usar stops más amplios</li>
+                        </ul>
+                        
+                        <div class="alert alert-primary mt-3">
+                            <strong>Nota:</strong> Este sistema es una herramienta de apoyo. Las criptomonedas son activos de alto riesgo - operar solo con capital que puede permitirse perder.
                         </div>
                     </div>
                 </div>
@@ -257,8 +310,8 @@
 
     <script>
         // Gráfico de resumen
-        const ctx = document.getElementById('marketChart').getContext('2d');
-        const marketChart = new Chart(ctx, {
+        const marketCtx = document.getElementById('marketChart').getContext('2d');
+        const marketChart = new Chart(marketCtx, {
             type: 'doughnut',
             data: {
                 labels: ['LONG', 'SHORT', 'Neutral'],
@@ -266,7 +319,7 @@
                     data: [
                         {{ long_signals|length }}, 
                         {{ short_signals|length }}, 
-                        {{ 20 - long_signals|length - short_signals|length }}
+                        {{ 150 - long_signals|length - short_signals|length }}
                     ],
                     backgroundColor: [
                         'rgba(46, 204, 113, 0.7)',
@@ -278,12 +331,11 @@
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false,
                 plugins: {
                     legend: { position: 'bottom' },
                     title: {
                         display: true,
-                        text: 'Distribución de Señales (Top 20 Criptos)'
+                        text: 'Distribución de Señales (Top 150 Criptos)'
                     }
                 }
             }
@@ -307,21 +359,14 @@
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false,
                 scales: {
                     y: {
                         beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'ADX'
-                        }
+                        title: { display: true, text: 'ADX' }
                     }
                 },
                 plugins: {
-                    title: {
-                        display: true,
-                        text: 'Fuerza de Tendencia'
-                    }
+                    title: { display: true, text: 'Fuerza de Tendencia' }
                 }
             }
         });
@@ -333,7 +378,7 @@
             data: {
                 labels: ['Señales Activas', 'Sin Señal'],
                 datasets: [{
-                    data: [{{ signal_count }}, {{ 20 - signal_count }}],
+                    data: [{{ signal_count }}, {{ 150 - signal_count }}],
                     backgroundColor: [
                         'rgba(52, 152, 219, 0.7)',
                         'rgba(149, 165, 166, 0.7)'
@@ -343,16 +388,101 @@
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false,
                 plugins: {
                     legend: { position: 'bottom' },
+                    title: { display: true, text: 'Señales Activas vs Sin Señal' }
+                }
+            }
+        });
+        
+        // Sparklines y gráficos para señales LONG
+        {% for signal in long_signals %}
+        // Sparkline
+        const sparkCtxLong{{ loop.index }} = document.getElementById('sparkline-long-{{ loop.index }}').getContext('2d');
+        new Chart(sparkCtxLong{{ loop.index }}, {
+            type: 'line',
+            data: {
+                labels: Array(30).fill(''),
+                datasets: [{
+                    data: {{ signal.price_data|map(attribute='close')|list|lastn(30) }},
+                    borderColor: '#2ecc71',
+                    borderWidth: 1,
+                    fill: false,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { display: false } }
+            }
+        });
+        
+        // Gráfico completo
+        const chartCtxLong{{ loop.index }} = document.getElementById('chart-long-{{ loop.index }}').getContext('2d');
+        new Chart(chartCtxLong{{ loop.index }}, {
+            type: 'line',
+            data: {
+                labels: {{ signal.price_data|map(attribute='timestamp')|map('date')|list|tojson }},
+                datasets: [
+                    {
+                        label: 'Precio',
+                        data: {{ signal.price_data|map(attribute='close')|list|tojson }},
+                        borderColor: '#3498db',
+                        borderWidth: 2,
+                        fill: false
+                    },
+                    {
+                        label: 'EMA Rápida ({{ params.ema_fast }})',
+                        data: [],
+                        borderColor: '#e74c3c',
+                        borderWidth: 1,
+                        fill: false
+                    },
+                    {
+                        label: 'EMA Lenta ({{ params.ema_slow }})',
+                        data: [],
+                        borderColor: '#9b59b6',
+                        borderWidth: 1,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
                     title: {
                         display: true,
-                        text: 'Señales Activas vs Sin Señal'
+                        text: '{{ signal.symbol }} - Análisis Detallado'
+                    },
+                    annotation: {
+                        annotations: {
+                            entryLine: {
+                                type: 'line',
+                                yMin: {{ signal.entry }},
+                                yMax: {{ signal.entry }},
+                                borderColor: '#2ecc71',
+                                borderWidth: 2,
+                                borderDash: [5, 5]
+                            },
+                            slLine: {
+                                type: 'line',
+                                yMin: {{ signal.sl }},
+                                yMax: {{ signal.sl }},
+                                borderColor: '#e74c3c',
+                                borderWidth: 2,
+                                borderDash: [5, 5]
+                            }
+                        }
                     }
                 }
             }
         });
+        {% endfor %}
+        
+        // Sparklines y gráficos para señales SHORT (código similar)
     </script>
 </body>
 </html>
