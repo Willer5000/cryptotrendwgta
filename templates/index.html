@@ -19,18 +19,8 @@
         .signal-table-container { max-height: 600px; overflow-y: auto; }
         .badge-long { background-color: #4CAF50; }
         .badge-short { background-color: #F44336; }
-        .scatter-point { position: relative; }
-        .scatter-label { 
-            position: absolute; 
-            font-size: 10px; 
-            color: white; 
-            text-shadow: 0 0 3px black;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            z-index: 10;
-        }
-        .volume-filter-btn { margin-right: 5px; margin-bottom: 5px; }
-        .active-volume { transform: scale(1.1); box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+        .filter-section { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .scatter-point { font-size: 10px; text-align: center; text-shadow: 1px 1px 1px #000; }
     </style>
 </head>
 <body>
@@ -52,87 +42,143 @@
             </div>
         </header>
 
-        <!-- Panel de Filtros -->
-        <div class="card mb-4">
-            <div class="card-header bg-primary text-white">
-                <h2 class="h5 mb-0"><i class="fas fa-filter"></i> Filtros de Parámetros</h2>
-            </div>
-            <div class="card-body">
-                <form method="POST">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label">Temporalidad</label>
-                            <select name="timeframe" class="form-select">
-                                {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
-                                <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
-                                    {{ tf }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">EMA Rápida</label>
-                            <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">EMA Lenta</label>
-                            <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">ADX Período</label>
-                            <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">ADX Nivel</label>
-                            <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">RSI Período</label>
-                            <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">S/R Ventana</label>
-                            <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">Divergencia Lookback</label>
-                            <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-12 mt-4">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="fas fa-sync-alt"></i> Actualizar Parámetros
-                            </button>
+        <!-- Filtros -->
+        <div class="filter-section">
+            <h2 class="mb-4"><i class="fas fa-filter"></i> Filtros</h2>
+            <form method="GET">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Temporalidad</label>
+                        <select name="timeframe" class="form-select">
+                            {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
+                            <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
+                                {{ tf }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">EMA Rápida</label>
+                        <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">EMA Lenta</label>
+                        <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">ADX Período</label>
+                        <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">ADX Nivel</label>
+                        <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">RSI Período</label>
+                        <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">S/R Ventana</label>
+                        <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">Divergencia Lookback</label>
+                        <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">Riesgo Máximo (%)</label>
+                        <input type="number" step="0.1" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">% Cerca S/R</label>
+                        <input type="number" step="0.1" name="support_resistance_percent" value="{{ params.support_resistance_percent }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-12 mt-4">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-filter"></i> Aplicar Filtros
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="h5 mb-0"><i class="fas fa-chart-pie"></i> Resumen del Mercado</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="marketChart"></canvas>
                         </div>
                     </div>
-                </form>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white">
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="longStatsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header bg-danger text-white">
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="shortStatsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Gráfico de Dispersión -->
+        <!-- Gráfico de dispersión -->
         <div class="card mb-4">
-            <div class="card-header bg-info text-white">
-                <h2 class="h5 mb-0"><i class="fas fa-braille"></i> Probabilidad de Señales</h2>
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0"><i class="fas fa-project-diagram"></i> Probabilidades de Señales</h2>
+                <form method="GET" class="d-inline">
+                    <input type="hidden" name="timeframe" value="{{ params.timeframe }}">
+                    <input type="hidden" name="ema_fast" value="{{ params.ema_fast }}">
+                    <input type="hidden" name="ema_slow" value="{{ params.ema_slow }}">
+                    <input type="hidden" name="adx_period" value="{{ params.adx_period }}">
+                    <input type="hidden" name="adx_level" value="{{ params.adx_level }}">
+                    <input type="hidden" name="rsi_period" value="{{ params.rsi_period }}">
+                    <input type="hidden" name="sr_window" value="{{ params.sr_window }}">
+                    <input type="hidden" name="divergence_lookback" value="{{ params.divergence_lookback }}">
+                    <input type="hidden" name="max_risk_percent" value="{{ params.max_risk_percent }}">
+                    <input type="hidden" name="support_resistance_percent" value="{{ params.support_resistance_percent }}">
+                    <select name="volume_filter" onchange="this.form.submit()" class="form-select form-select-sm">
+                        <option value="all" {% if volume_filter == 'all' %}selected{% endif %}>Todos los volúmenes</option>
+                        <option value="Muy Alto" {% if volume_filter == 'Muy Alto' %}selected{% endif %}>Muy Alto</option>
+                        <option value="Alto" {% if volume_filter == 'Alto' %}selected{% endif %}>Alto</option>
+                        <option value="Medio" {% if volume_filter == 'Medio' %}selected{% endif %}>Medio</option>
+                        <option value="Bajo" {% if volume_filter == 'Bajo' %}selected{% endif %}>Bajo</option>
+                        <option value="Muy Bajo" {% if volume_filter == 'Muy Bajo' %}selected{% endif %}>Muy Bajo</option>
+                    </select>
+                </form>
             </div>
             <div class="card-body">
-                <div class="mb-3">
-                    <label>Filtrar por Volumen:</label>
-                    <div class="d-flex flex-wrap">
-                        <button class="btn btn-sm volume-filter-btn btn-outline-secondary" data-volume="all">Todos</button>
-                        <button class="btn btn-sm volume-filter-btn btn-outline-success" data-volume="Muy Alto">Muy Alto</button>
-                        <button class="btn btn-sm volume-filter-btn btn-outline-primary" data-volume="Alto">Alto</button>
-                        <button class="btn btn-sm volume-filter-btn btn-outline-warning" data-volume="Medio">Medio</button>
-                        <button class="btn btn-sm volume-filter-btn btn-outline-orange" data-volume="Bajo">Bajo</button>
-                        <button class="btn btn-sm volume-filter-btn btn-outline-danger" data-volume="Muy Bajo">Muy Bajo</button>
-                    </div>
-                </div>
                 <div class="chart-container" style="height: 500px;">
                     <canvas id="scatterChart"></canvas>
                 </div>
@@ -257,32 +303,112 @@
     </div>
 
     <script>
-        // Datos para el gráfico de dispersión
-        const probabilityData = JSON.parse('{{ probability_data | safe }}');
-        const volumeColors = {
-            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'Alto': 'rgba(52, 152, 219, 0.8)',      // Azul
-            'Medio': 'rgba(241, 196, 15, 0.8)',     // Amarillo
-            'Bajo': 'rgba(230, 126, 34, 0.8)',      // Naranja
-            'Muy Bajo': 'rgba(231, 76, 60, 0.8)'    // Rojo
-        };
-
-        // Crear gráfico de dispersión
+        // Gráfico de resumen
+        const marketCtx = document.getElementById('marketChart').getContext('2d');
+        const marketChart = new Chart(marketCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['LONG', 'SHORT', 'Neutral'],
+                datasets: [{
+                    data: [
+                        {{ long_signals|length }}, 
+                        {{ short_signals|length }}, 
+                        {{ 150 - long_signals|length - short_signals|length }}
+                    ],
+                    backgroundColor: [
+                        'rgba(46, 204, 113, 0.7)',
+                        'rgba(231, 76, 60, 0.7)',
+                        'rgba(149, 165, 166, 0.7)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    title: {
+                        display: true,
+                        text: 'Distribución de Señales'
+                    }
+                }
+            }
+        });
+        
+        // Gráfico de estadísticas LONG
+        const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
+        const longStatsChart = new Chart(longStatsCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Distancia a Entrada'],
+                datasets: [{
+                    label: 'Distancia Promedio (%)',
+                    data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
+                    backgroundColor: 'rgba(46, 204, 113, 0.7)'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Estadísticas Señales LONG'
+                    }
+                }
+            }
+        });
+        
+        // Gráfico de estadísticas SHORT
+        const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
+        const shortStatsChart = new Chart(shortStatsCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Distancia a Entrada'],
+                datasets: [{
+                    label: 'Distancia Promedio (%)',
+                    data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
+                    backgroundColor: 'rgba(231, 76, 60, 0.7)'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Estadísticas Señales SHORT'
+                    }
+                }
+            }
+        });
+        
+        // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        let scatterChart = new Chart(scatterCtx, {
+        const scatterChart = new Chart(scatterCtx, {
             type: 'scatter',
             data: {
                 datasets: [{
                     label: 'Criptomonedas',
-                    data: probabilityData.map(item => ({
-                        x: item.short_prob,
-                        y: item.long_prob,
-                        symbol: item.symbol,
-                        volume: item.volume_class
+                    data: JSON.parse('{{ scatter_short|safe }}').map((short, index) => ({
+                        x: short,
+                        y: JSON.parse('{{ scatter_long|safe }}')[index],
+                        r: 5,
+                        symbol: JSON.parse('{{ scatter_labels|safe }}')[index],
+                        volume: JSON.parse('{{ scatter_volume_class|safe }}')[index]
                     })),
-                    backgroundColor: probabilityData.map(item => volumeColors[item.volume_class]),
-                    pointRadius: 8,
-                    pointHoverRadius: 10
+                    backgroundColor: JSON.parse('{{ scatter_volume|safe }}').map(level => {
+                        if (level === 4) return 'rgba(46, 204, 113, 0.7)'; // Muy Alto: Verde
+                        if (level === 3) return 'rgba(52, 152, 219, 0.7)'; // Alto: Azul
+                        if (level === 2) return 'rgba(241, 196, 15, 0.7)'; // Medio: Amarillo
+                        if (level === 1) return 'rgba(230, 126, 34, 0.7)'; // Bajo: Naranja
+                        return 'rgba(231, 76, 60, 0.7)'; // Muy Bajo: Rojo
+                    }),
+                    pointRadius: 8
                 }]
             },
             options: {
@@ -292,115 +418,39 @@
                     x: {
                         title: {
                             display: true,
-                            text: 'Probabilidad SHORT (%)',
-                            font: { size: 14 }
+                            text: 'Probabilidad SHORT (%)'
                         },
                         min: 0,
-                        max: 100,
-                        ticks: {
-                            stepSize: 20
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
+                        max: 100
                     },
                     y: {
                         title: {
                             display: true,
-                            text: 'Probabilidad LONG (%)',
-                            font: { size: 14 }
+                            text: 'Probabilidad LONG (%)'
                         },
                         min: 0,
-                        max: 100,
-                        ticks: {
-                            stepSize: 20
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
+                        max: 100
                     }
                 },
                 plugins: {
-                    legend: {
-                        display: false
-                    },
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return `${context.raw.symbol}: LONG ${context.raw.y}% | SHORT ${context.raw.x}%`;
-                            },
-                            afterLabel: function(context) {
-                                return `Volumen: ${context.raw.volume}`;
+                                return context.raw.symbol + 
+                                    ' - LONG: ' + context.raw.y + '%' +
+                                    ' - SHORT: ' + context.raw.x + '%' +
+                                    ' - Vol: ' + context.raw.volume;
                             }
                         }
+                    },
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'Probabilidades de Señales por Criptomoneda'
                     }
-                },
-                animation: {
-                    duration: 1000
                 }
             }
         });
-
-        // Añadir etiquetas a los puntos
-        function addLabels() {
-            const canvas = document.getElementById('scatterChart');
-            const points = scatterChart.getDatasetMeta(0).data;
-            
-            // Limpiar etiquetas anteriores
-            document.querySelectorAll('.scatter-label').forEach(el => el.remove());
-            
-            // Crear nuevas etiquetas
-            points.forEach((point, index) => {
-                const symbol = probabilityData[index].symbol;
-                const label = document.createElement('div');
-                label.className = 'scatter-label';
-                label.textContent = symbol;
-                label.style.left = `${point.x}px`;
-                label.style.top = `${point.y}px`;
-                canvas.parentNode.appendChild(label);
-            });
-        }
-
-        // Inicializar etiquetas
-        setTimeout(addLabels, 1000);
-        
-        // Evento para redibujar etiquetas al cambiar el tamaño
-        window.addEventListener('resize', addLabels);
-        
-        // Filtrado por volumen
-        document.querySelectorAll('.volume-filter-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const volume = this.getAttribute('data-volume');
-                
-                // Actualizar clase activa
-                document.querySelectorAll('.volume-filter-btn').forEach(b => 
-                    b.classList.remove('active-volume'));
-                this.classList.add('active-volume');
-                
-                // Filtrar datos
-                let filteredData = probabilityData;
-                if (volume !== 'all') {
-                    filteredData = probabilityData.filter(item => item.volume_class === volume);
-                }
-                
-                // Actualizar gráfico
-                scatterChart.data.datasets[0].data = filteredData.map(item => ({
-                    x: item.short_prob,
-                    y: item.long_prob,
-                    symbol: item.symbol,
-                    volume: item.volume_class
-                }));
-                
-                scatterChart.data.datasets[0].backgroundColor = filteredData.map(item => 
-                    volumeColors[item.volume_class]);
-                
-                scatterChart.update();
-                setTimeout(addLabels, 300);
-            });
-        });
-
-        // Activar filtro "Todos" por defecto
-        document.querySelector('.volume-filter-btn[data-volume="all"]').classList.add('active-volume');
         
         // Auto-refresh cada 60 segundos
         setTimeout(() => {
