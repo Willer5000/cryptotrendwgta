@@ -6,120 +6,169 @@
     <title>wgta Crypto Trading Signals</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.1.0/dist/chartjs-plugin-annotation.min.js"></script>
     <style>
         .signal-card { transition: transform 0.3s; }
-        .signal-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
-        .long-bg { background-color: #e8f5e9; border-left: 4px solid #4CAF50; }
-        .short-bg { background-color: #ffebee; border-left: 4px solid #F44336; }
-        .volume-extreme { color: #b71c1c; font-weight: bold; }
+        .signal-card:hover { transform: translateY(-5px); }
+        .long-bg { background-color: #e8f5e9; }
+        .short-bg { background-color: #ffebee; }
         .volume-high { color: #d32f2f; font-weight: bold; }
         .volume-medium { color: #f57c00; }
-        .chart-container { position: relative; height: 300px; }
-        .manual-section { background: #f8f9fa; border-radius: 10px; padding: 20px; }
-        .crypto-table th { background-color: #f1f1f1; position: sticky; top: 0; }
-        .info-badge { font-size: 0.85rem; }
+        .chart-container { position: relative; height: 400px; }
+        .crypto-chart { height: 100%; }
+        .info-card { height: 100%; }
+        .risk-badge { font-size: 0.9rem; padding: 0.4rem; }
     </style>
 </head>
 <body>
     <div class="container py-4">
-        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom">
             <div>
-                <h1 class="mb-1">wgta Crypto Trading Signals</h1>
-                <p class="text-muted mb-0">Sistema profesional de análisis técnico para criptomonedas</p>
-                <small class="text-muted">Autor: wgta | <a href="https://github.com/Willer5000" target="_blank">GitHub</a></small>
+                <h1>wgta Crypto Trading Signals</h1>
+                <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
+                <p class="text-muted">Última actualización: {{ cache_timestamp }}</p>
             </div>
             <div class="text-end">
-                <div class="bg-light p-2 rounded">
-                    <small class="d-block">Actualizado: {{ now.strftime('%Y-%m-%d %H:%M') }}</small>
-                    <small class="d-block">Cryptos analizadas: {{ total_cryptos }}</small>
-                    <small class="d-block">Tiempo proceso: {{ processing_time }}s</small>
-                </div>
+                <p class="mb-0">Autor: wgta</p>
+                <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary">
+                    GitHub
+                </a>
             </div>
         </header>
 
         <div class="row mb-4">
             <div class="col-md-12">
-                <div class="card mb-4">
+                <div class="card">
                     <div class="card-header bg-primary text-white">
-                        <h2 class="h5 mb-0">Panel de Control</h2>
+                        <h2 class="h5 mb-0">Resumen del Mercado</h2>
                     </div>
                     <div class="card-body">
-                        <form method="POST" class="row g-3">
-                            <div class="col-md-2">
-                                <label class="form-label">Temporalidad</label>
-                                <select name="timeframe" class="form-select">
-                                    {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
-                                    <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
-                                        {{ tf }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            
-                            <div class="col-md-2">
-                                <label class="form-label">EMA Rápida</label>
-                                <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
-                                <small class="text-muted">(Default: 9)</small>
-                            </div>
-                            
-                            <div class="col-md-2">
-                                <label class="form-label">EMA Lenta</label>
-                                <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
-                                <small class="text-muted">(Default: 20)</small>
-                            </div>
-                            
-                            <div class="col-md-2">
-                                <label class="form-label">ADX Período</label>
-                                <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
-                                <small class="text-muted">(Default: 14)</small>
-                            </div>
-                            
-                            <div class="col-md-2">
-                                <label class="form-label">ADX Nivel</label>
-                                <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
-                                <small class="text-muted">(Min: 25)</small>
-                            </div>
-                            
-                            <div class="col-md-2">
-                                <label class="form-label">RSI Período</label>
-                                <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
-                                <small class="text-muted">(Default: 14)</small>
-                            </div>
-                            
+                        <div class="row">
                             <div class="col-md-3">
-                                <label class="form-label">S/R Ventana</label>
-                                <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
-                                <small class="text-muted">(Default: 50)</small>
+                                <div class="card text-white bg-success mb-3">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Señales LONG</h5>
+                                        <p class="card-text display-4">{{ long_signals|length }}</p>
+                                        <p class="card-text">ADX Prom: {{ avg_adx_long }} | RR Prom: {{ avg_rr_long }}</p>
+                                    </div>
+                                </div>
                             </div>
-                            
                             <div class="col-md-3">
-                                <label class="form-label">Divergencia Lookback</label>
-                                <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
-                                <small class="text-muted">(Default: 20)</small>
+                                <div class="card text-white bg-danger mb-3">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Señales SHORT</h5>
+                                        <p class="card-text display-4">{{ short_signals|length }}</p>
+                                        <p class="card-text">ADX Prom: {{ avg_adx_short }} | RR Prom: {{ avg_rr_short }}</p>
+                                    </div>
+                                </div>
                             </div>
-                            
-                            <div class="col-md-12 mt-2">
-                                <button type="submit" class="btn btn-primary w-100 py-2">
-                                    <i class="bi bi-arrow-repeat"></i> Actualizar Análisis (Top 150 Cryptos)
-                                </button>
+                            <div class="col-md-3">
+                                <div class="card text-white bg-info mb-3">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Total Señales</h5>
+                                        <p class="card-text display-4">{{ signal_count }}</p>
+                                        <p class="card-text">de 150 criptomonedas</p>
+                                    </div>
+                                </div>
                             </div>
-                        </form>
+                            <div class="col-md-3">
+                                <div class="card text-white bg-warning mb-3">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Actualización</h5>
+                                        <p class="card-text">Cada 15 minutos</p>
+                                        <p class="card-text">Próxima: <span id="next-update"></span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="row">
-            <div class="col-md-6">
+            <div class="col-md-8">
                 <div class="card mb-4">
-                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <div class="card-header bg-primary text-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h2 class="h5 mb-0">Panel de Control</h2>
+                            <button class="btn btn-sm btn-light" type="button" data-bs-toggle="collapse" data-bs-target="#controlPanel">
+                                Mostrar/Ocultar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body collapse show" id="controlPanel">
+                        <form method="POST">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">Temporalidad</label>
+                                    <select name="timeframe" class="form-select">
+                                        {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
+                                        <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
+                                            {{ tf }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-2">
+                                    <label class="form-label">EMA Rápida</label>
+                                    <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
+                                </div>
+                                
+                                <div class="col-md-2">
+                                    <label class="form-label">EMA Lenta</label>
+                                    <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
+                                </div>
+                                
+                                <div class="col-md-2">
+                                    <label class="form-label">ADX Período</label>
+                                    <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
+                                </div>
+                                
+                                <div class="col-md-2">
+                                    <label class="form-label">ADX Nivel</label>
+                                    <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
+                                </div>
+                                
+                                <div class="col-md-2">
+                                    <label class="form-label">RSI Período</label>
+                                    <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
+                                </div>
+                                
+                                <div class="col-md-3">
+                                    <label class="form-label">S/R Ventana</label>
+                                    <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
+                                </div>
+                                
+                                <div class="col-md-3">
+                                    <label class="form-label">Divergencia Lookback</label>
+                                    <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
+                                </div>
+                                
+                                <div class="col-md-3">
+                                    <label class="form-label">Máximo Riesgo (%)</label>
+                                    <input type="number" step="0.1" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control">
+                                </div>
+                                
+                                <div class="col-md-12 mt-4">
+                                    <button type="submit" class="btn btn-primary w-100">
+                                        Actualizar Parámetros
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
                         <h2 class="h5 mb-0">Señales LONG ({{ long_signals|length }})</h2>
-                        <span class="badge bg-light text-success">Tendencia Alcista</span>
                     </div>
                     <div class="card-body">
                         {% if long_signals %}
                         <div class="table-responsive">
-                            <table class="table table-hover crypto-table">
+                            <table class="table table-hover">
                                 <thead class="table-light">
                                     <tr>
                                         <th>#</th>
@@ -128,43 +177,30 @@
                                         <th>SL</th>
                                         <th>TP1</th>
                                         <th>TP2</th>
+                                        <th>TP3</th>
                                         <th>Vol</th>
                                         <th>ADX</th>
-                                        <th>RSI</th>
+                                        <th>RR</th>
+                                        <th>Gráfico</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for signal in long_signals %}
-                                    <tr class="long-bg signal-card" data-bs-toggle="collapse" href="#detailLong{{ loop.index }}">
+                                    <tr class="long-bg">
                                         <td>{{ loop.index }}</td>
-                                        <td><strong>{{ signal.symbol }}</strong></td>
+                                        <td>{{ signal.symbol }}</td>
                                         <td>{{ signal.entry }}</td>
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
+                                        <td class="text-success">{{ signal.tp3 }}</td>
                                         <td class="volume-high">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
-                                        <td>{{ signal.rsi }}</td>
-                                    </tr>
-                                    <tr class="collapse" id="detailLong{{ loop.index }}">
-                                        <td colspan="9">
-                                            <div class="p-3 bg-light rounded">
-                                                <div class="row">
-                                                    <div class="col-md-6">
-                                                        <h5>Detalles de la operación</h5>
-                                                        <ul>
-                                                            <li><strong>Take Profit 3:</strong> {{ signal.tp3 }}</li>
-                                                            <li><strong>Divergencia:</strong> {{ 'Sí' if signal.divergence else 'No' }}</li>
-                                                            <li><strong>Ratio Riesgo/Beneficio:</strong> 1:3</li>
-                                                            <li><strong>Volumen:</strong> <span class="volume-high">{{ signal.volume }}</span></li>
-                                                        </ul>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <h5>Gráfico de análisis</h5>
-                                                        <img src="data:image/png;base64,{{ signal.chart }}" class="img-fluid" alt="{{ signal.symbol }} Chart">
-                                                    </div>
-                                                </div>
-                                            </div>
+                                        <td><span class="badge bg-{% if signal.risk_reward > 3 %}success{% else %}warning{% endif %} risk-badge">{{ signal.risk_reward }}:1</span></td>
+                                        <td>
+                                            <button class="btn btn-sm btn-info" onclick="showChart('{{ signal.symbol }}', 'long')">
+                                                Ver
+                                            </button>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -172,24 +208,21 @@
                             </table>
                         </div>
                         {% else %}
-                        <div class="alert alert-warning text-center">
-                            <i class="bi bi-exclamation-triangle"></i> No se encontraron señales LONG en este momento
+                        <div class="alert alert-warning">
+                            No se encontraron señales LONG en este momento
                         </div>
                         {% endif %}
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-md-6">
-                <div class="card mb-4">
-                    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                
+                <div class="card">
+                    <div class="card-header bg-danger text-white">
                         <h2 class="h5 mb-0">Señales SHORT ({{ short_signals|length }})</h2>
-                        <span class="badge bg-light text-danger">Tendencia Bajista</span>
                     </div>
                     <div class="card-body">
                         {% if short_signals %}
                         <div class="table-responsive">
-                            <table class="table table-hover crypto-table">
+                            <table class="table table-hover">
                                 <thead class="table-light">
                                     <tr>
                                         <th>#</th>
@@ -198,43 +231,30 @@
                                         <th>SL</th>
                                         <th>TP1</th>
                                         <th>TP2</th>
+                                        <th>TP3</th>
                                         <th>Vol</th>
                                         <th>ADX</th>
-                                        <th>RSI</th>
+                                        <th>RR</th>
+                                        <th>Gráfico</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for signal in short_signals %}
-                                    <tr class="short-bg signal-card" data-bs-toggle="collapse" href="#detailShort{{ loop.index }}">
+                                    <tr class="short-bg">
                                         <td>{{ loop.index }}</td>
-                                        <td><strong>{{ signal.symbol }}</strong></td>
+                                        <td>{{ signal.symbol }}</td>
                                         <td>{{ signal.entry }}</td>
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
+                                        <td class="text-success">{{ signal.tp3 }}</td>
                                         <td class="volume-high">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
-                                        <td>{{ signal.rsi }}</td>
-                                    </tr>
-                                    <tr class="collapse" id="detailShort{{ loop.index }}">
-                                        <td colspan="9">
-                                            <div class="p-3 bg-light rounded">
-                                                <div class="row">
-                                                    <div class="col-md-6">
-                                                        <h5>Detalles de la operación</h5>
-                                                        <ul>
-                                                            <li><strong>Take Profit 3:</strong> {{ signal.tp3 }}</li>
-                                                            <li><strong>Divergencia:</strong> {{ 'Sí' if signal.divergence else 'No' }}</li>
-                                                            <li><strong>Ratio Riesgo/Beneficio:</strong> 1:3</li>
-                                                            <li><strong>Volumen:</strong> <span class="volume-high">{{ signal.volume }}</span></li>
-                                                        </ul>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <h5>Gráfico de análisis</h5>
-                                                        <img src="data:image/png;base64,{{ signal.chart }}" class="img-fluid" alt="{{ signal.symbol }} Chart">
-                                                    </div>
-                                                </div>
-                                            </div>
+                                        <td><span class="badge bg-{% if signal.risk_reward > 3 %}success{% else %}warning{% endif %} risk-badge">{{ signal.risk_reward }}:1</span></td>
+                                        <td>
+                                            <button class="btn btn-sm btn-info" onclick="showChart('{{ signal.symbol }}', 'short')">
+                                                Ver
+                                            </button>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -242,131 +262,114 @@
                             </table>
                         </div>
                         {% else %}
-                        <div class="alert alert-warning text-center">
-                            <i class="bi bi-exclamation-triangle"></i> No se encontraron señales SHORT en este momento
+                        <div class="alert alert-warning">
+                            No se encontraron señales SHORT en este momento
                         </div>
                         {% endif %}
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="row mt-4">
+            
             <div class="col-md-4">
                 <div class="card mb-4">
                     <div class="card-header bg-info text-white">
-                        <h2 class="h5 mb-0">Resumen del Mercado</h2>
+                        <h2 class="h5 mb-0">Gráfico Analítico</h2>
                     </div>
                     <div class="card-body">
                         <div class="chart-container">
-                            <canvas id="marketChart"></canvas>
+                            <canvas id="cryptoChart"></canvas>
                         </div>
+                        <div class="mt-3" id="chartInfo"></div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-md-4">
+                
                 <div class="card mb-4">
                     <div class="card-header bg-warning text-white">
-                        <h2 class="h5 mb-0">Fuerza de Tendencia</h2>
+                        <h2 class="h5 mb-0">Top Criptos por Fuerza</h2>
                     </div>
                     <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="trendStrengthChart"></canvas>
-                        </div>
+                        <h5>Mejores LONG:</h5>
+                        <ul class="list-group mb-3">
+                            {% for crypto in top_long %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ crypto.symbol }}
+                                <span class="badge bg-success rounded-pill">{{ crypto.adx }} ADX</span>
+                            </li>
+                            {% else %}
+                            <li class="list-group-item">No hay señales</li>
+                            {% endfor %}
+                        </ul>
+                        
+                        <h5>Mejores SHORT:</h5>
+                        <ul class="list-group">
+                            {% for crypto in top_short %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ crypto.symbol }}
+                                <span class="badge bg-danger rounded-pill">{{ crypto.adx }} ADX</span>
+                            </li>
+                            {% else %}
+                            <li class="list-group-item">No hay señales</li>
+                            {% endfor %}
+                        </ul>
                     </div>
                 </div>
-            </div>
-            
-            <div class="col-md-4">
-                <div class="card mb-4">
+                
+                <div class="card">
                     <div class="card-header bg-secondary text-white">
-                        <h2 class="h5 mb-0">Indicadores Promedio</h2>
-                    </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="indicatorsChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <div class="card manual-section">
-                    <div class="card-header bg-primary text-white">
                         <h2 class="h5 mb-0">Manual Técnico Completo</h2>
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h3><i class="bi bi-graph-up"></i> Estrategia de Trading Profesional</h3>
-                                <p>Este sistema detecta oportunidades basadas en el análisis técnico institucional:</p>
+                        <h4>Estrategia de Trading</h4>
+                        <p>Este sistema detecta oportunidades basadas en múltiples indicadores técnicos:</p>
+                        
+                        <h5>1. Media Móvil Exponencial (EMA)</h5>
+                        <ul>
+                            <li><strong>EMA Rápida (9)</strong>: Sensible a cambios recientes</li>
+                            <li><strong>EMA Lenta (20)</strong>: Refleja tendencia principal</li>
+                            <li><strong>Señal</strong>: Cruce de EMAs indica cambio de tendencia</li>
+                        </ul>
+                        
+                        <h5>2. ADX (Average Directional Index)</h5>
+                        <ul>
+                            <li><strong>Periodo (14)</strong>: Mide fuerza de tendencia</li>
+                            <li><strong>Umbral (25)</strong>: Valores >25 indican tendencia fuerte</li>
+                            <li><strong>Interpretación</strong>: ADX alto = tendencia fuerte, ideal para trading direccional</li>
+                        </ul>
+                        
+                        <h5>3. RSI (Relative Strength Index)</h5>
+                        <ul>
+                            <li><strong>Periodo (14)</strong>: Identifica sobrecompra/sobreventa</li>
+                            <li><strong>Divergencias</strong>: 
                                 <ul>
-                                    <li><strong>EMAs (9/20):</strong> Cruce para determinar tendencia primaria</li>
-                                    <li><strong>ADX (>25):</strong> Confirmación de fuerza tendencial</li>
-                                    <li><strong>RSI (30-70):</strong> Detección de sobrecompra/sobreventa</li>
-                                    <li><strong>Soportes/Resistencias:</strong> Zonas clave para entradas y stops</li>
-                                    <li><strong>Divergencias:</strong> Alertas tempranas de reversión</li>
-                                    <li><strong>Volumen (2x+):</strong> Confirmación de movimientos</li>
+                                    <li><strong>Alcista</strong>: Precio baja, RSI sube = posible reversión</li>
+                                    <li><strong>Bajista</strong>: Precio sube, RSI baja = posible reversión</li>
                                 </ul>
-                                
-                                <h4>Patrones Clave Detectados</h4>
-                                <div class="d-flex flex-wrap gap-2 mb-3">
-                                    <span class="badge bg-info">Triángulos Ascendentes/Descendentes</span>
-                                    <span class="badge bg-info">Canales de Precio</span>
-                                    <span class="badge bg-info">Doble Techo/Suelo</span>
-                                    <span class="badge bg-info">Banderas Alcistas/Bajistas</span>
-                                    <span class="badge bg-info">Cuñas de Reversión</span>
-                                </div>
-                                
-                                <h4>Gestón de Riesgo</h4>
-                                <ol>
-                                    <li>Stop Loss siempre a 1.5-2% del capital</li>
-                                    <li>Take Profit escalonado (TP1: 50%, TP2: 30%, TP3: 20%)</li>
-                                    <li>Ratio mínimo riesgo/beneficio: 1:3</li>
-                                    <li>Diversificación máxima 5% por operación</li>
-                                </ol>
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <h3><i class="bi bi-lightbulb"></i> Recomendaciones Prácticas</h3>
-                                <div class="alert alert-success">
-                                    <strong>Estrategia LONG:</strong>
-                                    <ul>
-                                        <li>Operar con volumen mínimo "Alto"</li>
-                                        <li>Confirmar con ADX > 25 y RSI < 70</li>
-                                        <li>Buscar divergencias alcistas en soportes clave</li>
-                                        <li>TP1 en primera resistencia significativa</li>
-                                    </ul>
-                                </div>
-                                
-                                <div class="alert alert-danger">
-                                    <strong>Estrategia SHORT:</strong>
-                                    <ul>
-                                        <li>Volumen confirmatorio imprescindible</li>
-                                        <li>ADX > 30 para tendencias fuertes</li>
-                                        <li>Divergencias bajistas en zonas de resistencia</li>
-                                        <li>Operar con temporalidad mínima de 4h</li>
-                                    </ul>
-                                </div>
-                                
-                                <h4>Contexto de Mercado</h4>
-                                <p>Según los últimos análisis:</p>
-                                <ul>
-                                    <li>Bitcoin domina con el 64.9% del mercado :cite[10]</li>
-                                    <li>Altcoins muestran fuerza (49% superan a BTC) :cite[8]</li>
-                                    <li>Volumen institucional en altcoins +45% :cite[8]</li>
-                                    <li>Ethereum lidera crecimiento (+55% mensual) :cite[8]</li>
-                                </ul>
-                            </div>
-                        </div>
+                            </li>
+                        </ul>
+                        
+                        <h5>4. Soporte/Resistencia</h5>
+                        <ul>
+                            <li><strong>Ventana (50)</strong>: Detecta niveles clave históricos</li>
+                            <li><strong>Quiebres</strong>: Ruptura con volumen confirma señal</li>
+                            <li><strong>Entrada</strong>: 0.5% por encima resistencia (LONG) o debajo soporte (SHORT)</li>
+                        </ul>
+                        
+                        <h5>5. Gestión de Riesgo</h5>
+                        <ul>
+                            <li><strong>Stop Loss (SL)</strong>: Basado en soporte/resistencia más cercano</li>
+                            <li><strong>Take Profit (TP)</strong>: Basado en ATR (Average True Range)</li>
+                            <li><strong>Risk-Reward</strong>: Mínimo 1:3 recomendado</li>
+                            <li><strong>Riesgo Máximo</strong>: {{ params.max_risk_percent }}% por operación</li>
+                        </ul>
                         
                         <div class="alert alert-primary mt-3">
-                            <strong>Nota profesional:</strong> Las criptomonedas son activos de alta volatilidad.
-                            Este sistema es una herramienta de apoyo que debe combinarse con análisis fundamental
-                            y gestión adecuada de riesgo. Los rendimientos pasados no garantizan resultados futuros.
+                            <strong>Recomendaciones Finales:</strong>
+                            <ul>
+                                <li>Operar solo con volumen Alto/Muy Alto</li>
+                                <li>Confirmar señales con temporalidad superior</li>
+                                <li>Diversificar entre 3-5 operaciones simultáneas</li>
+                                <li>Revisar noticias del mercado antes de operar</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
@@ -374,114 +377,165 @@
         </div>
     </div>
 
+    <!-- Modal para gráficos -->
+    <div class="modal fade" id="chartModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Análisis Detallado</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="chart-container">
+                        <canvas id="detailChart"></canvas>
+                    </div>
+                    <div class="row mt-3" id="signalDetails"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Gráfico de resumen
-        const marketCtx = document.getElementById('marketChart').getContext('2d');
-        const marketChart = new Chart(marketCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['LONG', 'SHORT', 'Neutral'],
-                datasets: [{
-                    data: [
-                        {{ long_signals|length }}, 
-                        {{ short_signals|length }}, 
-                        {{ total_cryptos - long_signals|length - short_signals|length }}
-                    ],
-                    backgroundColor: [
-                        'rgba(46, 204, 113, 0.7)',
-                        'rgba(231, 76, 60, 0.7)',
-                        'rgba(149, 165, 166, 0.7)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
+        // Calcular próxima actualización
+        const cacheTimestamp = new Date("{{ cache_timestamp }}");
+        const nextUpdate = new Date(cacheTimestamp.getTime() + {{ CACHE_TIME }} * 1000);
+        document.getElementById('next-update').textContent = nextUpdate.toLocaleTimeString();
+        
+        // Gráfico principal
+        const ctx = document.getElementById('cryptoChart').getContext('2d');
+        let cryptoChart = new Chart(ctx, {
+            type: 'line',
+            data: { datasets: [] },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'bottom' },
-                    title: {
-                        display: true,
-                        text: 'Distribución de Señales ({{ total_cryptos }} Cryptos)'
-                    }
+                    title: { display: true, text: 'Seleccione una cripto para ver el análisis' }
                 }
             }
         });
         
-        // Gráfico de fuerza de tendencia
-        const trendCtx = document.getElementById('trendStrengthChart').getContext('2d');
-        const trendChart = new Chart(trendCtx, {
-            type: 'bar',
-            data: {
-                labels: ['LONG', 'SHORT'],
-                datasets: [{
-                    label: 'ADX Promedio',
-                    data: [{{ avg_adx_long }}, {{ avg_adx_short }}],
-                    backgroundColor: [
-                        'rgba(46, 204, 113, 0.7)',
-                        'rgba(231, 76, 60, 0.7)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
+        // Mostrar gráfico detallado
+        async function showChart(symbol, signalType) {
+            try {
+                const response = await fetch(`/chart/${symbol}/${signalType}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                
+                // Actualizar modal
+                document.getElementById('modalTitle').textContent = `Análisis ${symbol} (${signalType.toUpperCase()})`;
+                
+                // Crear gráfico detallado
+                const ctxDetail = document.getElementById('detailChart').getContext('2d');
+                if (window.detailChart) window.detailChart.destroy();
+                
+                const supports = data.supports || [];
+                const resistances = data.resistances || [];
+                
+                const annotations = [];
+                
+                // Añadir soportes
+                supports.forEach((value, index) => {
+                    annotations.push({
+                        type: 'line',
+                        mode: 'horizontal',
+                        scaleID: 'y',
+                        value: value,
+                        borderColor: 'rgba(46, 204, 113, 0.5)',
+                        borderWidth: 1,
+                        label: {
                             display: true,
-                            text: 'ADX'
+                            content: `Soporte ${index+1}`,
+                            position: 'left'
+                        }
+                    });
+                });
+                
+                // Añadir resistencias
+                resistances.forEach((value, index) => {
+                    annotations.push({
+                        type: 'line',
+                        mode: 'horizontal',
+                        scaleID: 'y',
+                        value: value,
+                        borderColor: 'rgba(231, 76, 60, 0.5)',
+                        borderWidth: 1,
+                        label: {
+                            display: true,
+                            content: `Resistencia ${index+1}`,
+                            position: 'right'
+                        }
+                    });
+                });
+                
+                window.detailChart = new Chart(ctxDetail, {
+                    type: 'line',
+                    data: {
+                        labels: data.timestamps,
+                        datasets: [
+                            {
+                                label: 'Precio',
+                                data: data.prices,
+                                borderColor: 'rgb(75, 192, 192)',
+                                tension: 0.1,
+                                fill: false
+                            },
+                            {
+                                label: 'EMA Rápida',
+                                data: data.ema_fast,
+                                borderColor: 'rgb(255, 99, 132)',
+                                tension: 0.1,
+                                borderDash: [5, 5],
+                                fill: false
+                            },
+                            {
+                                label: 'EMA Lenta',
+                                data: data.ema_slow,
+                                borderColor: 'rgb(54, 162, 235)',
+                                tension: 0.1,
+                                borderDash: [5, 5],
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            annotation: {
+                                annotations: annotations
+                            },
+                            title: {
+                                display: true,
+                                text: `${symbol} - Análisis Técnico`
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'day',
+                                    tooltipFormat: 'MMM dd, yyyy HH:mm'
+                                }
+                            }
                         }
                     }
-                },
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Fuerza de Tendencia'
-                    }
-                }
+                });
+                
+                // Mostrar modal
+                const modal = new bootstrap.Modal(document.getElementById('chartModal'));
+                modal.show();
+                
+            } catch (error) {
+                console.error('Error loading chart:', error);
+                alert('Error al cargar el gráfico');
             }
-        });
-        
-        // Gráfico de indicadores
-        const indCtx = document.getElementById('indicatorsChart').getContext('2d');
-        const indicatorsChart = new Chart(indCtx, {
-            type: 'radar',
-            data: {
-                labels: ['ADX LONG', 'ADX SHORT', 'RSI LONG', 'RSI SHORT'],
-                datasets: [{
-                    label: 'Indicadores Promedio',
-                    data: [
-                        {{ avg_adx_long }},
-                        {{ avg_adx_short }},
-                        {{ avg_rsi_long }},
-                        {{ avg_rsi_short }}
-                    ],
-                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    pointBackgroundColor: 'rgba(54, 162, 235, 1)'
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    r: {
-                        angleLines: {
-                            display: true
-                        },
-                        suggestedMin: 0,
-                        suggestedMax: 70
-                    }
-                },
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Indicadores Promedio'
-                    }
-                }
-            }
-        });
+        }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
