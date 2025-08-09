@@ -6,7 +6,6 @@
     <title>wgta Crypto Trading Signals</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .signal-card { transition: transform 0.3s; }
@@ -20,9 +19,13 @@
         .signal-table-container { max-height: 600px; overflow-y: auto; }
         .badge-long { background-color: #4CAF50; }
         .badge-short { background-color: #F44336; }
-        .filter-section { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        .zone-highlight { background-color: rgba(0, 0, 0, 0.05); }
-        .zone-border { stroke: #666; stroke-width: 1; stroke-dasharray: 5,5; }
+        .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .scatter-chart-container { height: 600px; }
+        .volume-very-high { background-color: #4CAF50; }   /* Verde */
+        .volume-high { background-color: #2196F3; }        /* Azul */
+        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
+        .volume-low { background-color: #FF9800; }         /* Naranja */
+        .volume-very-low { background-color: #F44336; }    /* Rojo */
     </style>
 </head>
 <body>
@@ -44,10 +47,10 @@
             </div>
         </header>
 
-        <!-- Filtros -->
+        <!-- Sección de Filtros -->
         <div class="filter-section">
-            <h2 class="mb-4"><i class="fas fa-filter"></i> Filtros</h2>
-            <form method="GET">
+            <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
+            <form method="POST" id="filters-form">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
@@ -60,54 +63,54 @@
                         </select>
                     </div>
                     
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label">EMA Rápida</label>
                         <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
                     </div>
                     
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label">EMA Lenta</label>
                         <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
                     </div>
                     
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label">ADX Período</label>
                         <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
                     </div>
                     
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label">ADX Nivel</label>
                         <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
                     </div>
                     
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label">RSI Período</label>
                         <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
                     </div>
                     
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label">S/R Ventana</label>
                         <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
                     </div>
                     
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label">Divergencia Lookback</label>
                         <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
                     </div>
                     
                     <div class="col-md-3">
-                        <label class="form-label">Riesgo Máximo (%)</label>
-                        <input type="number" step="0.1" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control">
+                        <label class="form-label">Máximo Riesgo (%)</label>
+                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1">
                     </div>
                     
                     <div class="col-md-3">
-                        <label class="form-label">% Cerca S/R</label>
-                        <input type="number" step="0.1" name="support_resistance_percent" value="{{ params.support_resistance_percent }}" class="form-control">
+                        <label class="form-label">Umbral Soporte/Resistencia (%)</label>
+                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1">
                     </div>
                     
                     <div class="col-md-12 mt-4">
                         <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-filter"></i> Aplicar Filtros
+                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros
                         </button>
                     </div>
                 </div>
@@ -155,33 +158,24 @@
             </div>
         </div>
 
-        <!-- Gráfico de dispersión -->
+        <!-- Gráfico de Dispersión -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                <h2 class="h5 mb-0"><i class="fas fa-project-diagram"></i> Probabilidades de Señales</h2>
-                <form method="GET" class="d-inline">
-                    <input type="hidden" name="timeframe" value="{{ params.timeframe }}">
-                    <input type="hidden" name="ema_fast" value="{{ params.ema_fast }}">
-                    <input type="hidden" name="ema_slow" value="{{ params.ema_slow }}">
-                    <input type="hidden" name="adx_period" value="{{ params.adx_period }}">
-                    <input type="hidden" name="adx_level" value="{{ params.adx_level }}">
-                    <input type="hidden" name="rsi_period" value="{{ params.rsi_period }}">
-                    <input type="hidden" name="sr_window" value="{{ params.sr_window }}">
-                    <input type="hidden" name="divergence_lookback" value="{{ params.divergence_lookback }}">
-                    <input type="hidden" name="max_risk_percent" value="{{ params.max_risk_percent }}">
-                    <input type="hidden" name="support_resistance_percent" value="{{ params.support_resistance_percent }}">
-                    <select name="volume_filter" onchange="this.form.submit()" class="form-select form-select-sm">
-                        <option value="all" {% if volume_filter == 'all' %}selected{% endif %}>Todos los volúmenes</option>
-                        <option value="Muy Alto" {% if volume_filter == 'Muy Alto' %}selected{% endif %}>Muy Alto</option>
-                        <option value="Alto" {% if volume_filter == 'Alto' %}selected{% endif %}>Alto</option>
-                        <option value="Medio" {% if volume_filter == 'Medio' %}selected{% endif %}>Medio</option>
-                        <option value="Bajo" {% if volume_filter == 'Bajo' %}selected{% endif %}>Bajo</option>
-                        <option value="Muy Bajo" {% if volume_filter == 'Muy Bajo' %}selected{% endif %}>Muy Bajo</option>
+                <h2 class="h5 mb-0"><i class="fas fa-chart-scatter"></i> Probabilidades de Trading</h2>
+                <div>
+                    <label class="me-2 text-white">Filtrar por Volumen:</label>
+                    <select id="volume-filter" class="form-select form-select-sm">
+                        <option value="all">Todos</option>
+                        <option value="Muy Alto">Muy Alto</option>
+                        <option value="Alto">Alto</option>
+                        <option value="Medio">Medio</option>
+                        <option value="Bajo">Bajo</option>
+                        <option value="Muy Bajo">Muy Bajo</option>
                     </select>
-                </form>
+                </div>
             </div>
             <div class="card-body">
-                <div class="chart-container" style="height: 600px;">
+                <div class="scatter-chart-container">
                     <canvas id="scatterChart"></canvas>
                 </div>
             </div>
@@ -305,35 +299,134 @@
     </div>
 
     <script>
-        // Datos para gráfico de dispersión
-        const scatterData = {
-            labels: {{ scatter_labels|safe }},
-            datasets: [{
-                label: 'Criptomonedas',
-                data: {{ scatter_short|safe }}.map((short, index) => ({
-                    x: short,
-                    y: {{ scatter_long|safe }}[index],
-                    r: 6,
-                    symbol: {{ scatter_labels|safe }}[index],
-                    volume: {{ scatter_volume_class|safe }}[index],
-                    volumeLevel: {{ scatter_volume|safe }}[index]
-                })),
-                backgroundColor: {{ scatter_volume|safe }}.map(level => {
-                    if (level === 4) return 'rgba(46, 204, 113, 0.8)'; // Muy Alto: Verde
-                    if (level === 3) return 'rgba(52, 152, 219, 0.8)'; // Alto: Azul
-                    if (level === 2) return 'rgba(241, 196, 15, 0.8)'; // Medio: Amarillo
-                    if (level === 1) return 'rgba(230, 126, 34, 0.8)'; // Bajo: Naranja
-                    return 'rgba(231, 76, 60, 0.8)'; // Muy Bajo: Rojo
-                }),
-                pointRadius: 8,
-                pointHoverRadius: 10
-            }]
+        // Gráfico de resumen
+        const marketCtx = document.getElementById('marketChart').getContext('2d');
+        const marketChart = new Chart(marketCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['LONG', 'SHORT', 'Neutral'],
+                datasets: [{
+                    data: [
+                        {{ long_signals|length }}, 
+                        {{ short_signals|length }}, 
+                        {{ 150 - long_signals|length - short_signals|length }}
+                    ],
+                    backgroundColor: [
+                        'rgba(46, 204, 113, 0.7)',
+                        'rgba(231, 76, 60, 0.7)',
+                        'rgba(149, 165, 166, 0.7)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    title: {
+                        display: true,
+                        text: 'Distribución de Señales'
+                    }
+                }
+            }
+        });
+        
+        // Gráfico de fuerza de tendencia LONG
+        const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
+        const longStatsChart = new Chart(longStatsCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Distancia a Entrada'],
+                datasets: [{
+                    label: 'Distancia Promedio (%)',
+                    data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
+                    backgroundColor: 'rgba(46, 204, 113, 0.7)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Estadísticas Señales LONG'
+                    }
+                }
+            }
+        });
+        
+        // Gráfico de fuerza de tendencia SHORT
+        const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
+        const shortStatsChart = new Chart(shortStatsCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Distancia a Entrada'],
+                datasets: [{
+                    label: 'Distancia Promedio (%)',
+                    data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
+                    backgroundColor: 'rgba(231, 76, 60, 0.7)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Estadísticas Señales SHORT'
+                    }
+                }
+            }
+        });
+        
+        // Gráfico de dispersión
+        const scatterCtx = document.getElementById('scatterChart').getContext('2d');
+        const scatterData = JSON.parse('{{ scatter_data|safe }}');
+        
+        // Mapeo de colores por volumen
+        const volumeColors = {
+            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+            'Alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+            'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+            'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+            'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
         };
-
-        // Configuración del gráfico de dispersión
-        const scatterConfig = {
+        
+        // Preparar datos para el gráfico
+        const datasets = [];
+        const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
+        
+        volumes.forEach(vol => {
+            const data = scatterData.filter(item => item.volume === vol).map(item => ({
+                x: item.short_prob,
+                y: item.long_prob,
+                symbol: item.symbol
+            }));
+            
+            if (data.length > 0) {
+                datasets.push({
+                    label: vol,
+                    data: data,
+                    backgroundColor: volumeColors[vol],
+                    pointRadius: 6,
+                    pointHoverRadius: 8
+                });
+            }
+        });
+        
+        // Crear gráfico de dispersión
+        const scatterChart = new Chart(scatterCtx, {
             type: 'scatter',
-            data: scatterData,
+            data: {
+                datasets: datasets
+            },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -341,52 +434,26 @@
                     x: {
                         title: {
                             display: true,
-                            text: 'Probabilidad SHORT (%)',
-                            font: { size: 14, weight: 'bold' }
+                            text: 'Probabilidad SHORT (%)'
                         },
                         min: 0,
                         max: 100,
                         ticks: {
-                            stepSize: 10
-                        },
-                        grid: {
-                            color: function(context) {
-                                if ([33, 66].includes(context.tick.value)) {
-                                    return 'rgba(100, 100, 100, 0.7)';
-                                }
-                                return 'rgba(200, 200, 200, 0.2)';
-                            },
-                            lineWidth: function(context) {
-                                if ([33, 66].includes(context.tick.value)) {
-                                    return 2;
-                                }
-                                return 1;
+                            callback: function(value) {
+                                return value + '%';
                             }
                         }
                     },
                     y: {
                         title: {
                             display: true,
-                            text: 'Probabilidad LONG (%)',
-                            font: { size: 14, weight: 'bold' }
+                            text: 'Probabilidad LONG (%)'
                         },
                         min: 0,
                         max: 100,
                         ticks: {
-                            stepSize: 10
-                        },
-                        grid: {
-                            color: function(context) {
-                                if ([33, 66].includes(context.tick.value)) {
-                                    return 'rgba(100, 100, 100, 0.7)';
-                                }
-                                return 'rgba(200, 200, 200, 0.2)';
-                            },
-                            lineWidth: function(context) {
-                                if ([33, 66].includes(context.tick.value)) {
-                                    return 2;
-                                }
-                                return 1;
+                            callback: function(value) {
+                                return value + '%';
                             }
                         }
                     }
@@ -395,208 +462,87 @@
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return [
-                                    context.raw.symbol,
-                                    'LONG: ' + context.raw.y + '%',
-                                    'SHORT: ' + context.raw.x + '%',
-                                    'Volumen: ' + context.raw.volume
-                                ];
+                                return context.raw.symbol + ': LONG ' + context.raw.y + '%, SHORT ' + context.raw.x + '%';
                             }
                         }
                     },
-                    legend: { display: false },
                     title: {
                         display: true,
-                        text: 'Probabilidades de Señales por Criptomoneda',
-                        font: { size: 16 }
+                        text: 'Probabilidades de Trading por Criptomoneda'
                     },
-                    datalabels: {
-                        color: 'white',
-                        font: {
-                            size: 9,
-                            weight: 'bold'
-                        },
-                        formatter: function(value, context) {
-                            return context.dataset.data[context.dataIndex].symbol;
-                        }
-                    }
-                },
-                // Dibujar zonas
-                animation: {
-                    onComplete: function() {
-                        const chart = this.chart;
-                        const ctx = chart.ctx;
-                        const xAxis = chart.scales.x;
-                        const yAxis = chart.scales.y;
-                        
-                        // Coordenadas de las zonas
-                        const zoneX1 = xAxis.getPixelForValue(33);
-                        const zoneX2 = xAxis.getPixelForValue(66);
-                        const zoneY1 = yAxis.getPixelForValue(33);
-                        const zoneY2 = yAxis.getPixelForValue(66);
-                        
-                        // Dibujar líneas divisorias
-                        ctx.save();
-                        ctx.strokeStyle = 'rgba(100, 100, 100, 0.7)';
-                        ctx.lineWidth = 2;
-                        ctx.setLineDash([5, 5]);
-                        
-                        // Verticales
-                        ctx.beginPath();
-                        ctx.moveTo(zoneX1, yAxis.top);
-                        ctx.lineTo(zoneX1, yAxis.bottom);
-                        ctx.stroke();
-                        
-                        ctx.beginPath();
-                        ctx.moveTo(zoneX2, yAxis.top);
-                        ctx.lineTo(zoneX2, yAxis.bottom);
-                        ctx.stroke();
-                        
-                        // Horizontales
-                        ctx.beginPath();
-                        ctx.moveTo(xAxis.left, zoneY1);
-                        ctx.lineTo(xAxis.right, zoneY1);
-                        ctx.stroke();
-                        
-                        ctx.beginPath();
-                        ctx.moveTo(xAxis.left, zoneY2);
-                        ctx.lineTo(xAxis.right, zoneY2);
-                        ctx.stroke();
-                        
-                        ctx.restore();
-                        
-                        // Etiquetar zonas
-                        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                        ctx.font = 'bold 12px Arial';
-                        ctx.textAlign = 'center';
-                        
-                        // Zona 1 (Baja LONG, Baja SHORT)
-                        ctx.fillText('Zona Neutral', xAxis.left + (zoneX1 - xAxis.left)/2, yAxis.bottom - (yAxis.bottom - zoneY2)/2);
-                        
-                        // Zona 2 (Media LONG, Baja SHORT)
-                        ctx.fillText('Potencial LONG', xAxis.left + (zoneX1 - xAxis.left)/2, yAxis.bottom - (zoneY2 - zoneY1)/2 - (yAxis.bottom - zoneY2));
-                        
-                        // Zona 3 (Alta LONG, Baja SHORT)
-                        ctx.fillText('Fuerte LONG', xAxis.left + (zoneX1 - xAxis.left)/2, yAxis.top + (zoneY1 - yAxis.top)/2);
-                        
-                        // Zona 4 (Baja LONG, Media SHORT)
-                        ctx.fillText('Potencial SHORT', zoneX1 + (zoneX2 - zoneX1)/2, yAxis.bottom - (yAxis.bottom - zoneY2)/2);
-                        
-                        // Zona 5 (Media LONG, Media SHORT)
-                        ctx.fillText('Zona de Conflicto', zoneX1 + (zoneX2 - zoneX1)/2, yAxis.bottom - (zoneY2 - zoneY1)/2 - (yAxis.bottom - zoneY2));
-                        
-                        // Zona 6 (Alta LONG, Media SHORT)
-                        ctx.fillText('LONG Dominante', zoneX1 + (zoneX2 - zoneX1)/2, yAxis.top + (zoneY1 - yAxis.top)/2);
-                        
-                        // Zona 7 (Baja LONG, Alta SHORT)
-                        ctx.fillText('Fuerte SHORT', xAxis.right - (xAxis.right - zoneX2)/2, yAxis.bottom - (yAxis.bottom - zoneY2)/2);
-                        
-                        // Zona 8 (Media LONG, Alta SHORT)
-                        ctx.fillText('SHORT Dominante', xAxis.right - (xAxis.right - zoneX2)/2, yAxis.bottom - (zoneY2 - zoneY1)/2 - (yAxis.bottom - zoneY2));
-                        
-                        // Zona 9 (Alta LONG, Alta SHORT)
-                        ctx.fillText('Alta Volatilidad', xAxis.right - (xAxis.right - zoneX2)/2, yAxis.top + (zoneY1 - yAxis.top)/2);
+                    legend: {
+                        display: true,
+                        position: 'bottom'
                     }
                 }
-            },
-            plugins: [ChartDataLabels]
-        };
-
-        // Inicializar gráficos cuando el documento esté listo
-        document.addEventListener('DOMContentLoaded', function() {
-            // Gráfico de resumen
-            const marketCtx = document.getElementById('marketChart').getContext('2d');
-            new Chart(marketCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['LONG', 'SHORT', 'Neutral'],
-                    datasets: [{
-                        data: [
-                            {{ long_signals|length }}, 
-                            {{ short_signals|length }}, 
-                            {{ 150 - long_signals|length - short_signals|length }}
-                        ],
-                        backgroundColor: [
-                            'rgba(46, 204, 113, 0.7)',
-                            'rgba(231, 76, 60, 0.7)',
-                            'rgba(149, 165, 166, 0.7)'
-                        ],
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { position: 'bottom' },
-                        title: {
-                            display: true,
-                            text: 'Distribución de Señales'
-                        }
-                    }
-                }
-            });
-            
-            // Gráfico de estadísticas LONG
-            const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
-            new Chart(longStatsCtx, {
-                type: 'bar',
-                data: {
-                    labels: ['Distancia a Entrada'],
-                    datasets: [{
-                        label: 'Distancia Promedio (%)',
-                        data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
-                        backgroundColor: 'rgba(46, 204, 113, 0.7)'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: { beginAtZero: true }
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Estadísticas Señales LONG'
-                        }
-                    }
-                }
-            });
-            
-            // Gráfico de estadísticas SHORT
-            const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
-            new Chart(shortStatsCtx, {
-                type: 'bar',
-                data: {
-                    labels: ['Distancia a Entrada'],
-                    datasets: [{
-                        label: 'Distancia Promedio (%)',
-                        data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
-                        backgroundColor: 'rgba(231, 76, 60, 0.7)'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: { beginAtZero: true }
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Estadísticas Señales SHORT'
-                        }
-                    }
-                }
-            });
-            
-            // Gráfico de dispersión
-            const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-            new Chart(scatterCtx, scatterConfig);
-            
-            // Auto-refresh cada 60 segundos
-            setTimeout(() => {
-                location.reload();
-            }, 60000);
+            }
         });
+        
+        // Añadir etiquetas a los puntos
+        scatterChart.options.plugins.tooltip.callbacks.afterDraw = function(chart) {
+            const ctx = chart.ctx;
+            chart.data.datasets.forEach((dataset, i) => {
+                const meta = chart.getDatasetMeta(i);
+                if (!meta.hidden) {
+                    meta.data.forEach((element, index) => {
+                        const data = dataset.data[index];
+                        ctx.fillStyle = 'white';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.font = '10px Arial';
+                        ctx.fillText(data.symbol, element.x, element.y);
+                    });
+                }
+            });
+        };
+        
+        // Filtro por volumen
+        document.getElementById('volume-filter').addEventListener('change', function() {
+            const filter = this.value;
+            scatterChart.data.datasets.forEach(dataset => {
+                dataset.hidden = filter !== 'all' && dataset.label !== filter;
+            });
+            scatterChart.update();
+        });
+        
+        // Dibujar líneas de división
+        scatterChart.options.plugins.afterDraw = function(chart) {
+            const ctx = chart.ctx;
+            const xAxis = chart.scales.x;
+            const yAxis = chart.scales.y;
+            
+            // Líneas verticales
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 1;
+            
+            // Línea a 33%
+            ctx.beginPath();
+            ctx.moveTo(xAxis.getPixelForValue(33), yAxis.top);
+            ctx.lineTo(xAxis.getPixelForValue(33), yAxis.bottom);
+            ctx.stroke();
+            
+            // Línea a 66%
+            ctx.beginPath();
+            ctx.moveTo(xAxis.getPixelForValue(66), yAxis.top);
+            ctx.lineTo(xAxis.getPixelForValue(66), yAxis.bottom);
+            ctx.stroke();
+            
+            // Líneas horizontales
+            ctx.beginPath();
+            ctx.moveTo(xAxis.left, yAxis.getPixelForValue(33));
+            ctx.lineTo(xAxis.right, yAxis.getPixelForValue(33));
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(xAxis.left, yAxis.getPixelForValue(66));
+            ctx.lineTo(xAxis.right, yAxis.getPixelForValue(66));
+            ctx.stroke();
+        };
+        
+        // Auto-refresh cada 60 segundos
+        setTimeout(() => {
+            location.reload();
+        }, 60000);
     </script>
 </body>
 </html>
