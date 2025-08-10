@@ -26,6 +26,9 @@
         .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
         .volume-low { background-color: #FF9800; }         /* Naranja */
         .volume-very-low { background-color: #F44336; }    /* Rojo */
+        .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
+        .grid-line.vertical { width: 1px; height: 100%; }
+        .grid-line.horizontal { height: 1px; width: 100%; }
     </style>
 </head>
 <body>
@@ -175,7 +178,13 @@
                 </div>
             </div>
             <div class="card-body">
-                <div class="scatter-chart-container">
+                <div class="scatter-chart-container position-relative">
+                    <!-- Líneas de la cuadrícula -->
+                    <div class="grid-line vertical" style="left: 33.33%;"></div>
+                    <div class="grid-line vertical" style="left: 66.66%;"></div>
+                    <div class="grid-line horizontal" style="top: 33.33%;"></div>
+                    <div class="grid-line horizontal" style="top: 66.66%;"></div>
+                    
                     <canvas id="scatterChart"></canvas>
                 </div>
             </div>
@@ -388,8 +397,8 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = JSON.parse('{{ scatter_data|safe }}');
-        
+        const scatterData = {{ scatter_data | tojson | safe }};
+
         // Mapeo de colores por volumen
         const volumeColors = {
             'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
@@ -415,8 +424,8 @@
                     label: vol,
                     data: data,
                     backgroundColor: volumeColors[vol],
-                    pointRadius: 6,
-                    pointHoverRadius: 8
+                    pointRadius: 8,
+                    pointHoverRadius: 10
                 });
             }
         });
@@ -474,28 +483,28 @@
                         display: true,
                         position: 'bottom'
                     }
+                },
+                // Dibujar etiquetas en los puntos
+                elements: {
+                    point: {
+                        // Dibujar etiqueta para cada punto
+                        afterDraw: function(chart, args, options) {
+                            const {ctx, element} = args;
+                            const dataPoint = chart.getDatasetMeta(element.datasetIndex).data[element.index].$context.raw;
+                            
+                            ctx.save();
+                            ctx.font = '10px Arial';
+                            ctx.fillStyle = 'white';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(dataPoint.symbol, element.x, element.y);
+                            ctx.restore();
+                        }
+                    }
                 }
             }
         });
-        
-        // Añadir etiquetas a los puntos
-        scatterChart.options.plugins.tooltip.callbacks.afterDraw = function(chart) {
-            const ctx = chart.ctx;
-            chart.data.datasets.forEach((dataset, i) => {
-                const meta = chart.getDatasetMeta(i);
-                if (!meta.hidden) {
-                    meta.data.forEach((element, index) => {
-                        const data = dataset.data[index];
-                        ctx.fillStyle = 'white';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.font = '10px Arial';
-                        ctx.fillText(data.symbol, element.x, element.y);
-                    });
-                }
-            });
-        };
-        
+
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
             const filter = this.value;
@@ -504,40 +513,6 @@
             });
             scatterChart.update();
         });
-        
-        // Dibujar líneas de división
-        scatterChart.options.plugins.afterDraw = function(chart) {
-            const ctx = chart.ctx;
-            const xAxis = chart.scales.x;
-            const yAxis = chart.scales.y;
-            
-            // Líneas verticales
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-            ctx.lineWidth = 1;
-            
-            // Línea a 33%
-            ctx.beginPath();
-            ctx.moveTo(xAxis.getPixelForValue(33), yAxis.top);
-            ctx.lineTo(xAxis.getPixelForValue(33), yAxis.bottom);
-            ctx.stroke();
-            
-            // Línea a 66%
-            ctx.beginPath();
-            ctx.moveTo(xAxis.getPixelForValue(66), yAxis.top);
-            ctx.lineTo(xAxis.getPixelForValue(66), yAxis.bottom);
-            ctx.stroke();
-            
-            // Líneas horizontales
-            ctx.beginPath();
-            ctx.moveTo(xAxis.left, yAxis.getPixelForValue(33));
-            ctx.lineTo(xAxis.right, yAxis.getPixelForValue(33));
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.moveTo(xAxis.left, yAxis.getPixelForValue(66));
-            ctx.lineTo(xAxis.right, yAxis.getPixelForValue(66));
-            ctx.stroke();
-        };
         
         // Auto-refresh cada 60 segundos
         setTimeout(() => {
