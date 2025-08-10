@@ -21,22 +21,12 @@
         .badge-short { background-color: #F44336; }
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; position: relative; }
-        .scatter-zone { position: absolute; border: 1px dashed #ccc; background-color: rgba(240,240,240,0.3); }
-        .scatter-label { position: absolute; font-weight: bold; text-align: center; }
         .volume-very-high { background-color: #4CAF50; }   /* Verde */
         .volume-high { background-color: #2196F3; }        /* Azul */
         .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
         .volume-low { background-color: #FF9800; }         /* Naranja */
         .volume-very-low { background-color: #F44336; }    /* Rojo */
-        .point-label {
-            position: absolute;
-            color: white;
-            font-size: 8px;
-            font-weight: bold;
-            text-shadow: 0 0 2px black;
-            pointer-events: none;
-            z-index: 10;
-        }
+        .zone-label { position: absolute; font-size: 12px; font-weight: bold; text-align: center; }
     </style>
 </head>
 <body>
@@ -188,30 +178,15 @@
             <div class="card-body">
                 <div class="scatter-chart-container">
                     <canvas id="scatterChart"></canvas>
-                    <div class="scatter-zone" style="top: 66.6%; left: 0; width: 33.3%; height: 33.3%;"></div>
-                    <div class="scatter-zone" style="top: 66.6%; left: 33.3%; width: 33.3%; height: 33.3%;"></div>
-                    <div class="scatter-zone" style="top: 66.6%; left: 66.6%; width: 33.3%; height: 33.3%;"></div>
-                    
-                    <div class="scatter-zone" style="top: 33.3%; left: 0; width: 33.3%; height: 33.3%;"></div>
-                    <div class="scatter-zone" style="top: 33.3%; left: 33.3%; width: 33.3%; height: 33.3%;"></div>
-                    <div class="scatter-zone" style="top: 33.3%; left: 66.6%; width: 33.3%; height: 33.3%;"></div>
-                    
-                    <div class="scatter-zone" style="top: 0; left: 0; width: 33.3%; height: 33.3%;"></div>
-                    <div class="scatter-zone" style="top: 0; left: 33.3%; width: 33.3%; height: 33.3%;"></div>
-                    <div class="scatter-zone" style="top: 0; left: 66.6%; width: 33.3%; height: 33.3%;"></div>
-                    
-                    <!-- Etiquetas de zonas -->
-                    <div class="scatter-label" style="top: 16.5%; left: 16.5%;">Alta Prob LONG<br>Baja Prob SHORT</div>
-                    <div class="scatter-label" style="top: 16.5%; left: 50%;">Alta Prob LONG<br>Med Prob SHORT</div>
-                    <div class="scatter-label" style="top: 16.5%; left: 83.5%;">Alta Prob LONG<br>Alta Prob SHORT</div>
-                    
-                    <div class="scatter-label" style="top: 50%; left: 16.5%;">Med Prob LONG<br>Baja Prob SHORT</div>
-                    <div class="scatter-label" style="top: 50%; left: 50%;">Neutro</div>
-                    <div class="scatter-label" style="top: 50%; left: 83.5%;">Med Prob LONG<br>Alta Prob SHORT</div>
-                    
-                    <div class="scatter-label" style="top: 83.5%; left: 16.5%;">Baja Prob LONG<br>Baja Prob SHORT</div>
-                    <div class="scatter-label" style="top: 83.5%; left: 50%;">Baja Prob LONG<br>Med Prob SHORT</div>
-                    <div class="scatter-label" style="top: 83.5%; left: 83.5%;">Baja Prob LONG<br>Alta Prob SHORT</div>
+                    <div class="zone-label" style="top: 10%; left: 10%; width: 30%; height: 30%;">Zona 1: Baja LONG, Baja SHORT</div>
+                    <div class="zone-label" style="top: 10%; left: 40%; width: 30%; height: 30%;">Zona 2: Baja LONG, Media SHORT</div>
+                    <div class="zone-label" style="top: 10%; left: 70%; width: 30%; height: 30%;">Zona 3: Baja LONG, Alta SHORT</div>
+                    <div class="zone-label" style="top: 40%; left: 10%; width: 30%; height: 30%;">Zona 4: Media LONG, Baja SHORT</div>
+                    <div class="zone-label" style="top: 40%; left: 40%; width: 30%; height: 30%;">Zona 5: Media LONG, Media SHORT</div>
+                    <div class="zone-label" style="top: 40%; left: 70%; width: 30%; height: 30%;">Zona 6: Media LONG, Alta SHORT</div>
+                    <div class="zone-label" style="top: 70%; left: 10%; width: 30%; height: 30%;">Zona 7: Alta LONG, Baja SHORT</div>
+                    <div class="zone-label" style="top: 70%; left: 40%; width: 30%; height: 30%;">Zona 8: Alta LONG, Media SHORT</div>
+                    <div class="zone-label" style="top: 70%; left: 70%; width: 30%; height: 30%;">Zona 9: Alta LONG, Alta SHORT</div>
                 </div>
             </div>
         </div>
@@ -427,11 +402,11 @@
         
         // Mapeo de colores por volumen
         const volumeColors = {
-            'Muy Alto': 'rgba(76, 175, 80, 0.8)',     // Verde
-            'Alto': 'rgba(33, 150, 243, 0.8)',       // Azul
-            'Medio': 'rgba(255, 235, 59, 0.8)',      // Amarillo
-            'Bajo': 'rgba(255, 152, 0, 0.8)',        // Naranja
-            'Muy Bajo': 'rgba(244, 67, 54, 0.8)'     // Rojo
+            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+            'Alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+            'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+            'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+            'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
         };
         
         // Preparar datos para el gráfico
@@ -511,37 +486,6 @@
                     }
                 }
             }
-        });
-        
-        // Añadir etiquetas a los puntos
-        scatterChart.canvas.parentNode.style.position = 'relative';
-        scatterChart.data.datasets.forEach((dataset, datasetIndex) => {
-            dataset.data.forEach((point, index) => {
-                const pointElement = document.createElement('div');
-                pointElement.className = 'point-label';
-                pointElement.textContent = point.symbol;
-                
-                const meta = scatterChart.getDatasetMeta(datasetIndex);
-                const pointMeta = meta.data[index];
-                
-                const updatePosition = () => {
-                    const canvasRect = scatterChart.canvas.getBoundingClientRect();
-                    const chartRect = scatterChart.chartArea;
-                    
-                    // Convertir coordenadas del gráfico a píxeles
-                    const x = chartRect.left + (pointMeta.x / 100) * chartRect.width;
-                    const y = chartRect.top + (1 - pointMeta.y / 100) * chartRect.height;
-                    
-                    pointElement.style.left = (x - canvasRect.left - 15) + 'px';
-                    pointElement.style.top = (y - canvasRect.top - 8) + 'px';
-                };
-                
-                updatePosition();
-                scatterChart.canvas.parentNode.appendChild(pointElement);
-                
-                // Actualizar posición al redimensionar
-                new ResizeObserver(updatePosition).observe(scatterChart.canvas.parentNode);
-            });
         });
         
         // Filtro por volumen
