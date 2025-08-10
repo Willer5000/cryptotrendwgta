@@ -26,9 +26,16 @@
         .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
         .volume-low { background-color: #FF9800; }         /* Naranja */
         .volume-very-low { background-color: #F44336; }    /* Rojo */
-        .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
-        .grid-line.vertical { width: 1px; height: 100%; }
-        .grid-line.horizontal { height: 1px; width: 100%; }
+        .zone-description { font-size: 0.85rem; }
+        .zone-1 { background-color: rgba(255, 99, 132, 0.1); }
+        .zone-2 { background-color: rgba(255, 159, 64, 0.1); }
+        .zone-3 { background-color: rgba(255, 205, 86, 0.1); }
+        .zone-4 { background-color: rgba(75, 192, 192, 0.1); }
+        .zone-5 { background-color: rgba(54, 162, 235, 0.1); }
+        .zone-6 { background-color: rgba(153, 102, 255, 0.1); }
+        .zone-7 { background-color: rgba(201, 203, 207, 0.1); }
+        .zone-8 { background-color: rgba(255, 99, 132, 0.1); }
+        .zone-9 { background-color: rgba(255, 159, 64, 0.1); }
     </style>
 </head>
 <body>
@@ -107,7 +114,7 @@
                     </div>
                     
                     <div class="col-md-3">
-                        <label class="form-label">Umbral Soporte/Resistencia (%)</label>
+                        <label class="form-label">Umbral S/R (%)</label>
                         <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1">
                     </div>
                     
@@ -178,14 +185,86 @@
                 </div>
             </div>
             <div class="card-body">
-                <div class="scatter-chart-container position-relative">
-                    <!-- Líneas de la cuadrícula -->
-                    <div class="grid-line vertical" style="left: 33.33%;"></div>
-                    <div class="grid-line vertical" style="left: 66.66%;"></div>
-                    <div class="grid-line horizontal" style="top: 33.33%;"></div>
-                    <div class="grid-line horizontal" style="top: 66.66%;"></div>
-                    
+                <div class="scatter-chart-container">
                     <canvas id="scatterChart"></canvas>
+                </div>
+                
+                <!-- Descripción de las zonas -->
+                <div class="row mt-4">
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 zone-1">
+                            <div class="card-body">
+                                <h5 class="card-title">Zona 1: Bajista Fuerte</h5>
+                                <p class="card-text zone-description">Alta probabilidad SHORT (66-100%), Baja probabilidad LONG (0-33%)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 zone-2">
+                            <div class="card-body">
+                                <h5 class="card-title">Zona 2: Bajista Moderado</h5>
+                                <p class="card-text zone-description">Media probabilidad SHORT (33-66%), Baja probabilidad LONG (0-33%)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 zone-3">
+                            <div class="card-body">
+                                <h5 class="card-title">Zona 3: Bajista Leve</h5>
+                                <p class="card-text zone-description">Baja probabilidad SHORT (0-33%), Baja probabilidad LONG (0-33%)</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 zone-4">
+                            <div class="card-body">
+                                <h5 class="card-title">Zona 4: Lateral Bajista</h5>
+                                <p class="card-text zone-description">Alta probabilidad SHORT (66-100%), Media probabilidad LONG (33-66%)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 zone-5">
+                            <div class="card-body">
+                                <h5 class="card-title">Zona 5: Indeciso</h5>
+                                <p class="card-text zone-description">Probabilidades medias (33-66%) en ambas direcciones</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 zone-6">
+                            <div class="card-body">
+                                <h5 class="card-title">Zona 6: Lateral Alcista</h5>
+                                <p class="card-text zone-description">Baja probabilidad SHORT (0-33%), Media probabilidad LONG (33-66%)</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 zone-7">
+                            <div class="card-body">
+                                <h5 class="card-title">Zona 7: Alcista Leve</h5>
+                                <p class="card-text zone-description">Baja probabilidad SHORT (0-33%), Baja probabilidad LONG (0-33%)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 zone-8">
+                            <div class="card-body">
+                                <h5 class="card-title">Zona 8: Alcista Moderado</h5>
+                                <p class="card-text zone-description">Baja probabilidad SHORT (0-33%), Media probabilidad LONG (33-66%)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 zone-9">
+                            <div class="card-body">
+                                <h5 class="card-title">Zona 9: Alcista Fuerte</h5>
+                                <p class="card-text zone-description">Baja probabilidad SHORT (0-33%), Alta probabilidad LONG (66-100%)</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -397,8 +476,8 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = {{ scatter_data | tojson | safe }};
-
+        const scatterData = JSON.parse('{{ scatter_data|safe }}');
+        
         // Mapeo de colores por volumen
         const volumeColors = {
             'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
@@ -443,7 +522,8 @@
                     x: {
                         title: {
                             display: true,
-                            text: 'Probabilidad SHORT (%)'
+                            text: 'Probabilidad SHORT (%)',
+                            font: { size: 14 }
                         },
                         min: 0,
                         max: 100,
@@ -451,12 +531,16 @@
                             callback: function(value) {
                                 return value + '%';
                             }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
                         }
                     },
                     y: {
                         title: {
                             display: true,
-                            text: 'Probabilidad LONG (%)'
+                            text: 'Probabilidad LONG (%)',
+                            font: { size: 14 }
                         },
                         min: 0,
                         max: 100,
@@ -464,6 +548,9 @@
                             callback: function(value) {
                                 return value + '%';
                             }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
                         }
                     }
                 },
@@ -477,34 +564,65 @@
                     },
                     title: {
                         display: true,
-                        text: 'Probabilidades de Trading por Criptomoneda'
+                        text: 'Probabilidades de Trading por Criptomoneda',
+                        font: { size: 16 }
                     },
                     legend: {
                         display: true,
-                        position: 'bottom'
-                    }
-                },
-                // Dibujar etiquetas en los puntos
-                elements: {
-                    point: {
-                        // Dibujar etiqueta para cada punto
-                        afterDraw: function(chart, args, options) {
-                            const {ctx, element} = args;
-                            const dataPoint = chart.getDatasetMeta(element.datasetIndex).data[element.index].$context.raw;
-                            
-                            ctx.save();
-                            ctx.font = '10px Arial';
-                            ctx.fillStyle = 'white';
-                            ctx.textAlign = 'center';
-                            ctx.textBaseline = 'middle';
-                            ctx.fillText(dataPoint.symbol, element.x, element.y);
-                            ctx.restore();
-                        }
+                        position: 'bottom',
+                        labels: { font: { size: 12 } }
                     }
                 }
             }
         });
-
+        
+        // Añadir etiquetas a los puntos
+        scatterChart.options.plugins.afterDraw = function(chart) {
+            const ctx = chart.ctx;
+            chart.data.datasets.forEach((dataset, i) => {
+                const meta = chart.getDatasetMeta(i);
+                if (!meta.hidden) {
+                    meta.data.forEach((element, index) => {
+                        const data = dataset.data[index];
+                        ctx.fillStyle = 'white';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.font = 'bold 10px Arial';
+                        ctx.fillText(data.symbol, element.x, element.y);
+                    });
+                }
+            });
+            
+            // Dibujar líneas divisorias
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 3]);
+            
+            // Líneas verticales
+            ctx.beginPath();
+            ctx.moveTo(chart.scales.x.getPixelForValue(33), chart.scales.y.top);
+            ctx.lineTo(chart.scales.x.getPixelForValue(33), chart.scales.y.bottom);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(chart.scales.x.getPixelForValue(66), chart.scales.y.top);
+            ctx.lineTo(chart.scales.x.getPixelForValue(66), chart.scales.y.bottom);
+            ctx.stroke();
+            
+            // Líneas horizontales
+            ctx.beginPath();
+            ctx.moveTo(chart.scales.x.left, chart.scales.y.getPixelForValue(33));
+            ctx.lineTo(chart.scales.x.right, chart.scales.y.getPixelForValue(33));
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(chart.scales.x.left, chart.scales.y.getPixelForValue(66));
+            ctx.lineTo(chart.scales.x.right, chart.scales.y.getPixelForValue(66));
+            ctx.stroke();
+            
+            ctx.setLineDash([]);
+        };
+        
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
             const filter = this.value;
