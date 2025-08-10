@@ -8,7 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background-color: #f8f9fa; }
         .signal-card { transition: transform 0.3s; }
         .signal-card:hover { transform: translateY(-5px); }
         .long-bg { background-color: #e8f5e9; }
@@ -22,13 +21,13 @@
         .badge-short { background-color: #F44336; }
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; }
+        .volume-very-high { background-color: #4CAF50; }   /* Verde */
+        .volume-high { background-color: #2196F3; }        /* Azul */
+        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
+        .volume-low { background-color: #FF9800; }         /* Naranja */
+        .volume-very-low { background-color: #F44336; }    /* Rojo */
+        .zone { position: absolute; opacity: 0.2; }
         .zone-label { position: absolute; font-weight: bold; text-align: center; }
-        .zone-1 { background-color: rgba(76, 175, 80, 0.1); } /* Verde claro */
-        .zone-2 { background-color: rgba(255, 235, 59, 0.1); } /* Amarillo claro */
-        .zone-3 { background-color: rgba(255, 152, 0, 0.1); } /* Naranja claro */
-        .zone-4 { background-color: rgba(33, 150, 243, 0.1); } /* Azul claro */
-        .zone-5 { background-color: rgba(156, 39, 176, 0.1); } /* Morado claro */
-        .zone-6 { background-color: rgba(244, 67, 54, 0.1); } /* Rojo claro */
     </style>
 </head>
 <body>
@@ -101,6 +100,16 @@
                         <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
                     </div>
                     
+                    <div class="col-md-3">
+                        <label class="form-label">Máximo Riesgo (%)</label>
+                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">Umbral Soporte/Resistencia (%)</label>
+                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1">
+                    </div>
+                    
                     <div class="col-md-12 mt-4">
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="fas fa-sync-alt"></i> Actualizar Parámetros
@@ -151,7 +160,7 @@
             </div>
         </div>
 
-        <!-- Gráfico de Dispersión con Zonas -->
+        <!-- Gráfico de Dispersión -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
                 <h2 class="h5 mb-0"><i class="fas fa-chart-scatter"></i> Probabilidades de Trading</h2>
@@ -168,30 +177,35 @@
                 </div>
             </div>
             <div class="card-body position-relative">
-                <!-- Zonas del gráfico -->
-                <div class="position-absolute w-100 h-100">
-                    <div class="zone-1 position-absolute" style="left:0; top:0; width:33.33%; height:33.33%;"></div>
-                    <div class="zone-2 position-absolute" style="left:33.33%; top:0; width:33.33%; height:33.33%;"></div>
-                    <div class="zone-3 position-absolute" style="left:66.66%; top:0; width:33.33%; height:33.33%;"></div>
-                    <div class="zone-4 position-absolute" style="left:0; top:33.33%; width:33.33%; height:33.33%;"></div>
-                    <div class="zone-5 position-absolute" style="left:33.33%; top:33.33%; width:33.33%; height:33.33%;"></div>
-                    <div class="zone-6 position-absolute" style="left:66.66%; top:33.33%; width:33.33%; height:33.33%;"></div>
-                    
-                    <!-- Etiquetas de zonas -->
-                    <div class="zone-label" style="left:16.66%; top:16.66%;">Alta Prob LONG</div>
-                    <div class="zone-label" style="left:50%; top:16.66%;">LONG Neutral</div>
-                    <div class="zone-label" style="left:83.33%; top:16.66%;">Alta Prob SHORT</div>
-                    <div class="zone-label" style="left:16.66%; top:50%;">LONG Neutral</div>
-                    <div class="zone-label" style="left:50%; top:50%;">Neutral</div>
-                    <div class="zone-label" style="left:83.33%; top:50%;">SHORT Neutral</div>
-                    <div class="zone-label" style="left:16.66%; top:83.33%;">Baja Prob LONG</div>
-                    <div class="zone-label" style="left:50%; top:83.33%;">SHORT Neutral</div>
-                    <div class="zone-label" style="left:83.33%; top:83.33%;">Baja Prob SHORT</div>
-                </div>
-                
-                <div class="scatter-chart-container position-relative z-1">
+                <div class="scatter-chart-container">
                     <canvas id="scatterChart"></canvas>
                 </div>
+                
+                <!-- Zonas de probabilidad -->
+                <div class="zone" style="background-color: #4CAF50; width: 33.3%; height: 33.3%; top: 66.7%; left: 0;"></div>
+                <div class="zone" style="background-color: #8BC34A; width: 33.3%; height: 33.3%; top: 66.7%; left: 33.3%;"></div>
+                <div class="zone" style="background-color: #FFEB3B; width: 33.3%; height: 33.3%; top: 66.7%; left: 66.7%;"></div>
+                
+                <div class="zone" style="background-color: #8BC34A; width: 33.3%; height: 33.3%; top: 33.3%; left: 0;"></div>
+                <div class="zone" style="background-color: #FFEB3B; width: 33.3%; height: 33.3%; top: 33.3%; left: 33.3%;"></div>
+                <div class="zone" style="background-color: #FF9800; width: 33.3%; height: 33.3%; top: 33.3%; left: 66.7%;"></div>
+                
+                <div class="zone" style="background-color: #FFEB3B; width: 33.3%; height: 33.3%; top: 0; left: 0;"></div>
+                <div class="zone" style="background-color: #FF9800; width: 33.3%; height: 33.3%; top: 0; left: 33.3%;"></div>
+                <div class="zone" style="background-color: #F44336; width: 33.3%; height: 33.3%; top: 0; left: 66.7%;"></div>
+                
+                <!-- Etiquetas de zonas -->
+                <div class="zone-label" style="top: 83.3%; left: 16.6%;">Baja Prob</div>
+                <div class="zone-label" style="top: 83.3%; left: 50%;">Media Prob</div>
+                <div class="zone-label" style="top: 83.3%; left: 83.3%;">Alta Prob SHORT</div>
+                
+                <div class="zone-label" style="top: 50%; left: 16.6%;">Media Prob</div>
+                <div class="zone-label" style="top: 50%; left: 50%;">Neutral</div>
+                <div class="zone-label" style="top: 50%; left: 83.3%;">Media Prob SHORT</div>
+                
+                <div class="zone-label" style="top: 16.6%; left: 16.6%;">Alta Prob LONG</div>
+                <div class="zone-label" style="top: 16.6%; left: 50%;">Media Prob LONG</div>
+                <div class="zone-label" style="top: 16.6%; left: 83.3%;">Baja Prob</div>
             </div>
         </div>
 
@@ -406,11 +420,11 @@
         
         // Mapeo de colores por volumen
         const volumeColors = {
-            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'Alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-            'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-            'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-            'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+            'Muy Alto': 'rgba(76, 175, 80, 0.8)',    // Verde
+            'Alto': 'rgba(33, 150, 243, 0.8)',       // Azul
+            'Medio': 'rgba(255, 235, 59, 0.8)',      // Amarillo
+            'Bajo': 'rgba(255, 152, 0, 0.8)',        // Naranja
+            'Muy Bajo': 'rgba(244, 67, 54, 0.8)'     // Rojo
         };
         
         // Preparar datos para el gráfico
@@ -456,14 +470,6 @@
                             callback: function(value) {
                                 return value + '%';
                             }
-                        },
-                        grid: {
-                            color: function(context) {
-                                if (context.tick.value === 33 || context.tick.value === 66) {
-                                    return 'rgba(0, 0, 0, 0.5)';
-                                }
-                                return 'rgba(0, 0, 0, 0.1)';
-                            }
                         }
                     },
                     y: {
@@ -476,14 +482,6 @@
                         ticks: {
                             callback: function(value) {
                                 return value + '%';
-                            }
-                        },
-                        grid: {
-                            color: function(context) {
-                                if (context.tick.value === 33 || context.tick.value === 66) {
-                                    return 'rgba(0, 0, 0, 0.5)';
-                                }
-                                return 'rgba(0, 0, 0, 0.1)';
                             }
                         }
                     }
