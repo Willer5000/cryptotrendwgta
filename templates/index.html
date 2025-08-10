@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        body { background-color: #f8f9fa; }
         .signal-card { transition: transform 0.3s; }
         .signal-card:hover { transform: translateY(-5px); }
         .long-bg { background-color: #e8f5e9; }
@@ -20,13 +21,14 @@
         .badge-long { background-color: #4CAF50; }
         .badge-short { background-color: #F44336; }
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .scatter-chart-container { height: 600px; position: relative; }
-        .volume-very-high { background-color: #4CAF50; }   /* Verde */
-        .volume-high { background-color: #2196F3; }        /* Azul */
-        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
-        .volume-low { background-color: #FF9800; }         /* Naranja */
-        .volume-very-low { background-color: #F44336; }    /* Rojo */
-        .zone-label { position: absolute; font-size: 12px; font-weight: bold; text-align: center; }
+        .scatter-chart-container { height: 600px; }
+        .zone-label { position: absolute; font-weight: bold; text-align: center; }
+        .zone-1 { background-color: rgba(76, 175, 80, 0.1); } /* Verde claro */
+        .zone-2 { background-color: rgba(255, 235, 59, 0.1); } /* Amarillo claro */
+        .zone-3 { background-color: rgba(255, 152, 0, 0.1); } /* Naranja claro */
+        .zone-4 { background-color: rgba(33, 150, 243, 0.1); } /* Azul claro */
+        .zone-5 { background-color: rgba(156, 39, 176, 0.1); } /* Morado claro */
+        .zone-6 { background-color: rgba(244, 67, 54, 0.1); } /* Rojo claro */
     </style>
 </head>
 <body>
@@ -99,16 +101,6 @@
                         <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
                     </div>
                     
-                    <div class="col-md-3">
-                        <label class="form-label">Máximo Riesgo (%)</label>
-                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1">
-                    </div>
-                    
-                    <div class="col-md-3">
-                        <label class="form-label">Umbral Soporte/Resistencia (%)</label>
-                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1">
-                    </div>
-                    
                     <div class="col-md-12 mt-4">
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="fas fa-sync-alt"></i> Actualizar Parámetros
@@ -159,7 +151,7 @@
             </div>
         </div>
 
-        <!-- Gráfico de Dispersión -->
+        <!-- Gráfico de Dispersión con Zonas -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
                 <h2 class="h5 mb-0"><i class="fas fa-chart-scatter"></i> Probabilidades de Trading</h2>
@@ -175,18 +167,30 @@
                     </select>
                 </div>
             </div>
-            <div class="card-body">
-                <div class="scatter-chart-container">
+            <div class="card-body position-relative">
+                <!-- Zonas del gráfico -->
+                <div class="position-absolute w-100 h-100">
+                    <div class="zone-1 position-absolute" style="left:0; top:0; width:33.33%; height:33.33%;"></div>
+                    <div class="zone-2 position-absolute" style="left:33.33%; top:0; width:33.33%; height:33.33%;"></div>
+                    <div class="zone-3 position-absolute" style="left:66.66%; top:0; width:33.33%; height:33.33%;"></div>
+                    <div class="zone-4 position-absolute" style="left:0; top:33.33%; width:33.33%; height:33.33%;"></div>
+                    <div class="zone-5 position-absolute" style="left:33.33%; top:33.33%; width:33.33%; height:33.33%;"></div>
+                    <div class="zone-6 position-absolute" style="left:66.66%; top:33.33%; width:33.33%; height:33.33%;"></div>
+                    
+                    <!-- Etiquetas de zonas -->
+                    <div class="zone-label" style="left:16.66%; top:16.66%;">Alta Prob LONG</div>
+                    <div class="zone-label" style="left:50%; top:16.66%;">LONG Neutral</div>
+                    <div class="zone-label" style="left:83.33%; top:16.66%;">Alta Prob SHORT</div>
+                    <div class="zone-label" style="left:16.66%; top:50%;">LONG Neutral</div>
+                    <div class="zone-label" style="left:50%; top:50%;">Neutral</div>
+                    <div class="zone-label" style="left:83.33%; top:50%;">SHORT Neutral</div>
+                    <div class="zone-label" style="left:16.66%; top:83.33%;">Baja Prob LONG</div>
+                    <div class="zone-label" style="left:50%; top:83.33%;">SHORT Neutral</div>
+                    <div class="zone-label" style="left:83.33%; top:83.33%;">Baja Prob SHORT</div>
+                </div>
+                
+                <div class="scatter-chart-container position-relative z-1">
                     <canvas id="scatterChart"></canvas>
-                    <div class="zone-label" style="top: 10%; left: 10%; width: 30%; height: 30%;">Zona 1: Baja LONG, Baja SHORT</div>
-                    <div class="zone-label" style="top: 10%; left: 40%; width: 30%; height: 30%;">Zona 2: Baja LONG, Media SHORT</div>
-                    <div class="zone-label" style="top: 10%; left: 70%; width: 30%; height: 30%;">Zona 3: Baja LONG, Alta SHORT</div>
-                    <div class="zone-label" style="top: 40%; left: 10%; width: 30%; height: 30%;">Zona 4: Media LONG, Baja SHORT</div>
-                    <div class="zone-label" style="top: 40%; left: 40%; width: 30%; height: 30%;">Zona 5: Media LONG, Media SHORT</div>
-                    <div class="zone-label" style="top: 40%; left: 70%; width: 30%; height: 30%;">Zona 6: Media LONG, Alta SHORT</div>
-                    <div class="zone-label" style="top: 70%; left: 10%; width: 30%; height: 30%;">Zona 7: Alta LONG, Baja SHORT</div>
-                    <div class="zone-label" style="top: 70%; left: 40%; width: 30%; height: 30%;">Zona 8: Alta LONG, Media SHORT</div>
-                    <div class="zone-label" style="top: 70%; left: 70%; width: 30%; height: 30%;">Zona 9: Alta LONG, Alta SHORT</div>
                 </div>
             </div>
         </div>
@@ -452,6 +456,14 @@
                             callback: function(value) {
                                 return value + '%';
                             }
+                        },
+                        grid: {
+                            color: function(context) {
+                                if (context.tick.value === 33 || context.tick.value === 66) {
+                                    return 'rgba(0, 0, 0, 0.5)';
+                                }
+                                return 'rgba(0, 0, 0, 0.1)';
+                            }
                         }
                     },
                     y: {
@@ -464,6 +476,14 @@
                         ticks: {
                             callback: function(value) {
                                 return value + '%';
+                            }
+                        },
+                        grid: {
+                            color: function(context) {
+                                if (context.tick.value === 33 || context.tick.value === 66) {
+                                    return 'rgba(0, 0, 0, 0.5)';
+                                }
+                                return 'rgba(0, 0, 0, 0.1)';
                             }
                         }
                     }
