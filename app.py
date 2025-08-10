@@ -5,15 +5,14 @@ import pandas as pd
 import numpy as np
 import json
 import threading
-from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify
+from datetime import datetime
+from flask import Flask, render_template, request
 from flask_caching import Cache
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
-import math
 
 app = Flask(__name__)
 cache = Cache(app, config={'CACHE_TYPE': 'simple'})
@@ -31,7 +30,7 @@ DEFAULTS = {
     'sr_window': 50,
     'divergence_lookback': 20,
     'max_risk_percent': 1.5,
-    'price_distance_threshold': 1.0  # 1% para considerar "cerca" de soporte/resistencia
+    'price_distance_threshold': 1.0
 }
 
 # Leer lista de criptomonedas
@@ -82,11 +81,8 @@ def calculate_rsi(series, window):
     avg_gain = gain.rolling(window, min_periods=1).mean()
     avg_loss = loss.rolling(window, min_periods=1).mean()
     
-    if avg_loss == 0:
-        rsi = 100
-    else:
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
     return rsi
 
 # Implementación manual de ADX
@@ -101,7 +97,7 @@ def calculate_adx(high, low, close, window):
     tr2 = (high - close.shift()).abs()
     tr3 = (low - close.shift()).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.rolling(window).mean().replace(0, 0.0001)  # Evitar división por cero
+    atr = tr.rolling(window).mean()
     
     plus_di = 100 * (plus_dm.rolling(window).mean() / atr)
     minus_di = 100 * (minus_dm.rolling(window).mean() / atr)
@@ -129,13 +125,7 @@ def calculate_indicators(df, params):
     df['rsi'] = calculate_rsi(df['close'], params['rsi_period'])
     
     # ADX
-    try:
-        df['adx'], df['plus_di'], df['minus_di'] = calculate_adx(df['high'], df['low'], df['close'], params['adx_period'])
-    except Exception as e:
-        app.logger.error(f"Error calculating ADX: {str(e)}")
-        df['adx'] = 0
-        df['plus_di'] = 0
-        df['minus_di'] = 0
+    df['adx'], df['plus_di'], df['minus_di'] = calculate_adx(df['high'], df['low'], df['close'], params['adx_period'])
     
     # ATR
     df['atr'] = calculate_atr(df['high'], df['low'], df['close'], 14)
@@ -144,22 +134,17 @@ def calculate_indicators(df, params):
 
 # Detectar soportes y resistencias
 def find_support_resistance(df, window):
-    try:
-        df['high_roll'] = df['high'].rolling(window=window, min_periods=1).max()
-        df['low_roll'] = df['low'].rolling(window=window, min_periods=1).min()
-        
-        resistances = df[df['high'] == df['high_roll']]['high'].unique().tolist()
-        supports = df[df['low'] == df['low_roll']]['low'].unique().tolist()
-    except Exception as e:
-        app.logger.error(f"Error finding support/resistance: {str(e)}")
-        resistances = []
-        supports = []
+    df['high_roll'] = df['high'].rolling(window=window, min_periods=1).max()
+    df['low_roll'] = df['low'].rolling(window=window, min_periods=1).min()
+    
+    resistances = df[df['high'] == df['high_roll']]['high'].unique().tolist()
+    supports = df[df['low'] == df['low_roll']]['low'].unique().tolist()
     
     return supports, resistances
 
 # Clasificar volumen
 def classify_volume(current_vol, avg_vol):
-    if avg_vol == 0:
+    if avg_vol == 0 or pd.isna(avg_vol):
         return 'Muy Bajo'
     ratio = current_vol / avg_vol
     if ratio > 2.0: return 'Muy Alto'
@@ -168,40 +153,37 @@ def classify_volume(current_vol, avg_vol):
     if ratio > 0.5: return 'Bajo'
     return 'Muy Bajo'
 
-# Detectar divergencias
+# Detectar divergencias (corregida)
 def detect_divergence(df, lookback):
     if len(df) < lookback + 1:
         return None
         
-    try:
-        # Seleccionar los últimos datos
-        recent = df.iloc[-lookback:]
+    # Seleccionar los últimos datos
+    recent = df.iloc[-lookback:]
+    
+    # Buscar máximos/mínimos recientes
+    max_idx = recent['close'].idxmax()
+    min_idx = recent['close'].idxmin()
+    
+    # Divergencia bajista
+    if not pd.isna(max_idx):
+        price_high = df.loc[max_idx, 'close']
+        rsi_high = df.loc[max_idx, 'rsi']
+        current_price = df.iloc[-1]['close']
+        current_rsi = df.iloc[-1]['rsi']
         
-        # Buscar máximos/mínimos recientes
-        max_idx = recent['close'].idxmax()
-        min_idx = recent['close'].idxmin()
+        if current_price > price_high and current_rsi < rsi_high and current_rsi > 70:
+            return 'bearish'
+    
+    # Divergencia alcista
+    if not pd.isna(min_idx):
+        price_low = df.loc[min_idx, 'close']
+        rsi_low = df.loc[min_idx, 'rsi']
+        current_price = df.iloc[-1]['close']
+        current_rsi = df.iloc[-1]['rsi']
         
-        # Divergencia bajista
-        if pd.notna(max_idx):
-            price_high = df.loc[max_idx, 'close']
-            rsi_high = df.loc[max_idx, 'rsi']
-            current_price = df.iloc[-1]['close']
-            current_rsi = df.iloc[-1]['rsi']
-            
-            if current_price > price_high and current_rsi < rsi_high and current_rsi > 70:
-                return 'bearish'
-        
-        # Divergencia alcista
-        if pd.notna(min_idx):
-            price_low = df.loc[min_idx, 'close']
-            rsi_low = df.loc[min_idx, 'rsi']
-            current_price = df.iloc[-1]['close']
-            current_rsi = df.iloc[-1]['rsi']
-            
-            if current_price < price_low and current_rsi > rsi_low and current_rsi < 30:
-                return 'bullish'
-    except Exception as e:
-        app.logger.error(f"Error detecting divergence: {str(e)}")
+        if current_price < price_low and current_rsi > rsi_low and current_rsi < 30:
+            return 'bullish'
     
     return None
 
@@ -209,19 +191,66 @@ def detect_divergence(df, lookback):
 def calculate_distance_to_level(price, levels, threshold_percent):
     if not levels:
         return False
-    try:
-        min_distance = min(abs(price - level) for level in levels)
-        threshold = price * threshold_percent / 100
-        return min_distance <= threshold
-    except Exception as e:
-        app.logger.error(f"Error calculating distance to level: {str(e)}")
-        return False
+    min_distance = min(abs(price - level) for level in levels)
+    threshold = price * threshold_percent / 100
+    return min_distance <= threshold
+
+# Generar gráfico para una señal
+def generate_chart(df, signal, signal_type):
+    plt.figure(figsize=(12, 8))
+    
+    # Gráfico de precio
+    plt.subplot(3, 1, 1)
+    plt.plot(df['timestamp'], df['close'], label='Precio', color='blue')
+    plt.plot(df['timestamp'], df['ema_fast'], label=f'EMA {DEFAULTS["ema_fast"]}', color='orange', alpha=0.7)
+    plt.plot(df['timestamp'], df['ema_slow'], label=f'EMA {DEFAULTS["ema_slow"]}', color='green', alpha=0.7)
+    
+    # Marcar entrada y SL
+    if signal_type == 'long':
+        plt.axhline(y=signal['entry'], color='green', linestyle='--', label='Entrada')
+        plt.axhline(y=signal['sl'], color='red', linestyle='--', label='Stop Loss')
+    else:
+        plt.axhline(y=signal['entry'], color='red', linestyle='--', label='Entrada')
+        plt.axhline(y=signal['sl'], color='green', linestyle='--', label='Stop Loss')
+    
+    plt.title(f'{signal["symbol"]} - Precio y EMAs')
+    plt.legend()
+    plt.grid(True)
+    
+    # Gráfico de volumen
+    plt.subplot(3, 1, 2)
+    plt.bar(df['timestamp'], df['volume'], color=np.where(df['close'] > df['open'], 'green', 'red'))
+    plt.title('Volumen')
+    plt.grid(True)
+    
+    # Gráfico de indicadores
+    plt.subplot(3, 1, 3)
+    plt.plot(df['timestamp'], df['rsi'], label='RSI', color='purple')
+    plt.axhline(y=70, color='red', linestyle='--', alpha=0.5)
+    plt.axhline(y=30, color='green', linestyle='--', alpha=0.5)
+    
+    plt.plot(df['timestamp'], df['adx'], label='ADX', color='brown')
+    plt.axhline(y=DEFAULTS['adx_level'], color='blue', linestyle='--', alpha=0.5)
+    
+    plt.title('Indicadores')
+    plt.legend()
+    plt.grid(True)
+    
+    plt.tight_layout()
+    
+    # Convertir a base64
+    img = io.BytesIO()
+    plt.savefig(img, format='png')
+    img.seek(0)
+    plot_url = base64.b64encode(img.getvalue()).decode()
+    plt.close()
+    
+    return plot_url
 
 # Analizar una criptomoneda y calcular probabilidades
 def analyze_crypto(symbol, params):
     df = get_kucoin_data(symbol, params['timeframe'])
-    if df is None or len(df) < 50:
-        app.logger.warning(f"Datos insuficientes para {symbol}")
+    if df is None or len(df) < 100:
         return None, None, 0, 0, 'Muy Bajo'
     
     try:
@@ -230,11 +259,7 @@ def analyze_crypto(symbol, params):
         
         last = df.iloc[-1]
         avg_vol = df['volume'].tail(20).mean()
-        if pd.isna(avg_vol) or avg_vol == 0:
-            volume_class = 'Muy Bajo'
-        else:
-            volume_class = classify_volume(last['volume'], avg_vol)
-        
+        volume_class = classify_volume(last['volume'], avg_vol)
         divergence = detect_divergence(df, params['divergence_lookback'])
         
         # Detectar quiebres
@@ -249,34 +274,20 @@ def analyze_crypto(symbol, params):
         short_prob = 0
         
         # Criterios para LONG
-        if trend == 'up': 
-            long_prob += 30
-        if last['adx'] > params['adx_level']: 
-            long_prob += 20
-        if is_breakout or divergence == 'bullish': 
-            long_prob += 25
-        if volume_class in ['Alto', 'Muy Alto']: 
-            long_prob += 15
-        if calculate_distance_to_level(last['close'], supports, params['price_distance_threshold']): 
-            long_prob += 10
+        if trend == 'up': long_prob += 30
+        if last['adx'] > params['adx_level']: long_prob += 20
+        if is_breakout or divergence == 'bullish': long_prob += 25
+        if volume_class in ['Alto', 'Muy Alto']: long_prob += 15
+        if calculate_distance_to_level(last['close'], supports, params['price_distance_threshold']): long_prob += 10
         
         # Criterios para SHORT
-        if trend == 'down': 
-            short_prob += 30
-        if last['adx'] > params['adx_level']: 
-            short_prob += 20
-        if is_breakdown or divergence == 'bearish': 
-            short_prob += 25
-        if volume_class in ['Alto', 'Muy Alto']: 
-            short_prob += 15
-        if calculate_distance_to_level(last['close'], resistances, params['price_distance_threshold']): 
-            short_prob += 10
+        if trend == 'down': short_prob += 30
+        if last['adx'] > params['adx_level']: short_prob += 20
+        if is_breakdown or divergence == 'bearish': short_prob += 25
+        if volume_class in ['Alto', 'Muy Alto']: short_prob += 15
+        if calculate_distance_to_level(last['close'], resistances, params['price_distance_threshold']): short_prob += 10
         
-        # Asegurar que no superen 100
-        long_prob = min(long_prob, 100)
-        short_prob = min(short_prob, 100)
-        
-        # Señales LONG (solo si probabilidad >= 70 y volumen alto)
+        # Señales LONG
         long_signal = None
         if long_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
             # Encontrar la resistencia más cercana por encima
@@ -301,7 +312,7 @@ def analyze_crypto(symbol, params):
                 'distance': round(((entry - last['close']) / last['close']) * 100, 2)
             }
         
-        # Señales SHORT (solo si probabilidad >= 70 y volumen alto)
+        # Señales SHORT
         short_signal = None
         if short_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
             # Encontrar el soporte más cercano por debajo
@@ -328,7 +339,7 @@ def analyze_crypto(symbol, params):
         
         return long_signal, short_signal, long_prob, short_prob, volume_class
     except Exception as e:
-        app.logger.error(f"Error analyzing {symbol}: {str(e)}")
+        app.logger.error(f"Error analyzing {symbol}: {str(e)}", exc_info=True)
         return None, None, 0, 0, 'Muy Bajo'
 
 # Tarea en segundo plano para actualizar datos
@@ -402,14 +413,10 @@ def index():
 @app.route('/chart/<symbol>/<signal_type>')
 def get_chart(symbol, signal_type):
     df = get_kucoin_data(symbol, DEFAULTS['timeframe'])
-    if df is None or len(df) < 50:
+    if df is None:
         return "Datos no disponibles", 404
     
-    try:
-        df = calculate_indicators(df, DEFAULTS)
-    except Exception as e:
-        app.logger.error(f"Error calculating indicators for {symbol}: {str(e)}")
-        return "Error generando indicadores", 500
+    df = calculate_indicators(df, DEFAULTS)
     
     # Buscar señal correspondiente
     signals = cache.get('long_signals') if signal_type == 'long' else cache.get('short_signals')
