@@ -20,22 +20,23 @@
         .badge-long { background-color: #4CAF50; }
         .badge-short { background-color: #F44336; }
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .scatter-chart-container { height: 600px; }
+        .scatter-chart-container { height: 600px; position: relative; }
+        .scatter-zone { position: absolute; border: 1px dashed #ccc; background-color: rgba(240,240,240,0.3); }
+        .scatter-label { position: absolute; font-weight: bold; text-align: center; }
         .volume-very-high { background-color: #4CAF50; }   /* Verde */
         .volume-high { background-color: #2196F3; }        /* Azul */
         .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
         .volume-low { background-color: #FF9800; }         /* Naranja */
         .volume-very-low { background-color: #F44336; }    /* Rojo */
-        .zone-description { font-size: 0.85rem; }
-        .zone-1 { background-color: rgba(255, 99, 132, 0.1); }
-        .zone-2 { background-color: rgba(255, 159, 64, 0.1); }
-        .zone-3 { background-color: rgba(255, 205, 86, 0.1); }
-        .zone-4 { background-color: rgba(75, 192, 192, 0.1); }
-        .zone-5 { background-color: rgba(54, 162, 235, 0.1); }
-        .zone-6 { background-color: rgba(153, 102, 255, 0.1); }
-        .zone-7 { background-color: rgba(201, 203, 207, 0.1); }
-        .zone-8 { background-color: rgba(255, 99, 132, 0.1); }
-        .zone-9 { background-color: rgba(255, 159, 64, 0.1); }
+        .point-label {
+            position: absolute;
+            color: white;
+            font-size: 8px;
+            font-weight: bold;
+            text-shadow: 0 0 2px black;
+            pointer-events: none;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -114,7 +115,7 @@
                     </div>
                     
                     <div class="col-md-3">
-                        <label class="form-label">Umbral S/R (%)</label>
+                        <label class="form-label">Umbral Soporte/Resistencia (%)</label>
                         <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1">
                     </div>
                     
@@ -187,84 +188,30 @@
             <div class="card-body">
                 <div class="scatter-chart-container">
                     <canvas id="scatterChart"></canvas>
-                </div>
-                
-                <!-- Descripción de las zonas -->
-                <div class="row mt-4">
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100 zone-1">
-                            <div class="card-body">
-                                <h5 class="card-title">Zona 1: Bajista Fuerte</h5>
-                                <p class="card-text zone-description">Alta probabilidad SHORT (66-100%), Baja probabilidad LONG (0-33%)</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100 zone-2">
-                            <div class="card-body">
-                                <h5 class="card-title">Zona 2: Bajista Moderado</h5>
-                                <p class="card-text zone-description">Media probabilidad SHORT (33-66%), Baja probabilidad LONG (0-33%)</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100 zone-3">
-                            <div class="card-body">
-                                <h5 class="card-title">Zona 3: Bajista Leve</h5>
-                                <p class="card-text zone-description">Baja probabilidad SHORT (0-33%), Baja probabilidad LONG (0-33%)</p>
-                            </div>
-                        </div>
-                    </div>
+                    <div class="scatter-zone" style="top: 66.6%; left: 0; width: 33.3%; height: 33.3%;"></div>
+                    <div class="scatter-zone" style="top: 66.6%; left: 33.3%; width: 33.3%; height: 33.3%;"></div>
+                    <div class="scatter-zone" style="top: 66.6%; left: 66.6%; width: 33.3%; height: 33.3%;"></div>
                     
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100 zone-4">
-                            <div class="card-body">
-                                <h5 class="card-title">Zona 4: Lateral Bajista</h5>
-                                <p class="card-text zone-description">Alta probabilidad SHORT (66-100%), Media probabilidad LONG (33-66%)</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100 zone-5">
-                            <div class="card-body">
-                                <h5 class="card-title">Zona 5: Indeciso</h5>
-                                <p class="card-text zone-description">Probabilidades medias (33-66%) en ambas direcciones</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100 zone-6">
-                            <div class="card-body">
-                                <h5 class="card-title">Zona 6: Lateral Alcista</h5>
-                                <p class="card-text zone-description">Baja probabilidad SHORT (0-33%), Media probabilidad LONG (33-66%)</p>
-                            </div>
-                        </div>
-                    </div>
+                    <div class="scatter-zone" style="top: 33.3%; left: 0; width: 33.3%; height: 33.3%;"></div>
+                    <div class="scatter-zone" style="top: 33.3%; left: 33.3%; width: 33.3%; height: 33.3%;"></div>
+                    <div class="scatter-zone" style="top: 33.3%; left: 66.6%; width: 33.3%; height: 33.3%;"></div>
                     
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100 zone-7">
-                            <div class="card-body">
-                                <h5 class="card-title">Zona 7: Alcista Leve</h5>
-                                <p class="card-text zone-description">Baja probabilidad SHORT (0-33%), Baja probabilidad LONG (0-33%)</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100 zone-8">
-                            <div class="card-body">
-                                <h5 class="card-title">Zona 8: Alcista Moderado</h5>
-                                <p class="card-text zone-description">Baja probabilidad SHORT (0-33%), Media probabilidad LONG (33-66%)</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100 zone-9">
-                            <div class="card-body">
-                                <h5 class="card-title">Zona 9: Alcista Fuerte</h5>
-                                <p class="card-text zone-description">Baja probabilidad SHORT (0-33%), Alta probabilidad LONG (66-100%)</p>
-                            </div>
-                        </div>
-                    </div>
+                    <div class="scatter-zone" style="top: 0; left: 0; width: 33.3%; height: 33.3%;"></div>
+                    <div class="scatter-zone" style="top: 0; left: 33.3%; width: 33.3%; height: 33.3%;"></div>
+                    <div class="scatter-zone" style="top: 0; left: 66.6%; width: 33.3%; height: 33.3%;"></div>
+                    
+                    <!-- Etiquetas de zonas -->
+                    <div class="scatter-label" style="top: 16.5%; left: 16.5%;">Alta Prob LONG<br>Baja Prob SHORT</div>
+                    <div class="scatter-label" style="top: 16.5%; left: 50%;">Alta Prob LONG<br>Med Prob SHORT</div>
+                    <div class="scatter-label" style="top: 16.5%; left: 83.5%;">Alta Prob LONG<br>Alta Prob SHORT</div>
+                    
+                    <div class="scatter-label" style="top: 50%; left: 16.5%;">Med Prob LONG<br>Baja Prob SHORT</div>
+                    <div class="scatter-label" style="top: 50%; left: 50%;">Neutro</div>
+                    <div class="scatter-label" style="top: 50%; left: 83.5%;">Med Prob LONG<br>Alta Prob SHORT</div>
+                    
+                    <div class="scatter-label" style="top: 83.5%; left: 16.5%;">Baja Prob LONG<br>Baja Prob SHORT</div>
+                    <div class="scatter-label" style="top: 83.5%; left: 50%;">Baja Prob LONG<br>Med Prob SHORT</div>
+                    <div class="scatter-label" style="top: 83.5%; left: 83.5%;">Baja Prob LONG<br>Alta Prob SHORT</div>
                 </div>
             </div>
         </div>
@@ -480,11 +427,11 @@
         
         // Mapeo de colores por volumen
         const volumeColors = {
-            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'Alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-            'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-            'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-            'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+            'Muy Alto': 'rgba(76, 175, 80, 0.8)',     // Verde
+            'Alto': 'rgba(33, 150, 243, 0.8)',       // Azul
+            'Medio': 'rgba(255, 235, 59, 0.8)',      // Amarillo
+            'Bajo': 'rgba(255, 152, 0, 0.8)',        // Naranja
+            'Muy Bajo': 'rgba(244, 67, 54, 0.8)'     // Rojo
         };
         
         // Preparar datos para el gráfico
@@ -503,8 +450,8 @@
                     label: vol,
                     data: data,
                     backgroundColor: volumeColors[vol],
-                    pointRadius: 8,
-                    pointHoverRadius: 10
+                    pointRadius: 6,
+                    pointHoverRadius: 8
                 });
             }
         });
@@ -522,8 +469,7 @@
                     x: {
                         title: {
                             display: true,
-                            text: 'Probabilidad SHORT (%)',
-                            font: { size: 14 }
+                            text: 'Probabilidad SHORT (%)'
                         },
                         min: 0,
                         max: 100,
@@ -531,16 +477,12 @@
                             callback: function(value) {
                                 return value + '%';
                             }
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
                         }
                     },
                     y: {
                         title: {
                             display: true,
-                            text: 'Probabilidad LONG (%)',
-                            font: { size: 14 }
+                            text: 'Probabilidad LONG (%)'
                         },
                         min: 0,
                         max: 100,
@@ -548,9 +490,6 @@
                             callback: function(value) {
                                 return value + '%';
                             }
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
                         }
                     }
                 },
@@ -564,64 +503,46 @@
                     },
                     title: {
                         display: true,
-                        text: 'Probabilidades de Trading por Criptomoneda',
-                        font: { size: 16 }
+                        text: 'Probabilidades de Trading por Criptomoneda'
                     },
                     legend: {
                         display: true,
-                        position: 'bottom',
-                        labels: { font: { size: 12 } }
+                        position: 'bottom'
                     }
                 }
             }
         });
         
         // Añadir etiquetas a los puntos
-        scatterChart.options.plugins.afterDraw = function(chart) {
-            const ctx = chart.ctx;
-            chart.data.datasets.forEach((dataset, i) => {
-                const meta = chart.getDatasetMeta(i);
-                if (!meta.hidden) {
-                    meta.data.forEach((element, index) => {
-                        const data = dataset.data[index];
-                        ctx.fillStyle = 'white';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.font = 'bold 10px Arial';
-                        ctx.fillText(data.symbol, element.x, element.y);
-                    });
-                }
+        scatterChart.canvas.parentNode.style.position = 'relative';
+        scatterChart.data.datasets.forEach((dataset, datasetIndex) => {
+            dataset.data.forEach((point, index) => {
+                const pointElement = document.createElement('div');
+                pointElement.className = 'point-label';
+                pointElement.textContent = point.symbol;
+                
+                const meta = scatterChart.getDatasetMeta(datasetIndex);
+                const pointMeta = meta.data[index];
+                
+                const updatePosition = () => {
+                    const canvasRect = scatterChart.canvas.getBoundingClientRect();
+                    const chartRect = scatterChart.chartArea;
+                    
+                    // Convertir coordenadas del gráfico a píxeles
+                    const x = chartRect.left + (pointMeta.x / 100) * chartRect.width;
+                    const y = chartRect.top + (1 - pointMeta.y / 100) * chartRect.height;
+                    
+                    pointElement.style.left = (x - canvasRect.left - 15) + 'px';
+                    pointElement.style.top = (y - canvasRect.top - 8) + 'px';
+                };
+                
+                updatePosition();
+                scatterChart.canvas.parentNode.appendChild(pointElement);
+                
+                // Actualizar posición al redimensionar
+                new ResizeObserver(updatePosition).observe(scatterChart.canvas.parentNode);
             });
-            
-            // Dibujar líneas divisorias
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([5, 3]);
-            
-            // Líneas verticales
-            ctx.beginPath();
-            ctx.moveTo(chart.scales.x.getPixelForValue(33), chart.scales.y.top);
-            ctx.lineTo(chart.scales.x.getPixelForValue(33), chart.scales.y.bottom);
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.moveTo(chart.scales.x.getPixelForValue(66), chart.scales.y.top);
-            ctx.lineTo(chart.scales.x.getPixelForValue(66), chart.scales.y.bottom);
-            ctx.stroke();
-            
-            // Líneas horizontales
-            ctx.beginPath();
-            ctx.moveTo(chart.scales.x.left, chart.scales.y.getPixelForValue(33));
-            ctx.lineTo(chart.scales.x.right, chart.scales.y.getPixelForValue(33));
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.moveTo(chart.scales.x.left, chart.scales.y.getPixelForValue(66));
-            ctx.lineTo(chart.scales.x.right, chart.scales.y.getPixelForValue(66));
-            ctx.stroke();
-            
-            ctx.setLineDash([]);
-        };
+        });
         
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
