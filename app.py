@@ -15,7 +15,8 @@ import io
 import base64
 
 app = Flask(__name__)
-cache = Cache(app, config={'CACHE_TYPE': 'simple'})
+app.config['CACHE_TYPE'] = 'simple'
+cache = Cache(app)
 
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
@@ -48,23 +49,25 @@ def get_kucoin_data(symbol, timeframe):
         '1d': '1day',
         '1w': '1week'
     }
-    kucoin_tf = tf_mapping[timeframe]
+    kucoin_tf = tf_mapping.get(timeframe, '1hour')
     url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}-USDT"
     
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=15)
         if response.status_code == 200:
             data = response.json()
             if data.get('code') == '200000' and data.get('data'):
                 candles = data['data']
                 candles.reverse()
                 df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
-                df = df.astype({'open': float, 'close': float, 'high': float, 'low': float, 'volume': float})
+                for col in ['open', 'close', 'high', 'low', 'volume']:
+                    df[col] = df[col].astype(float)
                 df['timestamp'] = pd.to_datetime(df['timestamp'].astype(int), unit='s')
                 return df
+        return None
     except Exception as e:
         app.logger.error(f"Error fetching data for {symbol}: {str(e)}")
-    return None
+        return None
 
 # Implementación manual de EMA
 def calculate_ema(series, window):
@@ -72,7 +75,7 @@ def calculate_ema(series, window):
 
 # Implementación manual de RSI
 def calculate_rsi(series, window):
-    delta = series.diff(1)
+    delta = series.diff()
     gain = delta.where(delta > 0, 0)
     loss = -delta.where(delta < 0, 0)
     
@@ -81,7 +84,7 @@ def calculate_rsi(series, window):
     
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    return rsi.fillna(50)  # Valor neutral cuando no hay datos suficientes
+    return rsi.fillna(50)  # Valor neutro cuando no hay datos suficientes
 
 # Implementación manual de ADX
 def calculate_adx(high, low, close, window):
@@ -95,14 +98,14 @@ def calculate_adx(high, low, close, window):
     tr2 = (high - close.shift()).abs()
     tr3 = (low - close.shift()).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.rolling(window).mean()
+    atr = tr.rolling(window).mean().fillna(tr)
     
-    plus_di = 100 * (plus_dm.rolling(window).mean() / atr)
-    minus_di = 100 * (minus_dm.rolling(window).mean() / atr)
+    plus_di = 100 * (plus_dm.rolling(window).mean() / atr).fillna(0)
+    minus_di = 100 * (minus_dm.rolling(window).mean() / atr).fillna(0)
     
-    dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di)).replace([np.inf, -np.inf], 0)
-    adx = dx.rolling(window).mean()
-    return adx.fillna(0), plus_di.fillna(0), minus_di.fillna(0)
+    dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, 1e-10)).fillna(0)
+    adx = dx.rolling(window).mean().fillna(0)
+    return adx, plus_di, minus_di
 
 # Implementación manual de ATR
 def calculate_atr(high, low, close, window):
@@ -110,47 +113,39 @@ def calculate_atr(high, low, close, window):
     tr2 = (high - close.shift()).abs()
     tr3 = (low - close.shift()).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.rolling(window).mean()
-    return atr.fillna(0)
+    atr = tr.rolling(window).mean().fillna(tr)
+    return atr
 
 # Calcular indicadores manualmente
 def calculate_indicators(df, params):
-    try:
-        # EMA
-        df['ema_fast'] = calculate_ema(df['close'], params['ema_fast'])
-        df['ema_slow'] = calculate_ema(df['close'], params['ema_slow'])
-        
-        # RSI
-        df['rsi'] = calculate_rsi(df['close'], params['rsi_period'])
-        
-        # ADX
-        df['adx'], df['plus_di'], df['minus_di'] = calculate_adx(df['high'], df['low'], df['close'], params['adx_period'])
-        
-        # ATR
-        df['atr'] = calculate_atr(df['high'], df['low'], df['close'], 14)
-        
-        return df
-    except Exception as e:
-        app.logger.error(f"Error calculating indicators: {str(e)}")
-        return df
+    # EMA
+    df['ema_fast'] = calculate_ema(df['close'], params['ema_fast'])
+    df['ema_slow'] = calculate_ema(df['close'], params['ema_slow'])
+    
+    # RSI
+    df['rsi'] = calculate_rsi(df['close'], params['rsi_period'])
+    
+    # ADX
+    df['adx'], _, _ = calculate_adx(df['high'], df['low'], df['close'], params['adx_period'])
+    
+    # ATR
+    df['atr'] = calculate_atr(df['high'], df['low'], df['close'], 14)
+    
+    return df.dropna()
 
 # Detectar soportes y resistencias
 def find_support_resistance(df, window):
-    try:
-        df['high_roll'] = df['high'].rolling(window=window, min_periods=1).max()
-        df['low_roll'] = df['low'].rolling(window=window, min_periods=1).min()
-        
-        resistances = df[df['high'] == df['high_roll']]['high'].unique().tolist()
-        supports = df[df['low'] == df['low_roll']]['low'].unique().tolist()
-        
-        return supports, resistances
-    except Exception as e:
-        app.logger.error(f"Error finding S/R: {str(e)}")
-        return [], []
+    df['high_roll'] = df['high'].rolling(window=window, min_periods=1).max()
+    df['low_roll'] = df['low'].rolling(window=window, min_periods=1).min()
+    
+    resistances = df[df['high'] >= df['high_roll']]['high'].unique().tolist()
+    supports = df[df['low'] <= df['low_roll']]['low'].unique().tolist()
+    
+    return supports, resistances
 
 # Clasificar volumen
 def classify_volume(current_vol, avg_vol):
-    if avg_vol == 0:
+    if avg_vol <= 0:
         return 'Muy Bajo'
     ratio = current_vol / avg_vol
     if ratio > 2.0: return 'Muy Alto'
@@ -164,35 +159,32 @@ def detect_divergence(df, lookback):
     if len(df) < lookback + 1:
         return None
         
-    try:
-        # Seleccionar los últimos datos
-        recent = df.iloc[-lookback:]
+    # Seleccionar los últimos datos
+    recent = df.tail(lookback)
+    
+    # Buscar máximos/mínimos recientes
+    max_idx = recent['close'].idxmax()
+    min_idx = recent['close'].idxmin()
+    
+    # Divergencia bajista
+    if not pd.isna(max_idx):
+        price_high = df.loc[max_idx, 'close']
+        rsi_high = df.loc[max_idx, 'rsi']
+        current_price = df.iloc[-1]['close']
+        current_rsi = df.iloc[-1]['rsi']
         
-        # Buscar máximos/mínimos recientes
-        max_idx = recent['close'].idxmax()
-        min_idx = recent['close'].idxmin()
+        if current_price > price_high and current_rsi < rsi_high and current_rsi > 70:
+            return 'bearish'
+    
+    # Divergencia alcista
+    if not pd.isna(min_idx):
+        price_low = df.loc[min_idx, 'close']
+        rsi_low = df.loc[min_idx, 'rsi']
+        current_price = df.iloc[-1]['close']
+        current_rsi = df.iloc[-1]['rsi']
         
-        # Divergencia bajista
-        if not pd.isna(max_idx) and max_idx in df.index:
-            price_high = df.loc[max_idx, 'close']
-            rsi_high = df.loc[max_idx, 'rsi']
-            current_price = df.iloc[-1]['close']
-            current_rsi = df.iloc[-1]['rsi']
-            
-            if current_price > price_high and current_rsi < rsi_high and current_rsi > 70:
-                return 'bearish'
-        
-        # Divergencia alcista
-        if not pd.isna(min_idx) and min_idx in df.index:
-            price_low = df.loc[min_idx, 'close']
-            rsi_low = df.loc[min_idx, 'rsi']
-            current_price = df.iloc[-1]['close']
-            current_rsi = df.iloc[-1]['rsi']
-            
-            if current_price < price_low and current_rsi > rsi_low and current_rsi < 30:
-                return 'bullish'
-    except Exception as e:
-        app.logger.error(f"Error detecting divergence: {str(e)}")
+        if current_price < price_low and current_rsi > rsi_low and current_rsi < 30:
+            return 'bullish'
     
     return None
 
@@ -200,13 +192,10 @@ def detect_divergence(df, lookback):
 def calculate_distance_to_level(price, levels, threshold_percent):
     if not levels:
         return False
-    try:
-        min_distance = min(abs(price - level) for level in levels)
-        threshold = price * threshold_percent / 100
-        return min_distance <= threshold
-    except Exception as e:
-        app.logger.error(f"Error calculating distance to level: {str(e)}")
-        return False
+    distances = [abs(price - level) for level in levels]
+    min_distance = min(distances)
+    threshold = price * threshold_percent / 100
+    return min_distance <= threshold
 
 # Analizar una criptomoneda y calcular probabilidades
 def analyze_crypto(symbol, params):
@@ -216,10 +205,15 @@ def analyze_crypto(symbol, params):
     
     try:
         df = calculate_indicators(df, params)
+        if len(df) < 10:  # Verificar que hay suficientes datos
+            return None, None, 0, 0, 'Muy Bajo'
+            
         supports, resistances = find_support_resistance(df, params['sr_window'])
         
         last = df.iloc[-1]
         avg_vol = df['volume'].tail(20).mean()
+        if pd.isna(avg_vol) or avg_vol <= 0:
+            avg_vol = last['volume']
         volume_class = classify_volume(last['volume'], avg_vol)
         divergence = detect_divergence(df, params['divergence_lookback'])
         
@@ -386,7 +380,55 @@ def get_chart(symbol, signal_type):
     if not signal:
         return "Señal no encontrada", 404
     
-    plot_url = generate_chart(df, signal, signal_type)
+    # Generar gráfico
+    plt.figure(figsize=(12, 8))
+    
+    # Gráfico de precio
+    plt.subplot(3, 1, 1)
+    plt.plot(df['timestamp'], df['close'], label='Precio', color='blue')
+    plt.plot(df['timestamp'], df['ema_fast'], label=f'EMA {DEFAULTS["ema_fast"]}', color='orange', alpha=0.7)
+    plt.plot(df['timestamp'], df['ema_slow'], label=f'EMA {DEFAULTS["ema_slow"]}', color='green', alpha=0.7)
+    
+    # Marcar entrada y SL
+    if signal_type == 'long':
+        plt.axhline(y=signal['entry'], color='green', linestyle='--', label='Entrada')
+        plt.axhline(y=signal['sl'], color='red', linestyle='--', label='Stop Loss')
+    else:
+        plt.axhline(y=signal['entry'], color='red', linestyle='--', label='Entrada')
+        plt.axhline(y=signal['sl'], color='green', linestyle='--', label='Stop Loss')
+    
+    plt.title(f'{symbol}-USDT - Precio y EMAs')
+    plt.legend()
+    plt.grid(True)
+    
+    # Gráfico de volumen
+    plt.subplot(3, 1, 2)
+    plt.bar(df['timestamp'], df['volume'], color=np.where(df['close'] > df['open'], 'green', 'red'))
+    plt.title('Volumen')
+    plt.grid(True)
+    
+    # Gráfico de indicadores
+    plt.subplot(3, 1, 3)
+    plt.plot(df['timestamp'], df['rsi'], label='RSI', color='purple')
+    plt.axhline(y=70, color='red', linestyle='--', alpha=0.5)
+    plt.axhline(y=30, color='green', linestyle='--', alpha=0.5)
+    
+    plt.plot(df['timestamp'], df['adx'], label='ADX', color='brown')
+    plt.axhline(y=DEFAULTS['adx_level'], color='blue', linestyle='--', alpha=0.5)
+    
+    plt.title('Indicadores')
+    plt.legend()
+    plt.grid(True)
+    
+    plt.tight_layout()
+    
+    # Convertir a base64
+    img = io.BytesIO()
+    plt.savefig(img, format='png')
+    img.seek(0)
+    plot_url = base64.b64encode(img.getvalue()).decode()
+    plt.close()
+    
     return render_template('chart.html', plot_url=plot_url, symbol=symbol, signal_type=signal_type)
 
 @app.route('/manual')
