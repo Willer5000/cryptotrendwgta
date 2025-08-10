@@ -10,24 +10,19 @@
         body { background-color: #f8f9fa; }
         .manual-container { max-width: 1200px; margin: 40px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
         .section { margin-bottom: 40px; }
-        .section-title { border-bottom: 2px solid #0d6efd; padding-bottom: 10px; margin-bottom: 20px; color: #0d6efd; }
+        .section-title { border-bottom: 2px solid #0d6efd; padding-bottom: 10px; margin-bottom: 20px; }
         .indicator-card { transition: transform 0.3s; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
         .indicator-card:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
         .indicator-header { background-color: #0d6efd; color: white; padding: 15px; }
         .indicator-body { padding: 20px; }
         .back-btn { margin-top: 20px; }
-        .zone-card { margin-bottom: 20px; border-left: 4px solid; }
-        .zone-1 { border-left-color: #dc3545; }
-        .zone-2 { border-left-color: #fd7e14; }
-        .zone-3 { border-left-color: #ffc107; }
-        .zone-4 { border-left-color: #20c997; }
-        .zone-5 { border-left-color: #0dcaf0; }
-        .zone-6 { border-left-color: #6f42c1; }
-        .zone-7 { border-left-color: #6610f2; }
-        .zone-8 { border-left-color: #d63384; }
-        .zone-9 { border-left-color: #6c757d; }
-        .zone-title { font-weight: bold; margin-bottom: 5px; }
-        .zone-description { font-size: 0.9rem; }
+        .scatter-legend { display: flex; justify-content: center; margin: 20px 0; }
+        .scatter-legend-item { display: flex; align-items: center; margin: 0 10px; }
+        .scatter-legend-color { width: 20px; height: 20px; border-radius: 50%; margin-right: 5px; }
+        .zone-description { margin-top: 30px; }
+        .zone-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .zone-card { border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; background-color: #f8f9fa; }
+        .zone-header { font-weight: bold; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -101,7 +96,7 @@
                             <h3 class="h5 mb-0">RSI (Índice de Fuerza Relativa)</h3>
                         </div>
                         <div class="indicator-body">
-                            <p>Oscilador que mide la velocidad de los movimientos de precios:</p>
+                            <p>Oscilador que mula la velocidad de los movimientos de precios:</p>
                             <ul>
                                 <li><strong>0-30:</strong> Sobrevendido (posible rebote)</li>
                                 <li><strong>30-70:</strong> Zona neutra</li>
@@ -129,101 +124,77 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="section">
-            <h2 class="section-title"><i class="fas fa-percentage"></i> Sistema de Probabilidades</h2>
+            <h2 class="section-title"><i class="fas fa-project-diagram"></i> Gráfico de Probabilidades</h2>
             
             <div class="alert alert-info">
-                <p>El sistema asigna probabilidades a cada criptomoneda basado en criterios técnicos:</p>
-                <ul>
-                    <li><strong>Tendencia (30%):</strong> Dirección del mercado según EMAs</li>
-                    <li><strong>Fuerza (ADX) (20%):</strong> Intensidad de la tendencia</li>
-                    <li><strong>Señal (25%):</strong> Quiebre de nivel o divergencia en RSI</li>
-                    <li><strong>Volumen (15%):</strong> Confirmación por volumen</li>
-                    <li><strong>Posición (10%):</strong> Proximidad a soporte/resistencia</li>
-                </ul>
-                <p>Las probabilidades se muestran en el gráfico de dispersión:</p>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="zone-card zone-1">
-                        <div class="card-body">
-                            <div class="zone-title">Zona 1: Bajista Fuerte</div>
-                            <div class="zone-description">SHORT: 66-100%, LONG: 0-33%</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="zone-card zone-2">
-                        <div class="card-body">
-                            <div class="zone-title">Zona 2: Bajista Moderado</div>
-                            <div class="zone-description">SHORT: 33-66%, LONG: 0-33%</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="zone-card zone-3">
-                        <div class="card-body">
-                            <div class="zone-title">Zona 3: Bajista Leve</div>
-                            <div class="zone-description">SHORT: 0-33%, LONG: 0-33%</div>
-                        </div>
-                    </div>
-                </div>
+                <p>El gráfico de dispersión muestra las probabilidades de señales LONG y SHORT para cada criptomoneda:</p>
                 
-                <div class="col-md-4">
-                    <div class="zone-card zone-4">
-                        <div class="card-body">
-                            <div class="zone-title">Zona 4: Lateral Bajista</div>
-                            <div class="zone-description">SHORT: 66-100%, LONG: 33-66%</div>
-                        </div>
+                <div class="scatter-legend">
+                    <div class="scatter-legend-item">
+                        <div class="scatter-legend-color" style="background-color: rgba(76, 175, 80, 0.8);"></div>
+                        <span>Volumen Muy Alto</span>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="zone-card zone-5">
-                        <div class="card-body">
-                            <div class="zone-title">Zona 5: Indeciso</div>
-                            <div class="zone-description">SHORT: 33-66%, LONG: 33-66%</div>
-                        </div>
+                    <div class="scatter-legend-item">
+                        <div class="scatter-legend-color" style="background-color: rgba(33, 150, 243, 0.8);"></div>
+                        <span>Volumen Alto</span>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="zone-card zone-6">
-                        <div class="card-body">
-                            <div class="zone-title">Zona 6: Lateral Alcista</div>
-                            <div class="zone-description">SHORT: 0-33%, LONG: 33-66%</div>
-                        </div>
+                    <div class="scatter-legend-item">
+                        <div class="scatter-legend-color" style="background-color: rgba(255, 235, 59, 0.8);"></div>
+                        <span>Volumen Medio</span>
                     </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <div class="zone-card zone-7">
-                        <div class="card-body">
-                            <div class="zone-title">Zona 7: Alcista Leve</div>
-                            <div class="zone-description">SHORT: 0-33%, LONG: 0-33%</div>
-                        </div>
+                    <div class="scatter-legend-item">
+                        <div class="scatter-legend-color" style="background-color: rgba(255, 152, 0, 0.8);"></div>
+                        <span>Volumen Bajo</span>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="zone-card zone-8">
-                        <div class="card-body">
-                            <div class="zone-title">Zona 8: Alcista Moderado</div>
-                            <div class="zone-description">SHORT: 0-33%, LONG: 33-66%</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="zone-card zone-9">
-                        <div class="card-body">
-                            <div class="zone-title">Zona 9: Alcista Fuerte</div>
-                            <div class="zone-description">SHORT: 0-33%, LONG: 66-100%</div>
-                        </div>
+                    <div class="scatter-legend-item">
+                        <div class="scatter-legend-color" style="background-color: rgba(244, 67, 54, 0.8);"></div>
+                        <span>Volumen Muy Bajo</span>
                     </div>
                 </div>
             </div>
             
-            <div class="alert alert-warning mt-4">
-                <strong>Nota:</strong> Las señales de trading solo se generan cuando la probabilidad supera el 70% y el volumen es Alto o Muy Alto.
+            <div class="zone-description">
+                <h4>Interpretación de las 9 Zonas:</h4>
+                <div class="zone-grid">
+                    <div class="zone-card">
+                        <div class="zone-header">Zona 1 (Superior Izquierda)</div>
+                        <p>Alta probabilidad LONG, Baja probabilidad SHORT. Las mejores oportunidades para entrar en LONG.</p>
+                    </div>
+                    <div class="zone-card">
+                        <div class="zone-header">Zona 2 (Superior Central)</div>
+                        <p>Alta probabilidad LONG, Media probabilidad SHORT. Oportunidades LONG con riesgo moderado.</p>
+                    </div>
+                    <div class="zone-card">
+                        <div class="zone-header">Zona 3 (Superior Derecha)</div>
+                        <p>Alta probabilidad en ambos. Mercado volátil, posible cambio de tendencia. Precaución.</p>
+                    </div>
+                    <div class="zone-card">
+                        <div class="zone-header">Zona 4 (Central Izquierda)</div>
+                        <p>Media probabilidad LONG, Baja probabilidad SHORT. Oportunidades LONG con confirmación adicional.</p>
+                    </div>
+                    <div class="zone-card">
+                        <div class="zone-header">Zona 5 (Centro)</div>
+                        <p>Mercado indeciso. Esperar confirmación antes de operar.</p>
+                    </div>
+                    <div class="zone-card">
+                        <div class="zone-header">Zona 6 (Central Derecha)</div>
+                        <p>Media probabilidad LONG, Alta probabilidad SHORT. Oportunidades SHORT con confirmación adicional.</p>
+                    </div>
+                    <div class="zone-card">
+                        <div class="zone-header">Zona 7 (Inferior Izquierda)</div>
+                        <p>Baja probabilidad en ambos. Mercado lateral sin dirección clara.</p>
+                    </div>
+                    <div class="zone-card">
+                        <div class="zone-header">Zona 8 (Inferior Central)</div>
+                        <p>Baja probabilidad LONG, Media probabilidad SHORT. Oportunidades SHORT con riesgo moderado.</p>
+                    </div>
+                    <div class="zone-card">
+                        <div class="zone-header">Zona 9 (Inferior Derecha)</div>
+                        <p>Baja probabilidad LONG, Alta probabilidad SHORT. Las mejores oportunidades para entrar en SHORT.</p>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -238,21 +209,21 @@
             <h4><i class="fas fa-arrow-up text-success"></i> Señales LONG</h4>
             <p>Condiciones para entrada:</p>
             <ol>
-                <li>Tendencia alcista (EMA9 > EMA20)</li>
-                <li>ADX > 25 (tendencia fuerte)</li>
-                <li>Quiebre de resistencia o divergencia alcista en RSI</li>
-                <li>Volumen Alto o Muy Alto</li>
-                <li>Precio cerca de soporte clave</li>
+                <li>Tendencia alcista (EMA9 > EMA20) - 30%</li>
+                <li>ADX > 25 (tendencia fuerte) - 20%</li>
+                <li>Quiebre de resistencia o divergencia alcista en RSI - 25%</li>
+                <li>Volumen Alto o Muy Alto - 15%</li>
+                <li>Precio cerca de soporte clave - 10%</li>
             </ol>
             
             <h4><i class="fas fa-arrow-down text-danger"></i> Señales SHORT</h4>
             <p>Condiciones para entrada:</p>
             <ol>
-                <li>Tendencia bajista (EMA9 < EMA20)</li>
-                <li>ADX > 25 (tendencia fuerte)</li>
-                <li>Quiebre de soporte o divergencia bajista en RSI</li>
-                <li>Volumen Alto o Muy Alto</li>
-                <li>Precio cerca de resistencia clave</li>
+                <li>Tendencia bajista (EMA9 < EMA20) - 30%</li>
+                <li>ADX > 25 (tendencia fuerte) - 20%</li>
+                <li>Quiebre de soporte o divergencia bajista en RSI - 25%</li>
+                <li>Volumen Alto o Muy Alto - 15%</li>
+                <li>Precio cerca de resistencia clave - 10%</li>
             </ol>
             
             <h4><i class="fas fa-money-bill-wave"></i> Gestión de Riesgo</h4>
@@ -271,7 +242,7 @@
                 <table class="table table-bordered">
                     <thead class="table-light">
                         <tr>
-                            <th>Elemento</th>
+                            <th>Columna</th>
                             <th>Descripción</th>
                             <th>Interpretación</th>
                         </tr>
@@ -297,35 +268,19 @@
                             <td>Objetivos de beneficio</td>
                             <td>Tomar beneficios escalonadamente</td>
                         </tr>
-                        <tr>
-                            <td>Gráfico de dispersión</td>
-                            <td>Probabilidades de LONG/SHORT</td>
-                            <td>Puntos en zona 1 o 9 = Mejores oportunidades</td>
-                        </tr>
                     </tbody>
                 </table>
             </div>
             
-            <div class="alert alert-primary">
-                <h4><i class="fas fa-chart-area"></i> Gráfico de Dispersión</h4>
-                <p>Este gráfico muestra todas las criptomonedas analizadas:</p>
-                <ul>
-                    <li><strong>Eje X:</strong> Probabilidad de señal SHORT (0-100%)</li>
-                    <li><strong>Eje Y:</strong> Probabilidad de señal LONG (0-100%)</li>
-                    <li><strong>Color:</strong> Volumen relativo (Verde = Muy Alto, Rojo = Muy Bajo)</li>
-                    <li><strong>Zonas:</strong> Divididas en 9 áreas según la fortaleza de las señales</li>
-                </ul>
-            </div>
-            
             <div class="alert alert-warning">
-                <strong>Recomendaciones Finales:</strong>
-                <ol>
+                <h4><i class="fas fa-exclamation-triangle"></i> Recomendaciones Finales</h4>
+                <ul>
                     <li>Nunca arriesgue más del 2% de su capital en una operación</li>
                     <li>Confirme señales con temporalidad superior</li>
                     <li>En mercados laterales, reduzca tamaño de posiciones</li>
                     <li>Actualice parámetros según condiciones de mercado</li>
                     <li>Combine con análisis fundamental para mejores resultados</li>
-                </ol>
+                </ul>
             </div>
         </div>
         
