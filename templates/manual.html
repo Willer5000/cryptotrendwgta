@@ -16,26 +16,69 @@
         .indicator-header { background-color: #0d6efd; color: white; padding: 15px; }
         .indicator-body { padding: 20px; }
         .back-btn { margin-top: 20px; }
-        .zone-card { height: 100%; }
-        .zone-high-long { background-color: rgba(46, 204, 113, 0.1); }
-        .zone-high-short { background-color: rgba(255, 99, 132, 0.1); }
-        .zone-neutral { background-color: rgba(200, 200, 200, 0.1); }
+        .probability-matrix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
+        .probability-cell { padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="manual-container">
         <div class="text-center mb-5">
-            <h1><i class="fas fa-book"></i> Manual Técnico</h1>
-            <p class="lead">Sistema de Trading Automatizado para Criptomonedas</p>
+            <h1><i class="fas fa-book"></i> Manual Técnico Completo</h1>
+            <p class="lead">Estrategia Avanzada de Trading con Indicadores Técnicos</p>
         </div>
         
         <div class="section">
-            <h2 class="section-title"><i class="fas fa-lightbulb"></i> Introducción</h2>
-            <p>Este sistema automatizado de trading analiza las 150 principales criptomonedas en tiempo real utilizando indicadores técnicos avanzados para identificar oportunidades de trading (LONG y SHORT). El sistema se actualiza cada 15 minutos utilizando datos de la API de KuCoin.</p>
+            <h2 class="section-title"><i class="fas fa-lightbulb"></i> Fundamentos del Sistema</h2>
+            <p>El sistema wgta Crypto Trading Signals es una solución automatizada que combina múltiples indicadores técnicos para identificar oportunidades de trading en el mercado de criptomonedas. Se basa en los siguientes pilares:</p>
             
-            <div class="alert alert-info">
-                <strong>wgta Crypto Trading Signals</strong> es una herramienta profesional diseñada para traders serios. 
-                Combina múltiples indicadores técnicos con un sistema de ponderación para generar señales de alta calidad.
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="indicator-card">
+                        <div class="indicator-header">
+                            <h3 class="h5 mb-0"><i class="fas fa-sync-alt"></i> Actualización en Tiempo Real</h3>
+                        </div>
+                        <div class="indicator-body">
+                            <p>El sistema analiza las 150 principales criptomonedas cada 15 minutos usando la API de KuCoin.</p>
+                            <ul>
+                                <li>Datos históricos de velas</li>
+                                <li>Indicadores calculados en tiempo real</li>
+                                <li>Señales actualizadas constantemente</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="indicator-card">
+                        <div class="indicator-header">
+                            <h3 class="h5 mb-0"><i class="fas fa-robot"></i> Análisis Automatizado</h3>
+                        </div>
+                        <div class="indicator-body">
+                            <p>Combina múltiples indicadores técnicos con lógica de trading avanzada:</p>
+                            <ul>
+                                <li>Detección de soportes/resistencias</li>
+                                <li>Identificación de tendencias</li>
+                                <li>Detección de divergencias</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="indicator-card">
+                        <div class="indicator-header">
+                            <h3 class="h5 mb-0"><i class="fas fa-chart-line"></i> Visualización Avanzada</h3>
+                        </div>
+                        <div class="indicator-body">
+                            <p>Interfaz intuitiva con múltiples gráficos y visualizaciones:</p>
+                            <ul>
+                                <li>Mapa de probabilidades</li>
+                                <li>Gráficos individuales por cripto</li>
+                                <li>Estadísticas de mercado</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -45,13 +88,17 @@
                 <div class="col-md-4">
                     <div class="indicator-card">
                         <div class="indicator-header bg-success">
-                            <h3 class="h5 mb-0">EMAs (Medias Móviles Exponenciales)</h3>
+                            <h3 class="h5 mb-0">ADX (Índice Direccional Medio)</h3>
                         </div>
                         <div class="indicator-body">
-                            <p><strong>EMA Rápida (9 períodos):</strong> Responde rápidamente a cambios de precio</p>
-                            <p><strong>EMA Lenta (20 períodos):</strong> Suaviza fluctuaciones a corto plazo</p>
-                            <p><strong>Señal:</strong> Cruce alcista (EMA9 > EMA20) o bajista (EMA9 < EMA20)</p>
-                            <p><strong>Ponderación:</strong> 30% en el cálculo de probabilidades</p>
+                            <p>Mide la fuerza de la tendencia:</p>
+                            <ul>
+                                <li><strong>0-25:</strong> Tendencia débil o mercado lateral</li>
+                                <li><strong>25-50:</strong> Tendencia fuerte</li>
+                                <li><strong>50-75:</strong> Tendencia muy fuerte</li>
+                                <li><strong>75-100:</strong> Tendencia extremadamente fuerte</li>
+                            </ul>
+                            <p>Se usa con +DI y -DI para determinar dirección.</p>
                         </div>
                     </div>
                 </div>
@@ -59,17 +106,16 @@
                 <div class="col-md-4">
                     <div class="indicator-card">
                         <div class="indicator-header bg-info">
-                            <h3 class="h5 mb-0">ADX (Índice Direccional Medio)</h3>
+                            <h3 class="h5 mb-0">RSI (Índice de Fuerza Relativa)</h3>
                         </div>
                         <div class="indicator-body">
-                            <p>Mide la fuerza de la tendencia:</p>
+                            <p>Oscilador que mide la velocidad de los movimientos de precios:</p>
                             <ul>
-                                <li><strong>0-25:</strong> Tendencia débil</li>
-                                <li><strong>25-50:</strong> Tendencia fuerte</li>
-                                <li><strong>>50:</strong> Tendencia muy fuerte</li>
+                                <li><strong>0-30:</strong> Sobrevendido (posible rebote)</li>
+                                <li><strong>30-70:</strong> Zona neutra</li>
+                                <li><strong>70-100:</strong> Sobrecomprado (posible corrección)</li>
                             </ul>
-                            <p><strong>Umbral:</strong> >25 para considerar tendencia válida</p>
-                            <p><strong>Ponderación:</strong> 20% en el cálculo de probabilidades</p>
+                            <p>Divergencias predicen posibles reversiones.</p>
                         </div>
                     </div>
                 </div>
@@ -77,55 +123,15 @@
                 <div class="col-md-4">
                     <div class="indicator-card">
                         <div class="indicator-header bg-warning">
-                            <h3 class="h5 mb-0">RSI (Índice de Fuerza Relativa)</h3>
+                            <h3 class="h5 mb-0">EMAs (Medias Móviles Exponenciales)</h3>
                         </div>
                         <div class="indicator-body">
-                            <p>Identifica condiciones de sobrecompra/sobreventa:</p>
+                            <p>Indicadores de tendencia que dan más peso a los precios recientes:</p>
                             <ul>
-                                <li><strong>0-30:</strong> Sobrevendido</li>
-                                <li><strong>30-70:</strong> Zona neutra</li>
-                                <li><strong>70-100:</strong> Sobrecomprado</li>
+                                <li><strong>EMA Rápida (9):</strong> Responde rápidamente a cambios de precio</li>
+                                <li><strong>EMA Lenta (20):</strong> Suaviza las fluctuaciones a corto plazo</li>
                             </ul>
-                            <p><strong>Divergencias:</strong> Señales tempranas de reversión</p>
-                            <p><strong>Ponderación:</strong> 25% en el cálculo de probabilidades</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row mt-4">
-                <div class="col-md-6">
-                    <div class="indicator-card">
-                        <div class="indicator-header bg-primary">
-                            <h3 class="h5 mb-0">Soportes y Resistencias</h3>
-                        </div>
-                        <div class="indicator-body">
-                            <p>Niveles clave donde el precio tiende a revertir:</p>
-                            <ul>
-                                <li><strong>Soportes:</strong> Niveles de compra</li>
-                                <li><strong>Resistencias:</strong> Niveles de venta</li>
-                            </ul>
-                            <p><strong>Quiebres:</strong> Señales fuertes de continuación de tendencia</p>
-                            <p><strong>Ponderación:</strong> 10% en el cálculo de probabilidades</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-6">
-                    <div class="indicator-card">
-                        <div class="indicator-header bg-danger">
-                            <h3 class="h5 mb-0">Volumen</h3>
-                        </div>
-                        <div class="indicator-body">
-                            <p>Confirma la fortaleza de las señales:</p>
-                            <ul>
-                                <li><strong>Muy Alto:</strong> >2x el promedio</li>
-                                <li><strong>Alto:</strong> 1.5-2x el promedio</li>
-                                <li><strong>Medio:</strong> 1-1.5x el promedio</li>
-                                <li><strong>Bajo:</strong> 0.5-1x el promedio</li>
-                                <li><strong>Muy Bajo:</strong> <0.5x el promedio</li>
-                            </ul>
-                            <p><strong>Ponderación:</strong> 15% en el cálculo de probabilidades</p>
+                            <p>Cruce alcista: EMA9 > EMA20 | Cruce bajista: EMA9 < EMA20</p>
                         </div>
                     </div>
                 </div>
@@ -135,150 +141,91 @@
         <div class="section">
             <h2 class="section-title"><i class="fas fa-cogs"></i> Estrategia de Trading</h2>
             
-            <h4><i class="fas fa-arrow-up text-success"></i> Señales LONG</h4>
-            <p>Condiciones para entrada:</p>
-            <ol>
-                <li>Tendencia alcista (EMA9 > EMA20) - 30%</li>
-                <li>ADX > 25 (tendencia fuerte) - 20%</li>
-                <li>Quiebre de resistencia o divergencia alcista en RSI - 25%</li>
-                <li>Volumen Alto o Muy Alto - 15%</li>
-                <li>Precio cerca de soporte clave - 10%</li>
-            </ol>
-            <p><strong>Umbral mínimo:</strong> 70% de probabilidad total</p>
+            <h4><i class="fas fa-arrow-up text-success"></i> Señales LONG - Condiciones</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <ul>
+                        <li><strong>Tendencia alcista:</strong> EMA9 > EMA20 (30%)</li>
+                        <li><strong>ADX > 25:</strong> Tendencia fuerte (20%)</li>
+                        <li><strong>Quiebre de resistencia o divergencia alcista:</strong> Confirmación de impulso (25%)</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <ul>
+                        <li><strong>Volumen Alto o Muy Alto:</strong> Confirmación de participación (15%)</li>
+                        <li><strong>Precio cerca de soporte clave:</strong> Buen punto de entrada (10%)</li>
+                    </ul>
+                </div>
+            </div>
             
-            <h4><i class="fas fa-arrow-down text-danger"></i> Señales SHORT</h4>
-            <p>Condiciones para entrada:</p>
-            <ol>
-                <li>Tendencia bajista (EMA9 < EMA20) - 30%</li>
-                <li>ADX > 25 (tendencia fuerte) - 20%</li>
-                <li>Quiebre de soporte o divergencia bajista en RSI - 25%</li>
-                <li>Volumen Alto o Muy Alto - 15%</li>
-                <li>Precio cerca de resistencia clave - 10%</li>
-            </ol>
-            <p><strong>Umbral mínimo:</strong> 70% de probabilidad total</p>
+            <h4><i class="fas fa-arrow-down text-danger"></i> Señales SHORT - Condiciones</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <ul>
+                        <li><strong>Tendencia bajista:</strong> EMA9 < EMA20 (30%)</li>
+                        <li><strong>ADX > 25:</strong> Tendencia fuerte (20%)</li>
+                        <li><strong>Quiebre de soporte o divergencia bajista:</strong> Confirmación de impulso (25%)</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <ul>
+                        <li><strong>Volumen Alto o Muy Alto:</strong> Confirmación de participación (15%)</li>
+                        <li><strong>Precio cerca de resistencia clave:</strong> Buen punto de entrada (10%)</li>
+                    </ul>
+                </div>
+            </div>
             
-            <h4><i class="fas fa-money-bill-wave"></i> Gestión de Riesgo</h4>
+            <h4><i class="fas fa-map"></i> Mapa de Probabilidades</h4>
+            <p>El mapa de probabilidades muestra todas las criptomonedas analizadas en un gráfico de dispersión:</p>
+            
+            <div class="probability-matrix">
+                <div class="probability-cell" style="background-color: rgba(46, 204, 113, 0.3);">Alta LONG<br>Baja SHORT</div>
+                <div class="probability-cell" style="background-color: rgba(46, 204, 113, 0.2);">Media LONG<br>Baja SHORT</div>
+                <div class="probability-cell" style="background-color: rgba(46, 204, 113, 0.1);">Baja LONG<br>Baja SHORT</div>
+                
+                <div class="probability-cell" style="background-color: rgba(46, 204, 113, 0.2);">Alta LONG<br>Media SHORT</div>
+                <div class="probability-cell" style="background-color: rgba(255, 206, 86, 0.3);">NEUTRAL</div>
+                <div class="probability-cell" style="background-color: rgba(231, 76, 60, 0.2);">Baja LONG<br>Media SHORT</div>
+                
+                <div class="probability-cell" style="background-color: rgba(46, 204, 113, 0.1);">Alta LONG<br>Alta SHORT</div>
+                <div class="probability-cell" style="background-color: rgba(231, 76, 60, 0.2);">Media LONG<br>Alta SHORT</div>
+                <div class="probability-cell" style="background-color: rgba(231, 76, 60, 0.3);">Baja LONG<br>Alta SHORT</div>
+            </div>
+            
+            <p>Los colores de los puntos indican el volumen relativo:</p>
             <ul>
-                <li><strong>Stop Loss:</strong> 1.5% del capital por operación</li>
-                <li><strong>Take Profit:</strong> Escalonado (TP1, TP2, TP3)</li>
-                <li><strong>Ratio riesgo/beneficio:</strong> Mínimo 1:3</li>
-                <li><strong>Diversificación:</strong> Máximo 5% del capital por activo</li>
+                <li><span style="color: #4CAF50; font-weight: bold">Verde</span>: Volumen Muy Alto</li>
+                <li><span style="color: #2196F3; font-weight: bold">Azul</span>: Volumen Alto</li>
+                <li><span style="color: #FFEB3B; font-weight: bold">Amarillo</span>: Volumen Medio</li>
+                <li><span style="color: #FF9800; font-weight: bold">Naranja</span>: Volumen Bajo</li>
+                <li><span style="color: #F44336; font-weight: bold">Rojo</span>: Volumen Muy Bajo</li>
             </ul>
         </div>
         
         <div class="section">
-            <h2 class="section-title"><i class="fas fa-chart-scatter"></i> Gráfico de Probabilidades</h2>
-            <p>Este gráfico muestra las probabilidades de señales LONG y SHORT para cada criptomoneda:</p>
+            <h2 class="section-title"><i class="fas fa-money-bill-wave"></i> Gestión de Riesgo</h2>
             
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="card zone-card zone-high-long">
-                        <div class="card-body">
-                            <h5 class="card-title">Zona 1: Alta LONG / Baja SHORT</h5>
-                            <p>Probabilidad LONG >66%</p>
-                            <p>Probabilidad SHORT <33%</p>
-                            <p><strong>Oportunidad:</strong> LONG de alta calidad</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card zone-card zone-neutral">
-                        <div class="card-body">
-                            <h5 class="card-title">Zona 2: Media LONG / Baja SHORT</h5>
-                            <p>Probabilidad LONG 33-66%</p>
-                            <p>Probabilidad SHORT <33%</p>
-                            <p><strong>Oportunidad:</strong> LONG potencial</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card zone-card zone-high-short">
-                        <div class="card-body">
-                            <h5 class="card-title">Zona 3: Alta LONG / Alta SHORT</h5>
-                            <p>Probabilidad LONG >66%</p>
-                            <p>Probabilidad SHORT >66%</p>
-                            <p><strong>Oportunidad:</strong> Conflicto de tendencia</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <h4><i class="fas fa-stop-circle"></i> Stop Loss (SL)</h4>
+            <p>El Stop Loss se calcula basado en:</p>
+            <ul>
+                <li>Soporte/resistencia más cercano</li>
+                <li>Volatilidad del activo (ATR)</li>
+                <li>Límite máximo de riesgo por operación (1.5% por defecto)</li>
+            </ul>
             
-            <div class="row mt-4">
-                <div class="col-md-4">
-                    <div class="card zone-card zone-neutral">
-                        <div class="card-body">
-                            <h5 class="card-title">Zona 4: Baja LONG / Baja SHORT</h5>
-                            <p>Probabilidad LONG <33%</p>
-                            <p>Probabilidad SHORT <33%</p>
-                            <p><strong>Oportunidad:</strong> Mercado lateral</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card zone-card zone-neutral">
-                        <div class="card-body">
-                            <h5 class="card-title">Zona 5: Media LONG / Media SHORT</h5>
-                            <p>Probabilidad LONG 33-66%</p>
-                            <p>Probabilidad SHORT 33-66%</p>
-                            <p><strong>Oportunidad:</strong> Mercado indeciso</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card zone-card zone-neutral">
-                        <div class="card-body">
-                            <h5 class="card-title">Zona 6: Alta SHORT / Media LONG</h5>
-                            <p>Probabilidad SHORT >66%</p>
-                            <p>Probabilidad LONG 33-66%</p>
-                            <p><strong>Oportunidad:</strong> SHORT potencial</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <h4><i class="fas fa-bullseye"></i> Take Profit (TP)</h4>
+            <p>Los objetivos de beneficio se establecen en tres niveles:</p>
+            <ul>
+                <li><strong>TP1:</strong> Primer objetivo (1:1 riesgo/beneficio)</li>
+                <li><strong>TP2:</strong> Segundo objetivo (1:2 riesgo/beneficio)</li>
+                <li><strong>TP3:</strong> Tercer objetivo (1:3 riesgo/beneficio) con trailing stop</li>
+            </ul>
             
-            <div class="row mt-4">
-                <div class="col-md-4">
-                    <div class="card zone-card zone-high-long">
-                        <div class="card-body">
-                            <h5 class="card-title">Zona 7: Baja LONG / Baja SHORT</h5>
-                            <p>Probabilidad LONG <33%</p>
-                            <p>Probabilidad SHORT <33%</p>
-                            <p><strong>Oportunidad:</strong> Mercado lateral</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card zone-card zone-neutral">
-                        <div class="card-body">
-                            <h5 class="card-title">Zona 8: Baja LONG / Media SHORT</h5>
-                            <p>Probabilidad LONG <33%</p>
-                            <p>Probabilidad SHORT 33-66%</p>
-                            <p><strong>Oportunidad:</strong> SHORT potencial</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card zone-card zone-high-short">
-                        <div class="card-body">
-                            <h5 class="card-title">Zona 9: Baja LONG / Alta SHORT</h5>
-                            <p>Probabilidad LONG <33%</p>
-                            <p>Probabilidad SHORT >66%</p>
-                            <p><strong>Oportunidad:</strong> SHORT de alta calidad</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="alert alert-primary mt-4">
-                <p><strong>Filtro de Volumen:</strong> Permite filtrar las criptomonedas por volumen relativo. Los colores indican:</p>
-                <ul>
-                    <li><span style="color: #4CAF50">●</span> Muy Alto (Verde)</li>
-                    <li><span style="color: #2196F3">●</span> Alto (Azul)</li>
-                    <li><span style="color: #FFEB3B">●</span> Medio (Amarillo)</li>
-                    <li><span style="color: #FF9800">●</span> Bajo (Naranja)</li>
-                    <li><span style="color: #F44336">●</span> Muy Bajo (Rojo)</li>
-                </ul>
-            </div>
+            <h4><i class="fas fa-balance-scale"></i> Tamaño de Posición</h4>
+            <p>Fórmula recomendada:</p>
+            <pre>Tamaño = (Capital * Riesgo %) / (Entrada - SL)</pre>
+            <p>Ejemplo: $10,000 capital, 1% riesgo, entrada $100, SL $95</p>
+            <pre>Tamaño = (10,000 * 0.01) / (100 - 95) = 100 / 5 = 20 acciones</pre>
         </div>
         
         <div class="section">
@@ -295,9 +242,14 @@
                     </thead>
                     <tbody>
                         <tr>
+                            <td>Mapa de Probabilidades</td>
+                            <td>Gráfico de dispersión con todas las criptomonedas</td>
+                            <td>Posición indica fuerza de señal LONG/SHORT</td>
+                        </tr>
+                        <tr>
                             <td>Distancia</td>
                             <td>% entre precio actual y entrada propuesta</td>
-                            <td>Menor distancia = Mejor oportunidad de entrada</td>
+                            <td>Menor distancia = Mejor oportunidad</td>
                         </tr>
                         <tr>
                             <td>ADX</td>
@@ -307,33 +259,46 @@
                         <tr>
                             <td>Volumen</td>
                             <td>Intensidad de la operación</td>
-                            <td>Alto o Muy Alto = Confirmación de señal</td>
+                            <td>Alto o Muy Alto = Confirmación</td>
                         </tr>
                         <tr>
                             <td>TP1/TP2/TP3</td>
                             <td>Objetivos de beneficio</td>
                             <td>Tomar beneficios escalonadamente</td>
                         </tr>
-                        <tr>
-                            <td>Gráfico de Probabilidades</td>
-                            <td>Mapa de oportunidades</td>
-                            <td>Las zonas verdes/rojas indican las mejores oportunidades</td>
-                        </tr>
                     </tbody>
                 </table>
             </div>
             
-            <div class="alert alert-warning mt-4">
-                <h4><i class="fas fa-exclamation-triangle"></i> Recomendaciones Finales</h4>
-                <ul>
-                    <li>Nunca arriesgue más del 2% de su capital en una operación</li>
-                    <li>Confirme señales con temporalidad superior (4h o diaria)</li>
-                    <li>En mercados laterales, reduzca el tamaño de las posiciones</li>
-                    <li>Combine con análisis fundamental para mejores resultados</li>
-                    <li>Actualice parámetros según las condiciones del mercado</li>
-                    <li>Monitoree noticias del mercado que puedan afectar la volatilidad</li>
-                </ul>
+            <h4><i class="fas fa-sync-alt"></i> Actualización de Datos</h4>
+            <p>El sistema se actualiza automáticamente cada 15 minutos. Puede forzar una actualización manual usando el botón <i class="fas fa-sync"></i> en la esquina superior derecha.</p>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title"><i class="fas fa-exclamation-triangle"></i> Consideraciones Finales</h2>
+            
+            <div class="alert alert-danger">
+                <h4><i class="fas fa-radiation"></i> Advertencia de Riesgo</h4>
+                <p>Las criptomonedas son activos de alta volatilidad. Este sistema es una herramienta de apoyo que no garantiza ganancias. Nunca invierta más de lo que puede permitirse perder.</p>
             </div>
+            
+            <h4><i class="fas fa-check-circle"></i> Mejores Prácticas</h4>
+            <ol>
+                <li>Use siempre stop loss</li>
+                <li>Diversifique su portfolio</li>
+                <li>Combine con análisis fundamental</li>
+                <li>Verifique señales en múltiples temporalidades</li>
+                <li>Ajuste parámetros según condiciones de mercado</li>
+            </ol>
+            
+            <h4><i class="fas fa-wrench"></i> Mantenimiento del Sistema</h4>
+            <p>Para mantener el sistema funcionando óptimamente:</p>
+            <ul>
+                <li>Revise actualizaciones periódicamente</li>
+                <li>Reporte problemas en GitHub</li>
+                <li>Ajuste parámetros según su estilo de trading</li>
+                <li>Monitoree el consumo de recursos en Render</li>
+            </ul>
         </div>
         
         <div class="text-center back-btn">
