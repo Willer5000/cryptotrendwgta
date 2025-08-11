@@ -8,7 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background-color: #f8f9fa; }
         .signal-card { transition: transform 0.3s; }
         .signal-card:hover { transform: translateY(-5px); }
         .long-bg { background-color: #e8f5e9; }
@@ -20,108 +19,111 @@
         .signal-table-container { max-height: 600px; overflow-y: auto; }
         .badge-long { background-color: #4CAF50; }
         .badge-short { background-color: #F44336; }
-        .filter-section { background-color: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
-        .scatter-chart-container { height: 600px; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
-        .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.8; }
+        .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .scatter-chart-container { height: 600px; position: relative; }
         .volume-very-high { background-color: #4CAF50; }   /* Verde */
         .volume-high { background-color: #2196F3; }        /* Azul */
         .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
         .volume-low { background-color: #FF9800; }         /* Naranja */
         .volume-very-low { background-color: #F44336; }    /* Rojo */
-        .zone-1 { background-color: rgba(76, 175, 80, 0.1); } /* ALTA LONG, BAJA SHORT */
-        .zone-2 { background-color: rgba(255, 193, 7, 0.1); }
-        .zone-3 { background-color: rgba(244, 67, 54, 0.1); }
-        .zone-4 { background-color: rgba(33, 150, 243, 0.1); }
-        .zone-5 { background-color: rgba(255, 255, 255, 0.1); }
-        .zone-6 { background-color: rgba(156, 39, 176, 0.1); }
-        .zone-7 { background-color: rgba(0, 150, 136, 0.1); }
-        .zone-8 { background-color: rgba(121, 85, 72, 0.1); }
-        .zone-9 { background-color: rgba(233, 30, 99, 0.1); } /* ALTA SHORT, BAJA LONG */
+        .zone-label {
+            position: absolute;
+            font-size: 12px;
+            font-weight: bold;
+            color: rgba(0,0,0,0.6);
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
     <div class="container py-4">
-        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom">
             <div>
-                <h1 class="mb-1"><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
-                <p class="text-muted mb-0">Sistema automatizado de detección de oportunidades de trading</p>
-                <p class="text-muted mb-0"><i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
+                <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
+                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</p>
             </div>
             <div class="text-end">
-                <p class="mb-1">Autor: wgta</p>
-                <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary mb-1">
+                <p class="mb-0">Autor: wgta</p>
+                <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary">
                     <i class="fab fa-github"></i> GitHub
+                </a>
+                <a href="/manual" class="btn btn-sm btn-outline-info">
+                    <i class="fas fa-book"></i> Manual
                 </a>
             </div>
         </header>
 
         <!-- Sección de Filtros -->
-        <div class="filter-section mb-4">
-            <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros de Parámetros</h2>
-            <form method="POST" id="filters-form" class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label">Temporalidad</label>
-                    <select name="timeframe" class="form-select">
-                        {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
-                        <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>{{ tf }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="col-md-2">
-                    <label class="form-label">EMA Rápida</label>
-                    <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
-                </div>
-                
-                <div class="col-md-2">
-                    <label class="form-label">EMA Lenta</label>
-                    <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
-                </div>
-                
-                <div class="col-md-2">
-                    <label class="form-label">ADX Período</label>
-                    <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
-                </div>
-                
-                <div class="col-md-2">
-                    <label class="form-label">ADX Nivel</label>
-                    <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
-                </div>
-                
-                <div class="col-md-2">
-                    <label class="form-label">RSI Período</label>
-                    <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
-                </div>
-                
-                <div class="col-md-3">
-                    <label class="form-label">S/R Ventana</label>
-                    <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
-                </div>
-                
-                <div class="col-md-3">
-                    <label class="form-label">Distancia S/R (%)</label>
-                    <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1">
-                </div>
-                
-                <div class="col-md-3">
-                    <label class="form-label">Divergencia Lookback</label>
-                    <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
-                </div>
-                
-                <div class="col-md-3">
-                    <label class="form-label">Máx Riesgo (%)</label>
-                    <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1">
-                </div>
-                
-                <div class="col-12 mt-2">
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-sync-alt"></i> Actualizar Parámetros
-                    </button>
+        <div class="filter-section">
+            <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
+            <form method="POST" id="filters-form">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Temporalidad</label>
+                        <select name="timeframe" class="form-select">
+                            {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
+                            <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
+                                {{ tf }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">EMA Rápida</label>
+                        <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">EMA Lenta</label>
+                        <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">ADX Período</label>
+                        <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">ADX Nivel</label>
+                        <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">RSI Período</label>
+                        <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">S/R Ventana</label>
+                        <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">Divergencia Lookback</label>
+                        <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">Máximo Riesgo (%)</label>
+                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">Umbral Soporte/Resistencia (%)</label>
+                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1">
+                    </div>
+                    
+                    <div class="col-md-12 mt-4">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
 
-        <!-- Estadísticas Resumen -->
         <div class="row mb-4">
             <div class="col-md-4">
                 <div class="card h-100">
@@ -164,57 +166,41 @@
         </div>
 
         <!-- Gráfico de Dispersión -->
-        <div class="card mb-4 border-0">
-            <div class="card-header bg-info text-white">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h2 class="h5 mb-0"><i class="fas fa-chart-scatter"></i> Probabilidades de Trading</h2>
-                    <div>
-                        <label class="me-2 text-white">Filtrar por Volumen:</label>
-                        <select id="volume-filter" class="form-select form-select-sm w-auto d-inline-block">
-                            <option value="all">Todos</option>
-                            <option value="Muy Alto">Muy Alto</option>
-                            <option value="Alto">Alto</option>
-                            <option value="Medio">Medio</option>
-                            <option value="Bajo">Bajo</option>
-                            <option value="Muy Bajo">Muy Bajo</option>
-                        </select>
-                    </div>
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0"><i class="fas fa-chart-scatter"></i> Probabilidades de Trading</h2>
+                <div>
+                    <label class="me-2 text-white">Filtrar por Volumen:</label>
+                    <select id="volume-filter" class="form-select form-select-sm">
+                        <option value="all">Todos</option>
+                        <option value="Muy Alto">Muy Alto</option>
+                        <option value="Alto">Alto</option>
+                        <option value="Medio">Medio</option>
+                        <option value="Bajo">Bajo</option>
+                        <option value="Muy Bajo">Muy Bajo</option>
+                    </select>
                 </div>
             </div>
-            <div class="card-body p-0">
-                <div class="scatter-chart-container position-relative">
-                    <!-- Zonas del gráfico -->
-                    <div class="zone-1 position-absolute top-0 start-0 w-33 h-33"></div>
-                    <div class="zone-2 position-absolute top-0 start-33 w-34 h-33"></div>
-                    <div class="zone-3 position-absolute top-0 end-0 w-33 h-33"></div>
-                    
-                    <div class="zone-4 position-absolute top-33 start-0 w-33 h-34"></div>
-                    <div class="zone-5 position-absolute top-33 start-33 w-34 h-34"></div>
-                    <div class="zone-6 position-absolute top-33 end-0 w-33 h-34"></div>
-                    
-                    <div class="zone-7 position-absolute bottom-0 start-0 w-33 h-33"></div>
-                    <div class="zone-8 position-absolute bottom-0 start-33 w-34 h-33"></div>
-                    <div class="zone-9 position-absolute bottom-0 end-0 w-33 h-33"></div>
+            <div class="card-body">
+                <div class="scatter-chart-container">
+                    <canvas id="scatterChart"></canvas>
                     
                     <!-- Etiquetas de zonas -->
-                    <div class="zone-label" style="top: 10%; left: 10%;">Alta LONG<br>Baja SHORT</div>
-                    <div class="zone-label" style="top: 10%; left: 50%;">LONG Neutral</div>
-                    <div class="zone-label" style="top: 10%; right: 10%;">Alta SHORT<br>Baja LONG</div>
+                    <div class="zone-label" style="top: 10%; left: 10%;">Alta Prob LONG</div>
+                    <div class="zone-label" style="top: 10%; left: 50%;">LONG</div>
+                    <div class="zone-label" style="top: 10%; left: 90%;">Alta Prob SHORT</div>
                     
-                    <div class="zone-label" style="top: 50%; left: 10%;">SHORT Neutral</div>
+                    <div class="zone-label" style="top: 50%; left: 10%;">LONG</div>
                     <div class="zone-label" style="top: 50%; left: 50%;">Neutral</div>
-                    <div class="zone-label" style="top: 50%; right: 10%;">LONG Neutral</div>
+                    <div class="zone-label" style="top: 50%; left: 90%;">SHORT</div>
                     
-                    <div class="zone-label" style="bottom: 10%; left: 10%;">Alta SHORT<br>Baja LONG</div>
-                    <div class="zone-label" style="bottom: 10%; left: 50%;">SHORT Neutral</div>
-                    <div class="zone-label" style="bottom: 10%; right: 10%;">Alta LONG<br>Baja SHORT</div>
-                    
-                    <canvas id="scatterChart" class="position-relative" style="z-index: 10;"></canvas>
+                    <div class="zone-label" style="top: 90%; left: 10%;">Alta Prob LONG</div>
+                    <div class="zone-label" style="top: 90%; left: 50%;">SHORT</div>
+                    <div class="zone-label" style="top: 90%; left: 90%;">Alta Prob SHORT</div>
                 </div>
             </div>
         </div>
 
-        <!-- Tablas de Señales -->
         <div class="row">
             <div class="col-md-6">
                 <div class="card mb-4">
@@ -231,9 +217,14 @@
                                         <th>#</th>
                                         <th>Cripto</th>
                                         <th>Precio</th>
-                                        <th>Prob</th>
-                                        <th>ADX</th>
+                                        <th>Entrada</th>
+                                        <th>Distancia</th>
+                                        <th>SL</th>
+                                        <th>TP1</th>
+                                        <th>TP2</th>
                                         <th>Volumen</th>
+                                        <th>ADX</th>
+                                        <th>Gráfico</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -242,9 +233,18 @@
                                         <td>{{ loop.index }}</td>
                                         <td>{{ signal.symbol }}</td>
                                         <td>{{ signal.price }}</td>
-                                        <td>{{ signal.long_prob }}%</td>
-                                        <td>{{ signal.adx }}</td>
+                                        <td>{{ signal.entry }}</td>
+                                        <td>{{ signal.distance }}%</td>
+                                        <td class="text-danger">{{ signal.sl }}</td>
+                                        <td class="text-success">{{ signal.tp1 }}</td>
+                                        <td class="text-success">{{ signal.tp2 }}</td>
                                         <td class="volume-high">{{ signal.volume }}</td>
+                                        <td>{{ signal.adx }}</td>
+                                        <td>
+                                            <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
+                                                <i class="fas fa-chart-line"></i>
+                                            </a>
+                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -274,9 +274,14 @@
                                         <th>#</th>
                                         <th>Cripto</th>
                                         <th>Precio</th>
-                                        <th>Prob</th>
-                                        <th>ADX</th>
+                                        <th>Entrada</th>
+                                        <th>Distancia</th>
+                                        <th>SL</th>
+                                        <th>TP1</th>
+                                        <th>TP2</th>
                                         <th>Volumen</th>
+                                        <th>ADX</th>
+                                        <th>Gráfico</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -285,9 +290,18 @@
                                         <td>{{ loop.index }}</td>
                                         <td>{{ signal.symbol }}</td>
                                         <td>{{ signal.price }}</td>
-                                        <td>{{ signal.short_prob }}%</td>
-                                        <td>{{ signal.adx }}</td>
+                                        <td>{{ signal.entry }}</td>
+                                        <td>{{ signal.distance }}%</td>
+                                        <td class="text-danger">{{ signal.sl }}</td>
+                                        <td class="text-success">{{ signal.tp1 }}</td>
+                                        <td class="text-success">{{ signal.tp2 }}</td>
                                         <td class="volume-high">{{ signal.volume }}</td>
+                                        <td>{{ signal.adx }}</td>
+                                        <td>
+                                            <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
+                                                <i class="fas fa-chart-line"></i>
+                                            </a>
+                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -338,15 +352,15 @@
             }
         });
         
-        // Gráfico de estadísticas LONG
+        // Gráfico de fuerza de tendencia LONG
         const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
         const longStatsChart = new Chart(longStatsCtx, {
             type: 'bar',
             data: {
-                labels: ['ADX Promedio'],
+                labels: ['Distancia a Entrada'],
                 datasets: [{
-                    label: 'ADX',
-                    data: [{{ avg_adx_long }}],
+                    label: 'Distancia Promedio (%)',
+                    data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
                     backgroundColor: 'rgba(46, 204, 113, 0.7)'
                 }]
             },
@@ -354,27 +368,26 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    y: { 
-                        beginAtZero: true,
-                        title: { display: true, text: 'ADX' }
-                    }
+                    y: { beginAtZero: true }
                 },
                 plugins: {
-                    title: { display: true, text: 'Fuerza de Tendencia LONG' },
-                    legend: { display: false }
+                    title: {
+                        display: true,
+                        text: 'Estadísticas Señales LONG'
+                    }
                 }
             }
         });
         
-        // Gráfico de estadísticas SHORT
+        // Gráfico de fuerza de tendencia SHORT
         const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
         const shortStatsChart = new Chart(shortStatsCtx, {
             type: 'bar',
             data: {
-                labels: ['ADX Promedio'],
+                labels: ['Distancia a Entrada'],
                 datasets: [{
-                    label: 'ADX',
-                    data: [{{ avg_adx_short }}],
+                    label: 'Distancia Promedio (%)',
+                    data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
                     backgroundColor: 'rgba(231, 76, 60, 0.7)'
                 }]
             },
@@ -382,14 +395,13 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    y: { 
-                        beginAtZero: true,
-                        title: { display: true, text: 'ADX' }
-                    }
+                    y: { beginAtZero: true }
                 },
                 plugins: {
-                    title: { display: true, text: 'Fuerza de Tendencia SHORT' },
-                    legend: { display: false }
+                    title: {
+                        display: true,
+                        text: 'Estadísticas Señales SHORT'
+                    }
                 }
             }
         });
@@ -442,60 +454,94 @@
                     x: {
                         title: {
                             display: true,
-                            text: 'Probabilidad SHORT (%)',
-                            font: { size: 14, weight: 'bold' }
+                            text: 'Probabilidad SHORT (%)'
                         },
                         min: 0,
                         max: 100,
                         ticks: {
-                            stepSize: 20,
-                            callback: function(value) { return value + '%'; }
-                        },
-                        grid: { color: 'rgba(0, 0, 0, 0.1)' }
+                            stepSize: 10,
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
                     },
                     y: {
                         title: {
                             display: true,
-                            text: 'Probabilidad LONG (%)',
-                            font: { size: 14, weight: 'bold' }
+                            text: 'Probabilidad LONG (%)'
                         },
                         min: 0,
                         max: 100,
                         ticks: {
-                            stepSize: 20,
-                            callback: function(value) { return value + '%'; }
-                        },
-                        grid: { color: 'rgba(0, 0, 0, 0.1)' }
+                            stepSize: 10,
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
                     }
                 },
                 plugins: {
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return [
-                                    context.raw.symbol,
-                                    `LONG: ${context.raw.y}%`,
-                                    `SHORT: ${context.raw.x}%`
-                                ];
+                                return context.raw.symbol + ': LONG ' + context.raw.y + '%, SHORT ' + context.raw.x + '%';
                             }
                         }
                     },
                     title: {
                         display: true,
-                        text: 'Probabilidades de Trading por Criptomoneda',
-                        font: { size: 16 }
+                        text: 'Probabilidades de Trading por Criptomoneda'
                     },
                     legend: {
                         display: true,
-                        position: 'bottom',
-                        labels: { font: { size: 12 } }
+                        position: 'bottom'
                     }
                 }
             }
         });
-        
+
+        // Función para dibujar las zonas
+        function drawZones(chart) {
+            const ctx = chart.ctx;
+            const xAxis = chart.scales.x;
+            const yAxis = chart.scales.y;
+            
+            // Líneas verticales
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 1;
+            
+            // Línea a 33%
+            ctx.beginPath();
+            ctx.moveTo(xAxis.getPixelForValue(33), yAxis.top);
+            ctx.lineTo(xAxis.getPixelForValue(33), yAxis.bottom);
+            ctx.stroke();
+            
+            // Línea a 66%
+            ctx.beginPath();
+            ctx.moveTo(xAxis.getPixelForValue(66), yAxis.top);
+            ctx.lineTo(xAxis.getPixelForValue(66), yAxis.bottom);
+            ctx.stroke();
+            
+            // Líneas horizontales
+            ctx.beginPath();
+            ctx.moveTo(xAxis.left, yAxis.getPixelForValue(33));
+            ctx.lineTo(xAxis.right, yAxis.getPixelForValue(33));
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(xAxis.left, yAxis.getPixelForValue(66));
+            ctx.lineTo(xAxis.right, yAxis.getPixelForValue(66));
+            ctx.stroke();
+        }
+
+        // Añadir el dibujo de zonas después de renderizar
+        scatterChart.options.plugins.afterDraw = function(chart) {
+            drawZones(chart);
+        };
+
         // Añadir etiquetas a los puntos
         scatterChart.options.plugins.afterDraw = function(chart) {
+            drawZones(chart);
             const ctx = chart.ctx;
             chart.data.datasets.forEach((dataset, i) => {
                 const meta = chart.getDatasetMeta(i);
