@@ -4,4 +4,5 @@ numpy
 requests
 gunicorn
 matplotlib
+scipy
 Flask-Caching
