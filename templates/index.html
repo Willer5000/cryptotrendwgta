@@ -8,6 +8,14 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --zone-high-long: rgba(46, 204, 113, 0.2);
+            --zone-mid-long: rgba(46, 204, 113, 0.1);
+            --zone-high-short: rgba(231, 76, 60, 0.2);
+            --zone-mid-short: rgba(231, 76, 60, 0.1);
+            --zone-neutral: rgba(255, 235, 59, 0.2);
+        }
+        
         .signal-card { transition: transform 0.3s; }
         .signal-card:hover { transform: translateY(-5px); }
         .long-bg { background-color: #e8f5e9; }
@@ -20,17 +28,16 @@
         .badge-long { background-color: #4CAF50; }
         .badge-short { background-color: #F44336; }
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .scatter-chart-container { height: 600px; }
+        .scatter-chart-container { height: 600px; position: relative; }
+        .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.7; }
         .volume-very-high { background-color: #4CAF50; }   /* Verde */
         .volume-high { background-color: #2196F3; }        /* Azul */
         .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
         .volume-low { background-color: #FF9800; }         /* Naranja */
         .volume-very-low { background-color: #F44336; }    /* Rojo */
-        .zone-high-long { background-color: rgba(0, 200, 0, 0.1); }
-        .zone-medium-long { background-color: rgba(0, 200, 0, 0.05); }
-        .zone-high-short { background-color: rgba(200, 0, 0, 0.1); }
-        .zone-medium-short { background-color: rgba(200, 0, 0, 0.05); }
-        .zone-neutral { background-color: rgba(200, 200, 0, 0.1); }
+        .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
+        .grid-line.vertical { width: 1px; height: 100%; }
+        .grid-line.horizontal { height: 1px; width: 100%; }
     </style>
 </head>
 <body>
@@ -70,47 +77,47 @@
                     
                     <div class="col-md-3">
                         <label class="form-label">EMA Rápida</label>
-                        <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control">
+                        <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control" min="1" max="50">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">EMA Lenta</label>
-                        <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control">
+                        <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control" min="1" max="100">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">ADX Período</label>
-                        <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control">
+                        <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control" min="1" max="50">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">ADX Nivel</label>
-                        <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control">
+                        <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" min="1" max="100">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">RSI Período</label>
-                        <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control">
+                        <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control" min="1" max="50">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">S/R Ventana</label>
-                        <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control">
+                        <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control" min="10" max="200">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">Divergencia Lookback</label>
-                        <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control">
+                        <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control" min="5" max="50">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">Máximo Riesgo (%)</label>
-                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1">
+                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1" min="0.1" max="5">
                     </div>
                     
                     <div class="col-md-3">
-                        <label class="form-label">Umbral Soporte/Resistencia (%)</label>
-                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1">
+                        <label class="form-label">Umbral S/R (%)</label>
+                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1" min="0.1" max="5">
                     </div>
                     
                     <div class="col-md-12 mt-4">
@@ -182,6 +189,43 @@
             <div class="card-body">
                 <div class="scatter-chart-container">
                     <canvas id="scatterChart"></canvas>
+                    
+                    <!-- Zonas de probabilidad -->
+                    <div class="zone-label" style="top: 10%; left: 10%; width: 30%; height: 30%; background: var(--zone-neutral);">
+                        Neutral
+                    </div>
+                    <div class="zone-label" style="top: 10%; left: 36%; width: 30%; height: 30%; background: var(--zone-mid-short);">
+                        Short Medio
+                    </div>
+                    <div class="zone-label" style="top: 10%; left: 67%; width: 30%; height: 30%; background: var(--zone-high-short);">
+                        Alto Short
+                    </div>
+                    
+                    <div class="zone-label" style="top: 36%; left: 10%; width: 30%; height: 30%; background: var(--zone-mid-long);">
+                        Long Medio
+                    </div>
+                    <div class="zone-label" style="top: 36%; left: 36%; width: 30%; height: 30%; background: var(--zone-neutral);">
+                        Neutral
+                    </div>
+                    <div class="zone-label" style="top: 36%; left: 67%; width: 30%; height: 30%; background: var(--zone-mid-short);">
+                        Short Medio
+                    </div>
+                    
+                    <div class="zone-label" style="top: 67%; left: 10%; width: 30%; height: 30%; background: var(--zone-high-long);">
+                        Alto Long
+                    </div>
+                    <div class="zone-label" style="top: 67%; left: 36%; width: 30%; height: 30%; background: var(--zone-mid-long);">
+                        Long Medio
+                    </div>
+                    <div class="zone-label" style="top: 67%; left: 67%; width: 30%; height: 30%; background: var(--zone-neutral);">
+                        Neutral
+                    </div>
+                    
+                    <!-- Líneas de división -->
+                    <div class="grid-line vertical" style="left: 33.3%;"></div>
+                    <div class="grid-line vertical" style="left: 66.6%;"></div>
+                    <div class="grid-line horizontal" style="top: 33.3%;"></div>
+                    <div class="grid-line horizontal" style="top: 66.6%;"></div>
                 </div>
             </div>
         </div>
@@ -248,7 +292,7 @@
                 <div class="card">
                     <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
                         <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
-                        <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
+                        <span class="badge badge-shout">ADX Prom: {{ avg_adx_short }}</span>
                     </div>
                     <div class="card-body">
                         {% if short_signals %}
@@ -353,7 +397,13 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    y: { beginAtZero: true }
+                    y: { 
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Distancia (%)'
+                        }
+                    }
                 },
                 plugins: {
                     title: {
@@ -380,7 +430,13 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    y: { beginAtZero: true }
+                    y: { 
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Distancia (%)'
+                        }
+                    }
                 },
                 plugins: {
                     title: {
@@ -420,8 +476,8 @@
                     label: vol,
                     data: data,
                     backgroundColor: volumeColors[vol],
-                    pointRadius: 6,
-                    pointHoverRadius: 8
+                    pointRadius: 8,
+                    pointHoverRadius: 10
                 });
             }
         });
@@ -479,83 +535,13 @@
                         display: true,
                         position: 'bottom'
                     }
+                },
+                animation: {
+                    duration: 2000,
+                    easing: 'easeOutQuart'
                 }
             }
         });
-        
-        // Dibujar zonas de fondo
-        function drawZones(chart) {
-            const ctx = chart.ctx;
-            const xAxis = chart.scales.x;
-            const yAxis = chart.scales.y;
-            
-            // Coordenadas de las zonas
-            const zoneWidth = xAxis.width / 3;
-            const zoneHeight = yAxis.height / 3;
-            
-            // Colores para las zonas (con transparencia)
-            const zoneColors = {
-                'high-long': 'rgba(0, 200, 0, 0.1)',    // Verde claro
-                'medium-long': 'rgba(0, 200, 0, 0.05)', // Verde muy claro
-                'neutral': 'rgba(200, 200, 0, 0.1)',    // Amarillo
-                'medium-short': 'rgba(200, 0, 0, 0.05)',// Rojo muy claro
-                'high-short': 'rgba(200, 0, 0, 0.1)'    // Rojo claro
-            };
-            
-            // Dibujar zonas
-            ctx.save();
-            
-            // Zona alta LONG (superior izquierda)
-            ctx.fillStyle = zoneColors['high-long'];
-            ctx.fillRect(xAxis.left, yAxis.top, zoneWidth * 2, zoneHeight);
-            
-            // Zona media LONG
-            ctx.fillStyle = zoneColors['medium-long'];
-            ctx.fillRect(xAxis.left, yAxis.top + zoneHeight, zoneWidth, zoneHeight * 2);
-            
-            // Zona neutral (centro)
-            ctx.fillStyle = zoneColors['neutral'];
-            ctx.fillRect(xAxis.left + zoneWidth, yAxis.top + zoneHeight, zoneWidth, zoneHeight);
-            
-            // Zona media SHORT
-            ctx.fillStyle = zoneColors['medium-short'];
-            ctx.fillRect(xAxis.left + zoneWidth * 2, yAxis.top + zoneHeight, zoneWidth, zoneHeight * 2);
-            
-            // Zona alta SHORT (inferior derecha)
-            ctx.fillStyle = zoneColors['high-short'];
-            ctx.fillRect(xAxis.left + zoneWidth, yAxis.top + zoneHeight * 2, zoneWidth * 2, zoneHeight);
-            
-            ctx.restore();
-        }
-        
-        // Plugin para dibujar las zonas
-        const zonePlugin = {
-            id: 'zones',
-            beforeDraw: function(chart) {
-                drawZones(chart);
-            }
-        };
-        
-        // Registrar el plugin
-        Chart.register(zonePlugin);
-        
-        // Añadir etiquetas a los puntos
-        scatterChart.options.plugins.afterDraw = function(chart) {
-            const ctx = chart.ctx;
-            chart.data.datasets.forEach((dataset, i) => {
-                const meta = chart.getDatasetMeta(i);
-                if (!meta.hidden) {
-                    meta.data.forEach((element, index) => {
-                        const data = dataset.data[index];
-                        ctx.fillStyle = 'white';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.font = '10px Arial';
-                        ctx.fillText(data.symbol, element.x, element.y - 10);
-                    });
-                }
-            });
-        };
         
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
