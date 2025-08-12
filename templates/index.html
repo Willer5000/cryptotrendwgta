@@ -20,6 +20,8 @@
         .signal-card:hover { transform: translateY(-5px); }
         .long-bg { background-color: #e8f5e9; }
         .short-bg { background-color: #ffebee; }
+        .volume-high { color: #d32f2f; font-weight: bold; }
+        .volume-medium { color: #f57c00; }
         .chart-container { position: relative; height: 300px; margin-bottom: 20px; }
         .signal-table th { position: sticky; top: 0; background: white; z-index: 10; }
         .signal-table-container { max-height: 600px; overflow-y: auto; }
@@ -28,25 +30,21 @@
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; position: relative; }
         .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.7; }
+        .volume-very-high { background-color: #4CAF50; }   /* Verde */
+        .volume-high { background-color: #2196F3; }        /* Azul */
+        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
+        .volume-low { background-color: #FF9800; }         /* Naranja */
+        .volume-very-low { background-color: #F44336; }    /* Rojo */
+        .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
+        .grid-line.vertical { width: 1px; height: 100%; }
+        .grid-line.horizontal { height: 1px; width: 100%; }
         
-        /* Clases de volumen */
+        /* Clases de volumen para colores */
         .volume-muy-alto { background-color: #4CAF50; color: white; }
         .volume-alto { background-color: #2196F3; color: white; }
         .volume-medio { background-color: #FFEB3B; }
         .volume-bajo { background-color: #FF9800; color: white; }
         .volume-muy-bajo { background-color: #F44336; color: white; }
-        
-        .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
-        .grid-line.vertical { width: 1px; height: 100%; }
-        .grid-line.horizontal { height: 1px; width: 100%; }
-        
-        /* Mejoras para móviles */
-        @media (max-width: 768px) {
-            .chart-container { height: 200px; }
-            .scatter-chart-container { height: 400px; }
-            .signal-table th, .signal-table td { padding: 4px; font-size: 12px; }
-            .filter-section .col-md-3 { margin-bottom: 10px; }
-        }
     </style>
 </head>
 <body>
@@ -71,7 +69,7 @@
         <!-- Sección de Filtros -->
         <div class="filter-section">
             <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
-            <form method="POST" action="/update_params" id="filters-form">
+            <form method="POST" id="filters-form">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
@@ -458,7 +456,7 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = JSON.parse('{{ scatter_data|safe }}');
+        const scatterData = {{ scatter_data|safe }};
         
         // Mapeo de colores por volumen
         const volumeColors = {
@@ -565,31 +563,6 @@
         setTimeout(() => {
             location.reload();
         }, 60000);
-        
-        // Enviar formulario de parámetros con AJAX
-        document.getElementById('filters-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            fetch('/update_params', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Parámetros actualizados correctamente. La página se recargará.');
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1500);
-                } else {
-                    alert('Error al actualizar parámetros: ' + data.error);
-                }
-            })
-            .catch(error => {
-                alert('Error de red: ' + error);
-            });
-        });
     </script>
 </body>
 </html>
