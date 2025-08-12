@@ -267,7 +267,7 @@
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-high">{{ signal.volume }}</td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
@@ -324,7 +324,7 @@
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-high">{{ signal.volume }}</td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
@@ -449,23 +449,30 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = JSON.parse({{ scatter_data|safe }});  // CORRECCIÓN: Parsear directamente
+        const scatterData = JSON.parse('{{ scatter_data|safe }}');
         
         // Mapeo de colores por volumen
         const volumeColors = {
-            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'Alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-            'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-            'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-            'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+            'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+            'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+            'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+            'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+            'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
         };
         
         // Preparar datos para el gráfico
         const datasets = [];
-        const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
+        const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
+        const volumeLabels = {
+            'muy-alto': 'Muy Alto',
+            'alto': 'Alto',
+            'medio': 'Medio',
+            'bajo': 'Bajo',
+            'muy-bajo': 'Muy Bajo'
+        };
         
         volumes.forEach(vol => {
-            const data = scatterData.filter(item => item.volume === vol).map(item => ({
+            const data = scatterData.filter(item => item.volume.toLowerCase().replace(' ', '-') === vol).map(item => ({
                 x: item.short_prob,
                 y: item.long_prob,
                 symbol: item.symbol
@@ -473,7 +480,7 @@
             
             if (data.length > 0) {
                 datasets.push({
-                    label: vol,
+                    label: volumeLabels[vol],
                     data: data,
                     backgroundColor: volumeColors[vol],
                     pointRadius: 8,
@@ -545,9 +552,9 @@
         
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
-            const filter = this.value;
+            const filter = this.value.toLowerCase().replace(' ', '-');
             scatterChart.data.datasets.forEach(dataset => {
-                dataset.hidden = filter !== 'all' && dataset.label !== filter;
+                dataset.hidden = filter !== 'all' && dataset.label.toLowerCase().replace(' ', '-') !== filter;
             });
             scatterChart.update();
         });
