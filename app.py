@@ -14,9 +14,11 @@ import matplotlib.pyplot as plt
 import io
 import base64
 import math
+import logging
 
 app = Flask(__name__)
 cache = Cache(app, config={'CACHE_TYPE': 'simple'})
+app.logger.setLevel(logging.INFO)
 
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
@@ -36,8 +38,12 @@ DEFAULTS = {
 
 # Leer lista de criptomonedas
 def load_cryptos():
-    with open(CRYPTOS_FILE, 'r') as f:
-        return [line.strip() for line in f.readlines() if line.strip()]
+    try:
+        with open(CRYPTOS_FILE, 'r') as f:
+            return [line.strip() for line in f.readlines() if line.strip()]
+    except Exception as e:
+        app.logger.error(f"Error loading cryptos: {str(e)}")
+        return ['BTC', 'ETH', 'BNB', 'SOL', 'XRP']  # Default list if file fails
 
 # Obtener datos de KuCoin
 def get_kucoin_data(symbol, timeframe):
@@ -53,7 +59,8 @@ def get_kucoin_data(symbol, timeframe):
     url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}-USDT"
     
     try:
-        response = requests.get(url, timeout=20)
+        response = requests.get(url, timeout=30)
+        app.logger.info(f"Fetching data for {symbol} at {url}")
         if response.status_code == 200:
             data = response.json()
             if data.get('code') == '200000' and data.get('data'):
@@ -62,7 +69,7 @@ def get_kucoin_data(symbol, timeframe):
                 candles.reverse()
                 
                 # Validar que hay suficientes velas
-                if len(candles) < 100:
+                if len(candles) < 50:
                     app.logger.warning(f"Datos insuficientes para {symbol}: {len(candles)} velas")
                     return None
                 
@@ -79,13 +86,15 @@ def get_kucoin_data(symbol, timeframe):
                 df = df.dropna()
                 
                 # Validar que aún tenemos suficientes datos
-                if len(df) < 50:
+                if len(df) < 30:
                     app.logger.warning(f"Datos insuficientes después de limpieza para {symbol}: {len(df)} velas")
                     return None
                 
                 # Convertir timestamp
                 df['timestamp'] = pd.to_datetime(df['timestamp'].astype(int), unit='s')
                 return df
+        else:
+            app.logger.error(f"Error fetching data for {symbol}: Status {response.status_code}")
     except Exception as e:
         app.logger.error(f"Error fetching data for {symbol}: {str(e)}")
     return None
@@ -176,11 +185,11 @@ def find_support_resistance(df, window):
         if len(df) < window:
             return [], []
         
-        df['high_roll'] = df['high'].rolling(window=window, min_periods=1).max()
-        df['low_roll'] = df['low'].rolling(window=window, min_periods=1).min()
+        # Usar los últimos datos para detectar S/R
+        recent = df.tail(window * 2)
         
-        resistances = df[df['high'] >= df['high_roll']]['high'].unique().tolist()
-        supports = df[df['low'] <= df['low_roll']]['low'].unique().tolist()
+        resistances = recent[recent['high'] == recent['high'].rolling(window, min_periods=1).max()]['high'].unique().tolist()
+        supports = recent[recent['low'] == recent['low'].rolling(window, min_periods=1).min()]['low'].unique().tolist()
         
         return supports, resistances
     except Exception as e:
@@ -310,7 +319,7 @@ def generate_chart(df, signal, signal_type):
 # Analizar una criptomoneda y calcular probabilidades
 def analyze_crypto(symbol, params):
     df = get_kucoin_data(symbol, params['timeframe'])
-    if df is None or len(df) < 50:
+    if df is None or len(df) < 30:
         return None, None, 0, 0, 'Muy Bajo'
     
     try:
@@ -350,9 +359,16 @@ def analyze_crypto(symbol, params):
         if volume_class in ['Alto', 'Muy Alto']: short_prob += 15
         if calculate_distance_to_level(last['close'], resistances, params['price_distance_threshold']): short_prob += 10
         
+        # Normalizar probabilidades
+        total = long_prob + short_prob
+        if total > 100:
+            scale = 100 / total
+            long_prob *= scale
+            short_prob *= scale
+        
         # Señales LONG
         long_signal = None
-        if long_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
+        if long_prob >= 60 and volume_class in ['Alto', 'Muy Alto']:
             # Encontrar la resistencia más cercana por encima
             next_resistances = [r for r in resistances if r > last['close']]
             entry = min(next_resistances) * 1.005 if next_resistances else last['close'] * 1.01
@@ -377,7 +393,7 @@ def analyze_crypto(symbol, params):
         
         # Señales SHORT
         short_signal = None
-        if short_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
+        if short_prob >= 60 and volume_class in ['Alto', 'Muy Alto']:
             # Encontrar el soporte más cercano por debajo
             next_supports = [s for s in supports if s < last['close']]
             entry = max(next_supports) * 0.995 if next_supports else last['close'] * 0.99
@@ -417,7 +433,7 @@ def background_update():
                 scatter_data = []
                 
                 # Procesar en lotes para reducir memoria
-                batch_size = 30
+                batch_size = 20
                 for i in range(0, len(cryptos), batch_size):
                     batch = cryptos[i:i+batch_size]
                     for crypto in batch:
@@ -435,7 +451,7 @@ def background_update():
                             'volume': volume_class
                         })
                     # Liberar memoria entre lotes
-                    time.sleep(2)
+                    time.sleep(1)
                 
                 # Ordenar por fuerza de tendencia (ADX)
                 long_signals.sort(key=lambda x: x['adx'], reverse=True)
