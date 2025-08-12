@@ -38,16 +38,25 @@
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
-        
-        /* Clases de volumen para colores */
-        .volume-muy-alto { background-color: #4CAF50; color: white; }
-        .volume-alto { background-color: #2196F3; color: white; }
-        .volume-medio { background-color: #FFEB3B; }
-        .volume-bajo { background-color: #FF9800; color: white; }
-        .volume-muy-bajo { background-color: #F44336; color: white; }
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
+    <div class="debug-info">
+        Señales: {{ long_signals|length }}L / {{ short_signals|length }}S | 
+        Scatter: {{ scatter_count }} puntos | 
+        Actualizado: {{ last_update.strftime('%H:%M:%S') }}
+    </div>
+    
     <div class="container py-4">
         <header class="d-flex justify-content-between align-items-center mb-4 border-bottom">
             <div>
@@ -456,38 +465,47 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = {{ scatter_data|safe }};
+        const scatterData = JSON.parse('{{ scatter_data|safe }}');
+        console.log("Datos de dispersión:", scatterData);
         
         // Mapeo de colores por volumen
         const volumeColors = {
-            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'Alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-            'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-            'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-            'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+            'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+            'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+            'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+            'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+            'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
         };
         
         // Preparar datos para el gráfico
         const datasets = [];
-        const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
+        const volumeGroups = {
+            'muy-alto': 'Muy Alto',
+            'alto': 'Alto',
+            'medio': 'Medio',
+            'bajo': 'Bajo',
+            'muy-bajo': 'Muy Bajo'
+        };
         
-        volumes.forEach(vol => {
-            const data = scatterData.filter(item => item.volume === vol).map(item => ({
-                x: item.short_prob,
-                y: item.long_prob,
-                symbol: item.symbol
-            }));
+        for (const [volumeKey, volumeLabel] of Object.entries(volumeGroups)) {
+            const data = scatterData
+                .filter(item => item.volume.toLowerCase().replace(' ', '-') === volumeKey)
+                .map(item => ({
+                    x: item.short_prob,
+                    y: item.long_prob,
+                    symbol: item.symbol
+                }));
             
             if (data.length > 0) {
                 datasets.push({
-                    label: vol,
+                    label: volumeLabel,
                     data: data,
-                    backgroundColor: volumeColors[vol],
+                    backgroundColor: volumeColors[volumeKey],
                     pointRadius: 8,
                     pointHoverRadius: 10
                 });
             }
-        });
+        }
         
         // Crear gráfico de dispersión
         const scatterChart = new Chart(scatterCtx, {
@@ -552,9 +570,9 @@
         
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
-            const filter = this.value;
+            const filter = this.value.toLowerCase().replace(' ', '-');
             scatterChart.data.datasets.forEach(dataset => {
-                dataset.hidden = filter !== 'all' && dataset.label !== filter;
+                dataset.hidden = filter !== 'all' && dataset.label.toLowerCase().replace(' ', '-') !== filter;
             });
             scatterChart.update();
         });
