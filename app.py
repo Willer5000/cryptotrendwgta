@@ -41,16 +41,23 @@ logger = logging.getLogger(__name__)
 
 # Leer lista de criptomonedas
 def load_cryptos():
+    cryptos = []
     with open(CRYPTOS_FILE, 'r') as f:
-        cryptos = [line.strip() for line in f.readlines() if line.strip()]
-        # Asegurar que los símbolos tengan el sufijo -USDT
-        return [f"{crypto}-USDT" for crypto in cryptos]
+        for line in f:
+            line = line.strip()
+            if line:
+                # Manejar ambos formatos: "BTC" y "BTC-USDT:Bitcoin"
+                if ':' in line:
+                    cryptos.append(line.split(':')[0])
+                else:
+                    cryptos.append(line)
+    return cryptos
 
 # Obtener datos de KuCoin
 def get_kucoin_data(symbol, timeframe):
-    # Asegurar que el símbolo tenga el formato correcto
+    # Asegurarse de que el símbolo tenga el sufijo -USDT
     if not symbol.endswith('-USDT'):
-        symbol = f"{symbol}-USDT"
+        symbol += '-USDT'
     
     tf_mapping = {
         '30m': '30min',
@@ -64,7 +71,6 @@ def get_kucoin_data(symbol, timeframe):
     url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}"
     
     try:
-        logger.info(f"Fetching data for {symbol} ({kucoin_tf})")
         response = requests.get(url, timeout=20)
         if response.status_code == 200:
             data = response.json()
@@ -74,15 +80,18 @@ def get_kucoin_data(symbol, timeframe):
                 candles.reverse()
                 
                 # Validar que hay suficientes velas
-                if len(candles) < 100:
+                if len(candles) < 50:
                     logger.warning(f"Datos insuficientes para {symbol}: {len(candles)} velas")
                     return None
                 
                 df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
                 
                 # Convertir a tipos numéricos
-                for col in ['open', 'close', 'high', 'low', 'volume']:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                df['open'] = pd.to_numeric(df['open'], errors='coerce')
+                df['close'] = pd.to_numeric(df['close'], errors='coerce')
+                df['high'] = pd.to_numeric(df['high'], errors='coerce')
+                df['low'] = pd.to_numeric(df['low'], errors='coerce')
+                df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
                 
                 # Eliminar filas con valores NaN
                 df = df.dropna()
@@ -142,7 +151,7 @@ def calculate_adx(high, low, close, window):
     plus_di = 100 * (plus_dm.rolling(window).mean() / atr)
     minus_di = 100 * (minus_dm.rolling(window).mean() / atr)
     
-    dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10))  # Evitar división por cero
+    dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).replace([np.inf, -np.inf], 0)
     adx = dx.rolling(window).mean()
     return adx, plus_di, minus_di
 
@@ -199,7 +208,7 @@ def find_support_resistance(df, window):
 # Clasificar volumen
 def classify_volume(current_vol, avg_vol):
     try:
-        if avg_vol <= 0 or current_vol is None or avg_vol is None:
+        if avg_vol == 0 or current_vol is None or avg_vol is None:
             return 'Muy Bajo'
         
         ratio = current_vol / avg_vol
@@ -306,7 +315,7 @@ def generate_chart(df, signal, signal_type):
         
         # Convertir a base64
         img = io.BytesIO()
-        plt.savefig(img, format='png', bbox_inches='tight')
+        plt.savefig(img, format='png')
         img.seek(0)
         plot_url = base64.b64encode(img.getvalue()).decode()
         plt.close()
@@ -318,9 +327,7 @@ def generate_chart(df, signal, signal_type):
 
 # Analizar una criptomoneda y calcular probabilidades
 def analyze_crypto(symbol, params):
-    # Limpiar el símbolo para quitar el sufijo -USDT si existe
-    clean_symbol = symbol.replace('-USDT', '')
-    df = get_kucoin_data(clean_symbol, params['timeframe'])
+    df = get_kucoin_data(symbol, params['timeframe'])
     if df is None or len(df) < 50:
         return None, None, 0, 0, 'Muy Bajo'
     
@@ -363,7 +370,7 @@ def analyze_crypto(symbol, params):
         
         # Señales LONG
         long_signal = None
-        if long_prob >= 60 and volume_class in ['Alto', 'Muy Alto']:  # Umbral más bajo para más señales
+        if long_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
             # Encontrar la resistencia más cercana por encima
             next_resistances = [r for r in resistances if r > last['close']]
             entry = min(next_resistances) * 1.005 if next_resistances else last['close'] * 1.01
@@ -373,12 +380,14 @@ def analyze_crypto(symbol, params):
             risk = entry - sl
             
             long_signal = {
-                'symbol': clean_symbol,
+                'symbol': symbol,
                 'entry': round(entry, 4),
                 'sl': round(sl, 4),
                 'tp1': round(entry + risk, 4),
                 'tp2': round(entry + risk * 2, 4),
+                'tp3': round(entry + risk * 3, 4),
                 'volume': volume_class,
+                'divergence': divergence == 'bullish',
                 'adx': round(last['adx'], 2) if not pd.isna(last['adx']) else 0,
                 'price': round(last['close'], 4),
                 'distance': round(((entry - last['close']) / last['close']) * 100, 2)
@@ -386,7 +395,7 @@ def analyze_crypto(symbol, params):
         
         # Señales SHORT
         short_signal = None
-        if short_prob >= 60 and volume_class in ['Alto', 'Muy Alto']:  # Umbral más bajo para más señales
+        if short_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
             # Encontrar el soporte más cercano por debajo
             next_supports = [s for s in supports if s < last['close']]
             entry = max(next_supports) * 0.995 if next_supports else last['close'] * 0.99
@@ -396,12 +405,14 @@ def analyze_crypto(symbol, params):
             risk = sl - entry
             
             short_signal = {
-                'symbol': clean_symbol,
+                'symbol': symbol,
                 'entry': round(entry, 4),
                 'sl': round(sl, 4),
                 'tp1': round(entry - risk, 4),
                 'tp2': round(entry - risk * 2, 4),
+                'tp3': round(entry - risk * 3, 4),
                 'volume': volume_class,
+                'divergence': divergence == 'bearish',
                 'adx': round(last['adx'], 2) if not pd.isna(last['adx']) else 0,
                 'price': round(last['close'], 4),
                 'distance': round(((last['close'] - entry) / last['close']) * 100, 2)
@@ -424,7 +435,7 @@ def background_update():
                 scatter_data = []
                 
                 # Procesar en lotes para reducir memoria
-                batch_size = 20
+                batch_size = 30
                 for i in range(0, len(cryptos), batch_size):
                     batch = cryptos[i:i+batch_size]
                     for crypto in batch:
@@ -436,13 +447,13 @@ def background_update():
                         
                         # Datos para el gráfico de dispersión
                         scatter_data.append({
-                            'symbol': crypto.replace('-USDT', ''),
+                            'symbol': crypto,
                             'long_prob': long_prob,
                             'short_prob': short_prob,
                             'volume': volume_class
                         })
                     # Liberar memoria entre lotes
-                    time.sleep(1)
+                    time.sleep(2)
                 
                 # Ordenar por fuerza de tendencia (ADX)
                 long_signals.sort(key=lambda x: x['adx'], reverse=True)
@@ -477,8 +488,8 @@ def index():
     
     # Estadísticas para gráficos
     signal_count = len(long_signals) + len(short_signals)
-    avg_adx_long = round(np.mean([s['adx'] for s in long_signals]), 2) if long_signals else 0
-    avg_adx_short = round(np.mean([s['adx'] for s in short_signals]), 2) if short_signals else 0
+    avg_adx_long = np.mean([s['adx'] for s in long_signals]) if long_signals else 0
+    avg_adx_short = np.mean([s['adx'] for s in short_signals]) if short_signals else 0
     
     return render_template('index.html', 
                            long_signals=long_signals[:50], 
@@ -486,16 +497,12 @@ def index():
                            last_update=last_update,
                            params=DEFAULTS,
                            signal_count=signal_count,
-                           avg_adx_long=avg_adx_long,
-                           avg_adx_short=avg_adx_short,
+                           avg_adx_long=round(avg_adx_long, 2),
+                           avg_adx_short=round(avg_adx_short, 2),
                            scatter_data=json.dumps(scatter_data))
 
 @app.route('/chart/<symbol>/<signal_type>')
 def get_chart(symbol, signal_type):
-    # Asegurar formato correcto del símbolo
-    if not symbol.endswith('-USDT'):
-        symbol = f"{symbol}-USDT"
-    
     df = get_kucoin_data(symbol, DEFAULTS['timeframe'])
     if df is None:
         return "Datos no disponibles", 404
@@ -509,9 +516,7 @@ def get_chart(symbol, signal_type):
     if signals is None:
         return "Señales no disponibles", 404
     
-    # Usar solo el nombre base del símbolo para buscar
-    base_symbol = symbol.replace('-USDT', '')
-    signal = next((s for s in signals if s['symbol'] == base_symbol), None)
+    signal = next((s for s in signals if s['symbol'] == symbol), None)
     
     if not signal:
         return "Señal no encontrada", 404
@@ -520,7 +525,7 @@ def get_chart(symbol, signal_type):
     if not plot_url:
         return "Error generando gráfico", 500
         
-    return render_template('chart.html', plot_url=plot_url, symbol=base_symbol, signal_type=signal_type)
+    return render_template('chart.html', plot_url=plot_url, symbol=symbol, signal_type=signal_type)
 
 @app.route('/manual')
 def manual():
