@@ -7,16 +7,16 @@ import json
 import threading
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
-from flask_caching import Cache
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
 import math
+import logging
 
 app = Flask(__name__)
-cache = Cache(app, config={'CACHE_TYPE': 'simple'})
+app.logger.setLevel(logging.INFO)
 
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
@@ -34,10 +34,22 @@ DEFAULTS = {
     'price_distance_threshold': 1.0  # 1% para considerar "cerca" de soporte/resistencia
 }
 
+# Almacenamiento en memoria para datos procesados
+long_signals = []
+short_signals = []
+scatter_data = []
+last_update = datetime.now()
+
 # Leer lista de criptomonedas
 def load_cryptos():
-    with open(CRYPTOS_FILE, 'r') as f:
-        return [line.strip() for line in f.readlines() if line.strip()]
+    try:
+        with open(CRYPTOS_FILE, 'r') as f:
+            cryptos = [line.strip() for line in f.readlines() if line.strip()]
+        app.logger.info(f"Loaded {len(cryptos)} cryptocurrencies")
+        return cryptos
+    except Exception as e:
+        app.logger.error(f"Error loading cryptos: {str(e)}")
+        return []
 
 # Obtener datos de KuCoin
 def get_kucoin_data(symbol, timeframe):
@@ -69,11 +81,8 @@ def get_kucoin_data(symbol, timeframe):
                 df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
                 
                 # Convertir a tipos numéricos
-                df['open'] = pd.to_numeric(df['open'], errors='coerce')
-                df['close'] = pd.to_numeric(df['close'], errors='coerce')
-                df['high'] = pd.to_numeric(df['high'], errors='coerce')
-                df['low'] = pd.to_numeric(df['low'], errors='coerce')
-                df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
+                for col in ['open', 'close', 'high', 'low', 'volume']:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
                 
                 # Eliminar filas con valores NaN
                 df = df.dropna()
@@ -407,49 +416,50 @@ def analyze_crypto(symbol, params):
 
 # Tarea en segundo plano para actualizar datos
 def background_update():
+    global long_signals, short_signals, scatter_data, last_update
+    
     while True:
-        with app.app_context():
-            try:
-                app.logger.info("Iniciando actualización de datos...")
-                cryptos = load_cryptos()
-                long_signals = []
-                short_signals = []
-                scatter_data = []
-                
-                # Procesar en lotes para reducir memoria
-                batch_size = 30
-                for i in range(0, len(cryptos), batch_size):
-                    batch = cryptos[i:i+batch_size]
-                    for crypto in batch:
-                        long_signal, short_signal, long_prob, short_prob, volume_class = analyze_crypto(crypto, DEFAULTS)
-                        if long_signal:
-                            long_signals.append(long_signal)
-                        if short_signal:
-                            short_signals.append(short_signal)
-                        
-                        # Datos para el gráfico de dispersión
-                        scatter_data.append({
-                            'symbol': crypto,
-                            'long_prob': long_prob,
-                            'short_prob': short_prob,
-                            'volume': volume_class
-                        })
-                    # Liberar memoria entre lotes
-                    time.sleep(2)
-                
-                # Ordenar por fuerza de tendencia (ADX)
-                long_signals.sort(key=lambda x: x['adx'], reverse=True)
-                short_signals.sort(key=lambda x: x['adx'], reverse=True)
-                
-                # Actualizar caché
-                cache.set('long_signals', long_signals)
-                cache.set('short_signals', short_signals)
-                cache.set('scatter_data', scatter_data)
-                cache.set('last_update', datetime.now())
-                
-                app.logger.info(f"Actualización completada: {len(long_signals)} LONG, {len(short_signals)} SHORT")
-            except Exception as e:
-                app.logger.error(f"Error en actualización de fondo: {str(e)}")
+        try:
+            app.logger.info("Iniciando actualización de datos...")
+            cryptos = load_cryptos()
+            new_long_signals = []
+            new_short_signals = []
+            new_scatter_data = []
+            
+            # Procesar en lotes para reducir memoria
+            batch_size = 30
+            for i in range(0, len(cryptos), batch_size):
+                batch = cryptos[i:i+batch_size]
+                for crypto in batch:
+                    long_signal, short_signal, long_prob, short_prob, volume_class = analyze_crypto(crypto, DEFAULTS)
+                    if long_signal:
+                        new_long_signals.append(long_signal)
+                    if short_signal:
+                        new_short_signals.append(short_signal)
+                    
+                    # Datos para el gráfico de dispersión
+                    new_scatter_data.append({
+                        'symbol': crypto,
+                        'long_prob': long_prob,
+                        'short_prob': short_prob,
+                        'volume': volume_class
+                    })
+                # Liberar memoria entre lotes
+                time.sleep(2)
+            
+            # Ordenar por fuerza de tendencia (ADX)
+            new_long_signals.sort(key=lambda x: x['adx'], reverse=True)
+            new_short_signals.sort(key=lambda x: x['adx'], reverse=True)
+            
+            # Actualizar variables globales
+            long_signals = new_long_signals
+            short_signals = new_short_signals
+            scatter_data = new_scatter_data
+            last_update = datetime.now()
+            
+            app.logger.info(f"Actualización completada: {len(long_signals)} LONG, {len(short_signals)} SHORT")
+        except Exception as e:
+            app.logger.error(f"Error en actualización de fondo: {str(e)}")
         
         time.sleep(CACHE_TIME)
 
@@ -463,10 +473,7 @@ except Exception as e:
 
 @app.route('/')
 def index():
-    long_signals = cache.get('long_signals') or []
-    short_signals = cache.get('short_signals') or []
-    scatter_data = cache.get('scatter_data') or []
-    last_update = cache.get('last_update') or datetime.now()
+    global long_signals, short_signals, scatter_data, last_update
     
     # Estadísticas para gráficos
     signal_count = len(long_signals) + len(short_signals)
@@ -494,7 +501,7 @@ def get_chart(symbol, signal_type):
         return "Datos insuficientes para generar gráfico", 404
     
     # Buscar señal correspondiente
-    signals = cache.get('long_signals') if signal_type == 'long' else cache.get('short_signals')
+    signals = long_signals if signal_type == 'long' else short_signals
     signal = next((s for s in signals if s['symbol'] == symbol), None)
     
     if not signal:
