@@ -481,7 +481,7 @@ def index():
                            signal_count=signal_count,
                            avg_adx_long=round(avg_adx_long, 2),
                            avg_adx_short=round(avg_adx_short, 2),
-                           scatter_data=json.dumps(scatter_data))  # CORRECCIÓN: Pasar como JSON
+                           scatter_data=json.dumps(scatter_data))
 
 @app.route('/chart/<symbol>/<signal_type>')
 def get_chart(symbol, signal_type):
@@ -495,6 +495,9 @@ def get_chart(symbol, signal_type):
     
     # Buscar señal correspondiente
     signals = cache.get('long_signals') if signal_type == 'long' else cache.get('short_signals')
+    if signals is None:
+        return "Señales no disponibles", 404
+    
     signal = next((s for s in signals if s['symbol'] == symbol), None)
     
     if not signal:
