@@ -292,7 +292,7 @@
                 <div class="card">
                     <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
                         <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
-                        <span class="badge badge-shout">ADX Prom: {{ avg_adx_short }}</span>
+                        <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
                     </div>
                     <div class="card-body">
                         {% if short_signals %}
@@ -449,7 +449,7 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = JSON.parse('{{ scatter_data|safe }}');
+        const scatterData = JSON.parse({{ scatter_data|safe }});  // CORRECCIÓN: Parsear directamente
         
         // Mapeo de colores por volumen
         const volumeColors = {
