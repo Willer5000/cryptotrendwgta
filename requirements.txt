@@ -1,7 +1,6 @@
-Flask
+flask
+requests
 pandas
 numpy
-requests
-gunicorn
 matplotlib
-Flask-Caching
+gunicorn
