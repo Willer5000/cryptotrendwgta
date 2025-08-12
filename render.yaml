@@ -2,8 +2,6 @@ services:
   - type: web
     name: wgta-crypto-signals
     env: python
-    buildCommand: "./build.sh"
-    startCommand: "gunicorn app:app"
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.9.16"
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: gunicorn app:app
+    plan: free
