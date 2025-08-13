@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: wgta-crypto-signals
+    name: wgta-crypto
     env: python
     buildCommand: chmod +x build.sh && ./build.sh
     startCommand: gunicorn app:app
