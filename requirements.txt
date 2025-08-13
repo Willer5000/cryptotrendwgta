@@ -1,8 +1,6 @@
-flask
-flask-caching
+Flask
 requests
 pandas
 numpy
 matplotlib
 gunicorn
-python-dotenv
