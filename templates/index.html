@@ -72,7 +72,7 @@
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
                         <select name="timeframe" class="form-select">
-                            {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
+                            {% for tf in ['15m','30m','1h','2h','4h','1d','1w'] %}
                             <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
                                 {{ tf }}
                             </option>
@@ -240,7 +240,7 @@
                 <div class="card mb-4">
                     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                         <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }})</h2>
-                        <span class="badge badge-long">ADX Prom: {{ avg_adx_long }}</span>
+                        <span class="badge bg-success">ADX Prom: {{ avg_adx_long }}</span>
                     </div>
                     <div class="card-body">
                         {% if long_signals %}
@@ -297,7 +297,7 @@
                 <div class="card">
                     <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
                         <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
-                        <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
+                        <span class="badge bg-danger">ADX Prom: {{ avg_adx_short }}</span>
                     </div>
                     <div class="card-body">
                         {% if short_signals %}
@@ -394,7 +394,7 @@
                 labels: ['Distancia a Entrada'],
                 datasets: [{
                     label: 'Distancia Promedio (%)',
-                    data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
+                    data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 | round(2) }}],
                     backgroundColor: 'rgba(46, 204, 113, 0.7)'
                 }]
             },
@@ -427,7 +427,7 @@
                 labels: ['Distancia a Entrada'],
                 datasets: [{
                     label: 'Distancia Promedio (%)',
-                    data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
+                    data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 | round(2) }}],
                     backgroundColor: 'rgba(231, 76, 60, 0.7)'
                 }]
             },
