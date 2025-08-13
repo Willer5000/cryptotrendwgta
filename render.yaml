@@ -2,6 +2,6 @@ services:
   - type: web
     name: cryptosignals
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --workers 1 --threads 4
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: gunicorn app:app
     plan: free
