@@ -1,7 +1,7 @@
 services:
   - type: web
-    name: cryptotrend
+    name: wgta-crypto-signals
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --workers 1 --timeout 300 app:app
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: gunicorn app:app
     plan: free
