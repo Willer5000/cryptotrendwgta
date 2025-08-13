@@ -38,15 +38,6 @@
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
-        .status-badge {
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-        .status-updating { background-color: #ffc107; color: #000; }
-        .status-updated { background-color: #28a745; color: #fff; }
-        .status-error { background-color: #dc3545; color: #fff; }
     </style>
 </head>
 <body>
@@ -71,7 +62,7 @@
         <!-- Sección de Filtros -->
         <div class="filter-section">
             <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
-            <form id="filters-form" method="POST" action="/update_params">
+            <form method="POST" action="/update_params" id="filters-form">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
@@ -354,23 +345,9 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Estado del sistema -->
-        <div class="d-flex justify-content-between align-items-center mt-4">
-            <div class="status-badge status-updated" id="updateStatus">
-                <i class="fas fa-check-circle"></i> Datos actualizados
-            </div>
-            <div>
-                <span id="cryptoCount">0</span> criptomonedas analizadas
-            </div>
-        </div>
     </div>
 
     <script>
-        // Elementos de estado
-        const updateStatus = document.getElementById('updateStatus');
-        const cryptoCount = document.getElementById('cryptoCount');
-        
         // Gráfico de resumen
         const marketCtx = document.getElementById('marketChart').getContext('2d');
         const marketChart = new Chart(marketCtx, {
@@ -472,171 +449,147 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        let scatterChart = null;
+        const scatterData = JSON.parse('{{ scatter_data|safe }}');
         
-        // Función para inicializar el gráfico de dispersión
-        function initScatterChart() {
-            try {
-                const scatterData = JSON.parse('{{ scatter_data|safe }}');
-                cryptoCount.textContent = scatterData.length;
-                
-                // Mapeo de colores por volumen
-                const volumeColors = {
-                    'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-                    'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-                    'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-                    'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-                    'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
-                };
-                
-                // Preparar datos para el gráfico
-                const datasets = [];
-                const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
-                
-                volumes.forEach(vol => {
-                    const data = scatterData.filter(item => {
-                        const itemVol = item.volume.toLowerCase().replace(' ', '-');
-                        return itemVol === vol;
-                    }).map(item => ({
-                        x: item.short_prob,
-                        y: item.long_prob,
-                        symbol: item.symbol
-                    }));
-                    
-                    if (data.length > 0) {
-                        datasets.push({
-                            label: vol.replace('-', ' '),
-                            data: data,
-                            backgroundColor: volumeColors[vol],
-                            pointRadius: 8,
-                            pointHoverRadius: 10
-                        });
-                    }
+        // Mapeo de colores por volumen
+        const volumeColors = {
+            'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+            'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+            'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+            'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+            'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+        };
+        
+        // Preparar datos para el gráfico
+        const datasets = [];
+        const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
+        const volumeLabels = {
+            'muy-alto': 'Muy Alto',
+            'alto': 'Alto',
+            'medio': 'Medio',
+            'bajo': 'Bajo',
+            'muy-bajo': 'Muy Bajo'
+        };
+        
+        volumes.forEach(vol => {
+            const data = scatterData.filter(item => {
+                const itemVol = item.volume.toLowerCase().replace(' ', '-');
+                return itemVol === vol;
+            }).map(item => ({
+                x: item.short_prob,
+                y: item.long_prob,
+                symbol: item.symbol
+            }));
+            
+            if (data.length > 0) {
+                datasets.push({
+                    label: volumeLabels[vol],
+                    data: data,
+                    backgroundColor: volumeColors[vol],
+                    pointRadius: 8,
+                    pointHoverRadius: 10
                 });
-                
-                // Crear gráfico de dispersión
-                scatterChart = new Chart(scatterCtx, {
-                    type: 'scatter',
-                    data: {
-                        datasets: datasets
+            }
+        });
+        
+        // Crear gráfico de dispersión
+        const scatterChart = new Chart(scatterCtx, {
+            type: 'scatter',
+            data: {
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Probabilidad SHORT (%)'
+                        },
+                        min: 0,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
                     },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: 'Probabilidad SHORT (%)'
-                                },
-                                min: 0,
-                                max: 100,
-                                ticks: {
-                                    callback: function(value) {
-                                        return value + '%';
-                                    }
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Probabilidad LONG (%)'
-                                },
-                                min: 0,
-                                max: 100,
-                                ticks: {
-                                    callback: function(value) {
-                                        return value + '%';
-                                    }
-                                }
-                            }
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Probabilidad LONG (%)'
                         },
-                        plugins: {
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return context.raw.symbol + ': LONG ' + context.raw.y + '%, SHORT ' + context.raw.x + '%';
-                                    }
-                                }
-                            },
-                            title: {
-                                display: true,
-                                text: 'Probabilidades de Trading por Criptomoneda'
-                            },
-                            legend: {
-                                display: true,
-                                position: 'bottom'
+                        min: 0,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
                             }
-                        },
-                        animation: {
-                            duration: 2000,
-                            easing: 'easeOutQuart'
                         }
                     }
-                });
-            } catch (e) {
-                console.error('Error inicializando gráfico de dispersión:', e);
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.raw.symbol + ': LONG ' + context.raw.y + '%, SHORT ' + context.raw.x + '%';
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Probabilidades de Trading por Criptomoneda'
+                    },
+                    legend: {
+                        display: true,
+                        position: 'bottom'
+                    }
+                },
+                animation: {
+                    duration: 2000,
+                    easing: 'easeOutQuart'
+                }
             }
-        }
-        
-        // Inicializar gráfico
-        initScatterChart();
+        });
         
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
-            if (!scatterChart) return;
-            
             const filter = this.value.toLowerCase().replace(' ', '-');
             scatterChart.data.datasets.forEach(dataset => {
-                dataset.hidden = filter !== 'all' && !dataset.label.toLowerCase().includes(filter);
+                dataset.hidden = filter !== 'all' && dataset.label.toLowerCase().replace(' ', '-') !== filter;
             });
             scatterChart.update();
         });
         
         // Auto-refresh cada 60 segundos
-        function autoRefresh() {
-            setTimeout(() => {
-                location.reload();
-            }, 60000);
-        }
+        setTimeout(() => {
+            location.reload();
+        }, 60000);
         
-        // Manejar envío de formulario
-        document.getElementById('filters-form').addEventListener('submit', async function(e) {
+        // Manejar el envío del formulario
+        document.getElementById('filters-form').addEventListener('submit', function(e) {
             e.preventDefault();
             
-            try {
-                updateStatus.className = 'status-badge status-updating';
-                updateStatus.innerHTML = '<i class="fas fa-sync fa-spin"></i> Actualizando...';
-                
-                const formData = new FormData(this);
-                const response = await fetch('/update_params', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (response.ok) {
-                    updateStatus.className = 'status-badge status-updated';
-                    updateStatus.innerHTML = '<i class="fas fa-check-circle"></i> Parámetros actualizados';
-                    
-                    // Recargar después de actualizar
-                    setTimeout(() => location.reload(), 2000);
+            const formData = new FormData(this);
+            fetch(this.action, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Parámetros actualizados correctamente');
+                    location.reload();
                 } else {
-                    throw new Error('Error al actualizar parámetros');
+                    alert('Error actualizando parámetros: ' + data.message);
                 }
-            } catch (error) {
-                console.error('Error actualizando parámetros:', error);
-                updateStatus.className = 'status-badge status-error';
-                updateStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error actualizando';
-                
-                setTimeout(() => {
-                    updateStatus.className = 'status-badge status-updated';
-                    updateStatus.innerHTML = '<i class="fas fa-check-circle"></i> Datos actualizados';
-                }, 3000);
-            }
+            })
+            .catch(error => {
+                alert('Error en la solicitud');
+                console.error('Error:', error);
+            });
         });
-        
-        // Iniciar funciones
-        autoRefresh();
     </script>
 </body>
 </html>
