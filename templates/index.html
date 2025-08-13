@@ -38,13 +38,15 @@
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
-        
-        /* Nuevas clases para volumen */
-        .volume-muy-alto { background-color: #4CAF50; color: white; padding: 2px 5px; border-radius: 3px; }
-        .volume-alto { background-color: #2196F3; color: white; padding: 2px 5px; border-radius: 3px; }
-        .volume-medio { background-color: #FFEB3B; padding: 2px 5px; border-radius: 3px; }
-        .volume-bajo { background-color: #FF9800; color: white; padding: 2px 5px; border-radius: 3px; }
-        .volume-muy-bajo { background-color: #F44336; color: white; padding: 2px 5px; border-radius: 3px; }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .status-updating { background-color: #ffc107; color: #000; }
+        .status-updated { background-color: #28a745; color: #fff; }
+        .status-error { background-color: #dc3545; color: #fff; }
     </style>
 </head>
 <body>
@@ -69,7 +71,7 @@
         <!-- Sección de Filtros -->
         <div class="filter-section">
             <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
-            <form method="POST" id="filters-form">
+            <form id="filters-form" method="POST" action="/update_params">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
@@ -352,9 +354,23 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Estado del sistema -->
+        <div class="d-flex justify-content-between align-items-center mt-4">
+            <div class="status-badge status-updated" id="updateStatus">
+                <i class="fas fa-check-circle"></i> Datos actualizados
+            </div>
+            <div>
+                <span id="cryptoCount">0</span> criptomonedas analizadas
+            </div>
+        </div>
     </div>
 
     <script>
+        // Elementos de estado
+        const updateStatus = document.getElementById('updateStatus');
+        const cryptoCount = document.getElementById('cryptoCount');
+        
         // Gráfico de resumen
         const marketCtx = document.getElementById('marketChart').getContext('2d');
         const marketChart = new Chart(marketCtx, {
@@ -456,123 +472,171 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = JSON.parse('{{ scatter_data|safe }}');
+        let scatterChart = null;
         
-        // Mapeo de colores por volumen
-        const volumeColors = {
-            'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-            'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-            'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-            'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
-        };
-        
-        // Preparar datos para el gráfico
-        const datasets = [];
-        const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
-        const volumeLabels = {
-            'muy-alto': 'Muy Alto',
-            'alto': 'Alto',
-            'medio': 'Medio',
-            'bajo': 'Bajo',
-            'muy-bajo': 'Muy Bajo'
-        };
-        
-        volumes.forEach(vol => {
-            const data = scatterData.filter(item => {
-                const volClass = item.volume.toLowerCase().replace(' ', '-');
-                return volClass === vol;
-            }).map(item => ({
-                x: item.short_prob,
-                y: item.long_prob,
-                symbol: item.symbol
-            }));
-            
-            if (data.length > 0) {
-                datasets.push({
-                    label: volumeLabels[vol],
-                    data: data,
-                    backgroundColor: volumeColors[vol],
-                    pointRadius: 8,
-                    pointHoverRadius: 10
+        // Función para inicializar el gráfico de dispersión
+        function initScatterChart() {
+            try {
+                const scatterData = JSON.parse('{{ scatter_data|safe }}');
+                cryptoCount.textContent = scatterData.length;
+                
+                // Mapeo de colores por volumen
+                const volumeColors = {
+                    'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+                    'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+                    'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+                    'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+                    'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+                };
+                
+                // Preparar datos para el gráfico
+                const datasets = [];
+                const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
+                
+                volumes.forEach(vol => {
+                    const data = scatterData.filter(item => {
+                        const itemVol = item.volume.toLowerCase().replace(' ', '-');
+                        return itemVol === vol;
+                    }).map(item => ({
+                        x: item.short_prob,
+                        y: item.long_prob,
+                        symbol: item.symbol
+                    }));
+                    
+                    if (data.length > 0) {
+                        datasets.push({
+                            label: vol.replace('-', ' '),
+                            data: data,
+                            backgroundColor: volumeColors[vol],
+                            pointRadius: 8,
+                            pointHoverRadius: 10
+                        });
+                    }
                 });
+                
+                // Crear gráfico de dispersión
+                scatterChart = new Chart(scatterCtx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Probabilidad SHORT (%)'
+                                },
+                                min: 0,
+                                max: 100,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Probabilidad LONG (%)'
+                                },
+                                min: 0,
+                                max: 100,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.raw.symbol + ': LONG ' + context.raw.y + '%, SHORT ' + context.raw.x + '%';
+                                    }
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Probabilidades de Trading por Criptomoneda'
+                            },
+                            legend: {
+                                display: true,
+                                position: 'bottom'
+                            }
+                        },
+                        animation: {
+                            duration: 2000,
+                            easing: 'easeOutQuart'
+                        }
+                    }
+                });
+            } catch (e) {
+                console.error('Error inicializando gráfico de dispersión:', e);
             }
-        });
+        }
         
-        // Crear gráfico de dispersión
-        const scatterChart = new Chart(scatterCtx, {
-            type: 'scatter',
-            data: {
-                datasets: datasets
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Probabilidad SHORT (%)'
-                        },
-                        min: 0,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
-                            }
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'Probabilidad LONG (%)'
-                        },
-                        min: 0,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return context.raw.symbol + ': LONG ' + context.raw.y + '%, SHORT ' + context.raw.x + '%';
-                            }
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Probabilidades de Trading por Criptomoneda'
-                    },
-                    legend: {
-                        display: true,
-                        position: 'bottom'
-                    }
-                },
-                animation: {
-                    duration: 2000,
-                    easing: 'easeOutQuart'
-                }
-            }
-        });
+        // Inicializar gráfico
+        initScatterChart();
         
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
+            if (!scatterChart) return;
+            
             const filter = this.value.toLowerCase().replace(' ', '-');
             scatterChart.data.datasets.forEach(dataset => {
-                dataset.hidden = filter !== 'all' && dataset.label.toLowerCase().replace(' ', '-') !== filter;
+                dataset.hidden = filter !== 'all' && !dataset.label.toLowerCase().includes(filter);
             });
             scatterChart.update();
         });
         
         // Auto-refresh cada 60 segundos
-        setTimeout(() => {
-            location.reload();
-        }, 60000);
+        function autoRefresh() {
+            setTimeout(() => {
+                location.reload();
+            }, 60000);
+        }
+        
+        // Manejar envío de formulario
+        document.getElementById('filters-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            try {
+                updateStatus.className = 'status-badge status-updating';
+                updateStatus.innerHTML = '<i class="fas fa-sync fa-spin"></i> Actualizando...';
+                
+                const formData = new FormData(this);
+                const response = await fetch('/update_params', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    updateStatus.className = 'status-badge status-updated';
+                    updateStatus.innerHTML = '<i class="fas fa-check-circle"></i> Parámetros actualizados';
+                    
+                    // Recargar después de actualizar
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    throw new Error('Error al actualizar parámetros');
+                }
+            } catch (error) {
+                console.error('Error actualizando parámetros:', error);
+                updateStatus.className = 'status-badge status-error';
+                updateStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error actualizando';
+                
+                setTimeout(() => {
+                    updateStatus.className = 'status-badge status-updated';
+                    updateStatus.innerHTML = '<i class="fas fa-check-circle"></i> Datos actualizados';
+                }, 3000);
+            }
+        });
+        
+        // Iniciar funciones
+        autoRefresh();
     </script>
 </body>
 </html>
