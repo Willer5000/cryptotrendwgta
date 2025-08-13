@@ -30,16 +30,14 @@
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; position: relative; }
         .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.7; }
-        .volume-muy-alto { background-color: #4CAF50; }   /* Verde */
-        .volume-alto { background-color: #2196F3; }        /* Azul */
-        .volume-medio { background-color: #FFEB3B; }      /* Amarillo */
-        .volume-bajo { background-color: #FF9800; }         /* Naranja */
-        .volume-muy-bajo { background-color: #F44336; }    /* Rojo */
+        .volume-very-high { background-color: #4CAF50; }   /* Verde */
+        .volume-high { background-color: #2196F3; }        /* Azul */
+        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
+        .volume-low { background-color: #FF9800; }         /* Naranja */
+        .volume-very-low { background-color: #F44336; }    /* Rojo */
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
-        
-        /* Colores de volumen para celdas */
         .volume-muy-alto { background-color: #4CAF50; color: white; }
         .volume-alto { background-color: #2196F3; color: white; }
         .volume-medio { background-color: #FFEB3B; }
@@ -456,8 +454,7 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = {{ scatter_data|safe }};
-        console.log("Scatter data:", scatterData);
+        const scatterData = JSON.parse('{{ scatter_data|safe }}');
         
         // Mapeo de colores por volumen
         const volumeColors = {
@@ -481,7 +478,6 @@
         
         volumes.forEach(vol => {
             const data = scatterData.filter(item => {
-                // Normalizar el volumen del ítem
                 const itemVol = item.volume.toLowerCase().replace(' ', '-');
                 return itemVol === vol;
             }).map(item => ({
