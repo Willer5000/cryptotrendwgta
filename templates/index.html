@@ -20,6 +20,8 @@
         .signal-card:hover { transform: translateY(-5px); }
         .long-bg { background-color: #e8f5e9; }
         .short-bg { background-color: #ffebee; }
+        .volume-high { color: #d32f2f; font-weight: bold; }
+        .volume-medium { color: #f57c00; }
         .chart-container { position: relative; height: 300px; margin-bottom: 20px; }
         .signal-table th { position: sticky; top: 0; background: white; z-index: 10; }
         .signal-table-container { max-height: 600px; overflow-y: auto; }
@@ -37,12 +39,12 @@
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
         
-        /* Nuevos estilos para volumen */
-        .volume-muy-alto { color: #4CAF50; font-weight: bold; }
-        .volume-alto { color: #2196F3; font-weight: bold; }
-        .volume-medio { color: #FFC107; }
-        .volume-bajo { color: #FF9800; }
-        .volume-muy-bajo { color: #F44336; }
+        /* Nuevas clases para volumen */
+        .volume-muy-alto { background-color: #4CAF50; color: white; padding: 2px 5px; border-radius: 3px; }
+        .volume-alto { background-color: #2196F3; color: white; padding: 2px 5px; border-radius: 3px; }
+        .volume-medio { background-color: #FFEB3B; padding: 2px 5px; border-radius: 3px; }
+        .volume-bajo { background-color: #FF9800; color: white; padding: 2px 5px; border-radius: 3px; }
+        .volume-muy-bajo { background-color: #F44336; color: white; padding: 2px 5px; border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -52,7 +54,6 @@
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
                 <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</p>
-                <p class="text-muted" id="dataStatus">Señales detectadas: {{ signal_count }} ({{ long_signals|length }} LONG, {{ short_signals|length }} SHORT)</p>
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
@@ -457,23 +458,31 @@
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
         const scatterData = JSON.parse('{{ scatter_data|safe }}');
         
-        console.log('Scatter data:', scatterData);
-        
         // Mapeo de colores por volumen
         const volumeColors = {
-            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'Alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-            'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-            'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-            'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+            'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+            'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+            'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+            'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+            'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
         };
         
         // Preparar datos para el gráfico
         const datasets = [];
-        const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
+        const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
+        const volumeLabels = {
+            'muy-alto': 'Muy Alto',
+            'alto': 'Alto',
+            'medio': 'Medio',
+            'bajo': 'Bajo',
+            'muy-bajo': 'Muy Bajo'
+        };
         
         volumes.forEach(vol => {
-            const data = scatterData.filter(item => item.volume === vol).map(item => ({
+            const data = scatterData.filter(item => {
+                const volClass = item.volume.toLowerCase().replace(' ', '-');
+                return volClass === vol;
+            }).map(item => ({
                 x: item.short_prob,
                 y: item.long_prob,
                 symbol: item.symbol
@@ -481,7 +490,7 @@
             
             if (data.length > 0) {
                 datasets.push({
-                    label: vol,
+                    label: volumeLabels[vol],
                     data: data,
                     backgroundColor: volumeColors[vol],
                     pointRadius: 8,
@@ -553,39 +562,16 @@
         
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
-            const filter = this.value;
+            const filter = this.value.toLowerCase().replace(' ', '-');
             scatterChart.data.datasets.forEach(dataset => {
-                dataset.hidden = filter !== 'all' && dataset.label !== filter;
+                dataset.hidden = filter !== 'all' && dataset.label.toLowerCase().replace(' ', '-') !== filter;
             });
             scatterChart.update();
         });
         
         // Auto-refresh cada 60 segundos
-        setInterval(() => {
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    const lastUpdate = new Date(data.last_update);
-                    const formattedDate = lastUpdate.toLocaleString('es-ES', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit'
-                    });
-                    
-                    document.querySelector('.text-muted:nth-child(3)').textContent = 
-                        ` Última actualización: ${formattedDate}`;
-                    
-                    document.getElementById('dataStatus').textContent = 
-                        `Señales detectadas: ${data.long_signals + data.short_signals} (${data.long_signals} LONG, ${data.short_signals} SHORT)`;
-                    
-                    // Recargar solo si hay cambios
-                    if (data.long_signals > 0 || data.short_signals > 0 || data.scatter_points > 0) {
-                        location.reload();
-                    }
-                });
+        setTimeout(() => {
+            location.reload();
         }, 60000);
     </script>
 </body>
