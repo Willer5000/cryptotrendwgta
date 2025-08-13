@@ -1,4 +1,5 @@
 flask
+flask-caching
 requests
 pandas
 numpy
