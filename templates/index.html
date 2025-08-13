@@ -38,6 +38,13 @@
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
+        
+        /* Nuevos estilos para volumen */
+        .volume-muy-alto { background-color: #4CAF50; color: white; }
+        .volume-alto { background-color: #2196F3; color: white; }
+        .volume-medio { background-color: #FFEB3B; }
+        .volume-bajo { background-color: #FF9800; color: white; }
+        .volume-muy-bajo { background-color: #F44336; color: white; }
     </style>
 </head>
 <body>
@@ -62,7 +69,7 @@
         <!-- Sección de Filtros -->
         <div class="filter-section">
             <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
-            <form method="POST" action="/update_params" id="filters-form">
+            <form method="POST" id="filters-form">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
@@ -449,41 +456,33 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = JSON.parse('{{ scatter_data|safe }}');
+        const scatterData = {{ scatter_data | tojson }};
         
         // Mapeo de colores por volumen
         const volumeColors = {
-            'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-            'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-            'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-            'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+            'Alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+            'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+            'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+            'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
         };
         
         // Preparar datos para el gráfico
         const datasets = [];
-        const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
-        const volumeLabels = {
-            'muy-alto': 'Muy Alto',
-            'alto': 'Alto',
-            'medio': 'Medio',
-            'bajo': 'Bajo',
-            'muy-bajo': 'Muy Bajo'
-        };
+        const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
         
         volumes.forEach(vol => {
-            const data = scatterData.filter(item => {
-                const itemVol = item.volume.toLowerCase().replace(' ', '-');
-                return itemVol === vol;
-            }).map(item => ({
-                x: item.short_prob,
-                y: item.long_prob,
-                symbol: item.symbol
-            }));
+            const data = scatterData
+                .filter(item => item.volume === vol)
+                .map(item => ({
+                    x: item.short_prob,
+                    y: item.long_prob,
+                    symbol: item.symbol
+                }));
             
             if (data.length > 0) {
                 datasets.push({
-                    label: volumeLabels[vol],
+                    label: vol,
                     data: data,
                     backgroundColor: volumeColors[vol],
                     pointRadius: 8,
@@ -555,9 +554,9 @@
         
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
-            const filter = this.value.toLowerCase().replace(' ', '-');
+            const filter = this.value;
             scatterChart.data.datasets.forEach(dataset => {
-                dataset.hidden = filter !== 'all' && dataset.label.toLowerCase().replace(' ', '-') !== filter;
+                dataset.hidden = filter !== 'all' && dataset.label !== filter;
             });
             scatterChart.update();
         });
@@ -566,30 +565,6 @@
         setTimeout(() => {
             location.reload();
         }, 60000);
-        
-        // Manejar el envío del formulario
-        document.getElementById('filters-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            fetch(this.action, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert('Parámetros actualizados correctamente');
-                    location.reload();
-                } else {
-                    alert('Error actualizando parámetros: ' + data.message);
-                }
-            })
-            .catch(error => {
-                alert('Error en la solicitud');
-                console.error('Error:', error);
-            });
-        });
     </script>
 </body>
 </html>
