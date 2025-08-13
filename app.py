@@ -14,12 +14,9 @@ import io
 import base64
 import math
 import logging
+from threading import Lock
 
 app = Flask(__name__)
-
-# Configurar logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
@@ -37,16 +34,16 @@ DEFAULTS = {
     'price_distance_threshold': 1.0  # 1% para considerar "cerca" de soporte/resistencia
 }
 
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Leer lista de criptomonedas
 def load_cryptos():
-    try:
-        with open(CRYPTOS_FILE, 'r') as f:
-            cryptos = [line.strip() for line in f.readlines() if line.strip()]
-            logger.info(f"Cargadas {len(cryptos)} criptomonedas desde {CRYPTOS_FILE}")
-            return cryptos
-    except Exception as e:
-        logger.error(f"Error cargando criptomonedas: {str(e)}")
-        return []
+    with open(CRYPTOS_FILE, 'r') as f:
+        cryptos = [line.strip() for line in f.readlines() if line.strip()]
+        logger.info(f"Loaded {len(cryptos)} cryptocurrencies")
+        return cryptos
 
 # Obtener datos de KuCoin
 def get_kucoin_data(symbol, timeframe):
@@ -62,8 +59,8 @@ def get_kucoin_data(symbol, timeframe):
     url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}-USDT"
     
     try:
-        logger.info(f"Obteniendo datos para {symbol} ({kucoin_tf})")
-        response = requests.get(url, timeout=30)
+        logger.info(f"Fetching data for {symbol} ({kucoin_tf})")
+        response = requests.get(url, timeout=20)
         if response.status_code == 200:
             data = response.json()
             if data.get('code') == '200000' and data.get('data'):
@@ -73,7 +70,7 @@ def get_kucoin_data(symbol, timeframe):
                 
                 # Validar que hay suficientes velas
                 if len(candles) < 100:
-                    logger.warning(f"Datos insuficientes para {symbol}: {len(candles)} velas")
+                    logger.warning(f"Insufficient data for {symbol}: {len(candles)} candles")
                     return None
                 
                 df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
@@ -90,14 +87,15 @@ def get_kucoin_data(symbol, timeframe):
                 
                 # Validar que aún tenemos suficientes datos
                 if len(df) < 50:
-                    logger.warning(f"Datos insuficientes después de limpieza para {symbol}: {len(df)} velas")
+                    logger.warning(f"Insufficient data after cleaning for {symbol}: {len(df)} candles")
                     return None
                 
                 # Convertir timestamp
                 df['timestamp'] = pd.to_datetime(df['timestamp'].astype(int), unit='s')
+                logger.info(f"Successfully fetched {len(df)} candles for {symbol}")
                 return df
     except Exception as e:
-        logger.error(f"Error obteniendo datos para {symbol}: {str(e)}")
+        logger.error(f"Error fetching data for {symbol}: {str(e)}")
     return None
 
 # Implementación manual de EMA
@@ -140,10 +138,10 @@ def calculate_adx(high, low, close, window):
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
     atr = tr.rolling(window).mean()
     
-    plus_di = 100 * (plus_dm.rolling(window).mean() / (atr + 1e-10))
-    minus_di = 100 * (minus_dm.rolling(window).mean() / (atr + 1e-10))
+    plus_di = 100 * (plus_dm.rolling(window).mean() / atr)
+    minus_di = 100 * (minus_dm.rolling(window).mean() / atr)
     
-    dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).replace([np.inf, -np.inf], 0)
+    dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10))  # Evitar división por cero
     adx = dx.rolling(window).mean()
     return adx, plus_di, minus_di
 
@@ -177,7 +175,7 @@ def calculate_indicators(df, params):
         
         return df
     except Exception as e:
-        logger.error(f"Error calculando indicadores: {str(e)}")
+        logger.error(f"Error calculating indicators: {str(e)}")
         return None
 
 # Detectar soportes y resistencias
@@ -194,7 +192,7 @@ def find_support_resistance(df, window):
         
         return supports, resistances
     except Exception as e:
-        logger.error(f"Error buscando S/R: {str(e)}")
+        logger.error(f"Error finding S/R: {str(e)}")
         return [], []
 
 # Clasificar volumen
@@ -247,7 +245,7 @@ def detect_divergence(df, lookback):
         
         return None
     except Exception as e:
-        logger.error(f"Error detectando divergencia: {str(e)}")
+        logger.error(f"Error detecting divergence: {str(e)}")
         return None
 
 # Calcular distancia al nivel más cercano
@@ -314,7 +312,7 @@ def generate_chart(df, signal, signal_type):
         
         return plot_url
     except Exception as e:
-        logger.error(f"Error generando gráfico: {str(e)}")
+        logger.error(f"Error generating chart: {str(e)}")
         return None
 
 # Analizar una criptomoneda y calcular probabilidades
@@ -360,6 +358,15 @@ def analyze_crypto(symbol, params):
         if volume_class in ['Alto', 'Muy Alto']: short_prob += 15
         if calculate_distance_to_level(last['close'], resistances, params['price_distance_threshold']): short_prob += 10
         
+        # Normalizar probabilidades
+        total = long_prob + short_prob
+        if total > 0:
+            long_prob = (long_prob / total) * 100
+            short_prob = (short_prob / total) * 100
+        else:
+            long_prob = 50
+            short_prob = 50
+        
         # Señales LONG
         long_signal = None
         if long_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
@@ -369,7 +376,7 @@ def analyze_crypto(symbol, params):
             # Encontrar el soporte más cercano por debajo para SL
             next_supports = [s for s in supports if s < entry]
             sl = max(next_supports) * 0.995 if next_supports else entry * (1 - params['max_risk_percent']/100)
-            risk = entry - sl
+            risk = entry - last['close']
             
             long_signal = {
                 'symbol': symbol,
@@ -377,7 +384,6 @@ def analyze_crypto(symbol, params):
                 'sl': round(sl, 4),
                 'tp1': round(entry + risk, 4),
                 'tp2': round(entry + risk * 2, 4),
-                'tp3': round(entry + risk * 3, 4),
                 'volume': volume_class,
                 'divergence': divergence == 'bullish',
                 'adx': round(last['adx'], 2) if not pd.isna(last['adx']) else 0,
@@ -394,7 +400,7 @@ def analyze_crypto(symbol, params):
             # Encontrar la resistencia más cercana por encima para SL
             next_resistances = [r for r in resistances if r > entry]
             sl = min(next_resistances) * 1.005 if next_resistances else entry * (1 + params['max_risk_percent']/100)
-            risk = sl - entry
+            risk = last['close'] - entry
             
             short_signal = {
                 'symbol': symbol,
@@ -402,7 +408,6 @@ def analyze_crypto(symbol, params):
                 'sl': round(sl, 4),
                 'tp1': round(entry - risk, 4),
                 'tp2': round(entry - risk * 2, 4),
-                'tp3': round(entry - risk * 3, 4),
                 'volume': volume_class,
                 'divergence': divergence == 'bearish',
                 'adx': round(last['adx'], 2) if not pd.isna(last['adx']) else 0,
@@ -412,32 +417,35 @@ def analyze_crypto(symbol, params):
         
         return long_signal, short_signal, long_prob, short_prob, volume_class
     except Exception as e:
-        logger.error(f"Error analizando {symbol}: {str(e)}")
+        logger.error(f"Error analyzing {symbol}: {str(e)}")
         return None, None, 0, 0, 'Muy Bajo'
 
-# Variables globales para almacenar resultados
-analysis_results = {
+# Datos en caché con bloqueo
+crypto_cache = {
     'long_signals': [],
     'short_signals': [],
     'scatter_data': [],
     'last_update': datetime.now()
 }
-analysis_lock = threading.Lock()
+cache_lock = Lock()
 
-# Tarea en segundo plano para actualizar datos
-def background_update():
+# Tarea para actualizar datos
+def update_crypto_data():
+    global crypto_cache
     while True:
         try:
             start_time = time.time()
-            logger.info("Iniciando actualización de datos...")
+            logger.info("Starting data update...")
             cryptos = load_cryptos()
             long_signals = []
             short_signals = []
             scatter_data = []
             
-            # Procesar cada criptomoneda
-            for i, crypto in enumerate(cryptos):
-                try:
+            # Procesar en lotes
+            batch_size = 20
+            for i in range(0, len(cryptos), batch_size):
+                batch = cryptos[i:i+batch_size]
+                for crypto in batch:
                     long_signal, short_signal, long_prob, short_prob, volume_class = analyze_crypto(crypto, DEFAULTS)
                     if long_signal:
                         long_signals.append(long_signal)
@@ -451,54 +459,52 @@ def background_update():
                         'short_prob': short_prob,
                         'volume': volume_class
                     })
-                    
-                    # Pequeña pausa cada 10 criptos para evitar sobrecarga
-                    if i % 10 == 0:
-                        time.sleep(1)
-                        
-                except Exception as e:
-                    logger.error(f"Error procesando {crypto}: {str(e)}")
+                
+                # Liberar memoria entre lotes
+                time.sleep(1)
             
             # Ordenar por fuerza de tendencia (ADX)
             long_signals.sort(key=lambda x: x['adx'], reverse=True)
             short_signals.sort(key=lambda x: x['adx'], reverse=True)
             
-            # Actualizar resultados globales
-            with analysis_lock:
-                analysis_results['long_signals'] = long_signals
-                analysis_results['short_signals'] = short_signals
-                analysis_results['scatter_data'] = scatter_data
-                analysis_results['last_update'] = datetime.now()
+            # Actualizar caché con bloqueo
+            with cache_lock:
+                crypto_cache = {
+                    'long_signals': long_signals,
+                    'short_signals': short_signals,
+                    'scatter_data': scatter_data,
+                    'last_update': datetime.now()
+                }
             
             elapsed = time.time() - start_time
-            logger.info(f"Actualización completada en {elapsed:.2f}s: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(scatter_data)} puntos scatter")
+            logger.info(f"Update completed in {elapsed:.2f}s: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(scatter_data)} points")
         except Exception as e:
-            logger.error(f"Error en actualización de fondo: {str(e)}")
+            logger.error(f"Error in data update: {str(e)}")
         
         time.sleep(CACHE_TIME)
 
-# Iniciar hilo de actualización en segundo plano
+# Iniciar hilo de actualización
 try:
-    update_thread = threading.Thread(target=background_update, daemon=True)
+    update_thread = threading.Thread(target=update_crypto_data, daemon=True)
     update_thread.start()
-    logger.info("Hilo de actualización iniciado")
+    logger.info("Background update thread started")
 except Exception as e:
-    logger.error(f"No se pudo iniciar el hilo de actualización: {str(e)}")
+    logger.error(f"Could not start update thread: {str(e)}")
 
 @app.route('/')
 def index():
-    with analysis_lock:
-        long_signals = analysis_results['long_signals']
-        short_signals = analysis_results['short_signals']
-        scatter_data = analysis_results['scatter_data']
-        last_update = analysis_results['last_update']
+    with cache_lock:
+        long_signals = crypto_cache['long_signals']
+        short_signals = crypto_cache['short_signals']
+        scatter_data = crypto_cache['scatter_data']
+        last_update = crypto_cache['last_update']
     
     # Estadísticas para gráficos
     signal_count = len(long_signals) + len(short_signals)
     avg_adx_long = np.mean([s['adx'] for s in long_signals]) if long_signals else 0
     avg_adx_short = np.mean([s['adx'] for s in short_signals]) if short_signals else 0
     
-    logger.info(f"Enviando a frontend: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(scatter_data)} puntos")
+    logger.info(f"Sending to frontend: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(scatter_data)} points")
     
     return render_template('index.html', 
                            long_signals=long_signals[:50], 
@@ -508,36 +514,53 @@ def index():
                            signal_count=signal_count,
                            avg_adx_long=round(avg_adx_long, 2),
                            avg_adx_short=round(avg_adx_short, 2),
-                           scatter_data=json.dumps(scatter_data))
+                           scatter_data=scatter_data)
 
 @app.route('/chart/<symbol>/<signal_type>')
 def get_chart(symbol, signal_type):
     df = get_kucoin_data(symbol, DEFAULTS['timeframe'])
     if df is None:
-        return "Datos no disponibles", 404
+        return "Data not available", 404
     
     df = calculate_indicators(df, DEFAULTS)
     if df is None or len(df) < 20:
-        return "Datos insuficientes para generar gráfico", 404
+        return "Insufficient data to generate chart", 404
     
-    # Buscar señal correspondiente
-    with analysis_lock:
-        signals = analysis_results['long_signals'] if signal_type == 'long' else analysis_results['short_signals']
+    with cache_lock:
+        signals = crypto_cache['long_signals'] if signal_type == 'long' else crypto_cache['short_signals']
+    
+    if signals is None:
+        return "Signals not available", 404
     
     signal = next((s for s in signals if s['symbol'] == symbol), None)
     
     if not signal:
-        return "Señal no encontrada", 404
+        return "Signal not found", 404
     
     plot_url = generate_chart(df, signal, signal_type)
     if not plot_url:
-        return "Error generando gráfico", 500
+        return "Error generating chart", 500
         
     return render_template('chart.html', plot_url=plot_url, symbol=symbol, signal_type=signal_type)
 
 @app.route('/manual')
 def manual():
     return render_template('manual.html')
+
+@app.route('/data')
+def get_data():
+    with cache_lock:
+        long_signals = crypto_cache['long_signals']
+        short_signals = crypto_cache['short_signals']
+        scatter_data = crypto_cache['scatter_data']
+        last_update = crypto_cache['last_update']
+    
+    return jsonify({
+        'long_signals': long_signals,
+        'short_signals': short_signals,
+        'scatter_data': scatter_data,
+        'last_update': last_update.isoformat()
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
