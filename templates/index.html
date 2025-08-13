@@ -6,8 +6,6 @@
     <title>wgta Crypto Trading Signals</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.0.0"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -22,8 +20,6 @@
         .signal-card:hover { transform: translateY(-5px); }
         .long-bg { background-color: #e8f5e9; }
         .short-bg { background-color: #ffebee; }
-        .volume-high { color: #d32f2f; font-weight: bold; }
-        .volume-medium { color: #f57c00; }
         .chart-container { position: relative; height: 300px; margin-bottom: 20px; }
         .signal-table th { position: sticky; top: 0; background: white; z-index: 10; }
         .signal-table-container { max-height: 600px; overflow-y: auto; }
@@ -32,15 +28,21 @@
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; position: relative; }
         .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.7; }
-        .volume-muy-alto { color: #4CAF50; font-weight: bold; }   /* Verde */
-        .volume-alto { color: #2196F3; font-weight: bold; }        /* Azul */
-        .volume-medio { color: #FFEB3B; font-weight: bold; }      /* Amarillo */
-        .volume-bajo { color: #FF9800; font-weight: bold; }         /* Naranja */
-        .volume-muy-bajo { color: #F44336; font-weight: bold; }    /* Rojo */
+        .volume-muy-alto { background-color: #4CAF50; }   /* Verde */
+        .volume-alto { background-color: #2196F3; }        /* Azul */
+        .volume-medio { background-color: #FFEB3B; }      /* Amarillo */
+        .volume-bajo { background-color: #FF9800; }         /* Naranja */
+        .volume-muy-bajo { background-color: #F44336; }    /* Rojo */
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
-        .status-bar { background-color: #e9ecef; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        .update-indicator {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .updating { background-color: #FFC107; color: #000; }
+        .updated { background-color: #4CAF50; color: #fff; }
     </style>
 </head>
 <body>
@@ -49,11 +51,10 @@
             <div>
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
-                <div class="status-bar">
-                    <p class="mb-1"><i class="fas fa-sync-alt"></i> Última actualización: <span id="last-update">{{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</span></p>
-                    <p class="mb-1"><i class="fas fa-coins"></i> Criptos monitoreadas: <span id="crypto-count">{{ crypto_count }}</span></p>
-                    <p class="mb-0"><i class="fas fa-signal"></i> Señales detectadas: <span id="signal-count">{{ signal_count }}</span> (<span class="text-success">{{ long_signals|length }} LONG</span>, <span class="text-danger">{{ short_signals|length }} SHORT</span>)</p>
-                </div>
+                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: 
+                    <span id="last-update">{{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                    <span id="update-status" class="update-indicator updated">Actualizado</span>
+                </p>
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
@@ -63,43 +64,68 @@
                 <a href="/manual" class="btn btn-sm btn-outline-info">
                     <i class="fas fa-book"></i> Manual
                 </a>
+                <button id="manual-update" class="btn btn-sm btn-warning mt-1">
+                    <i class="fas fa-sync"></i> Actualizar Ahora
+                </button>
             </div>
         </header>
 
         <!-- Sección de Filtros -->
         <div class="filter-section">
             <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
-            <form id="filters-form" class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label">Temporalidad</label>
-                    <select name="timeframe" class="form-select">
-                        {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
-                        <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
-                            {{ tf }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="col-md-3">
-                    <label class="form-label">EMA Rápida</label>
-                    <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control" min="1" max="50">
-                </div>
-                
-                <div class="col-md-3">
-                    <label class="form-label">EMA Lenta</label>
-                    <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control" min="1" max="100">
-                </div>
-                
-                <div class="col-md-3">
-                    <label class="form-label">ADX Nivel</label>
-                    <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" min="1" max="100">
-                </div>
-                
-                <div class="col-md-12 mt-4">
-                    <button type="button" id="update-btn" class="btn btn-primary w-100">
-                        <i class="fas fa-sync-alt"></i> Actualizar Parámetros
-                    </button>
+            <form method="POST" id="filters-form">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Temporalidad</label>
+                        <select name="timeframe" class="form-select">
+                            {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
+                            <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
+                                {{ tf }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">EMA Rápida</label>
+                        <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control" min="1" max="50">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">EMA Lenta</label>
+                        <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control" min="1" max="100">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">ADX Período</label>
+                        <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control" min="1" max="50">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">ADX Nivel</label>
+                        <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" min="1" max="100">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">RSI Período</label>
+                        <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control" min="1" max="50">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">S/R Ventana</label>
+                        <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control" min="10" max="200">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">Máximo Riesgo (%)</label>
+                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1" min="0.1" max="5">
+                    </div>
+                    
+                    <div class="col-md-12 mt-4">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -153,11 +179,11 @@
                     <label class="me-2 text-white">Filtrar por Volumen:</label>
                     <select id="volume-filter" class="form-select form-select-sm">
                         <option value="all">Todos</option>
-                        <option value="Muy Alto">Muy Alto</option>
-                        <option value="Alto">Alto</option>
-                        <option value="Medio">Medio</option>
-                        <option value="Bajo">Bajo</option>
-                        <option value="Muy Bajo">Muy Bajo</option>
+                        <option value="muy-alto">Muy Alto</option>
+                        <option value="alto">Alto</option>
+                        <option value="medio">Medio</option>
+                        <option value="bajo">Bajo</option>
+                        <option value="muy-bajo">Muy Bajo</option>
                     </select>
                 </div>
             </div>
@@ -209,10 +235,11 @@
             <div class="col-md-6">
                 <div class="card mb-4">
                     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG (<span id="long-count">{{ long_signals|length }}</span>)</h2>
-                        <span class="badge badge-long">ADX Prom: <span id="avg-adx-long">{{ avg_adx_long }}</span></span>
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }})</h2>
+                        <span class="badge badge-long">ADX Prom: {{ avg_adx_long }}</span>
                     </div>
                     <div class="card-body">
+                        {% if long_signals %}
                         <div class="signal-table-container">
                             <table class="table table-hover signal-table">
                                 <thead class="table-light">
@@ -220,35 +247,44 @@
                                         <th>#</th>
                                         <th>Cripto</th>
                                         <th>Precio</th>
-                                        <th>Prob</th>
+                                        <th>Entrada</th>
+                                        <th>Distancia</th>
+                                        <th>SL</th>
+                                        <th>TP1</th>
+                                        <th>TP2</th>
                                         <th>Volumen</th>
                                         <th>ADX</th>
                                         <th>Gráfico</th>
                                     </tr>
                                 </thead>
-                                <tbody id="long-table-body">
+                                <tbody>
                                     {% for signal in long_signals %}
                                     <tr class="long-bg">
                                         <td>{{ loop.index }}</td>
                                         <td>{{ signal.symbol }}</td>
-                                        <td>{{ signal.price|round(4) }}</td>
-                                        <td>{{ signal.long_prob }}%</td>
-                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
-                                        <td>{{ signal.adx|round(2) }}</td>
+                                        <td>{{ signal.price }}</td>
+                                        <td>{{ signal.entry }}</td>
+                                        <td>{{ signal.distance }}%</td>
+                                        <td class="text-danger">{{ signal.sl }}</td>
+                                        <td class="text-success">{{ signal.tp1 }}</td>
+                                        <td class="text-success">{{ signal.tp2 }}</td>
+                                        <td class="volume-{{ signal.volume }}">{{ signal.volume|replace('-', ' ')|title }}</td>
+                                        <td>{{ signal.adx }}</td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
                                                 <i class="fas fa-chart-line"></i>
                                             </a>
                                         </td>
                                     </tr>
-                                    {% else %}
-                                    <tr>
-                                        <td colspan="7" class="text-center">No hay señales LONG disponibles</td>
-                                    </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
+                        {% else %}
+                        <div class="alert alert-warning">
+                            No se encontraron señales LONG en este momento
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -256,10 +292,11 @@
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT (<span id="short-count">{{ short_signals|length }}</span>)</h2>
-                        <span class="badge badge-short">ADX Prom: <span id="avg-adx-short">{{ avg_adx_short }}</span></span>
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
+                        <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
                     </div>
                     <div class="card-body">
+                        {% if short_signals %}
                         <div class="signal-table-container">
                             <table class="table table-hover signal-table">
                                 <thead class="table-light">
@@ -267,35 +304,44 @@
                                         <th>#</th>
                                         <th>Cripto</th>
                                         <th>Precio</th>
-                                        <th>Prob</th>
+                                        <th>Entrada</th>
+                                        <th>Distancia</th>
+                                        <th>SL</th>
+                                        <th>TP1</th>
+                                        <th>TP2</th>
                                         <th>Volumen</th>
                                         <th>ADX</th>
                                         <th>Gráfico</th>
                                     </tr>
                                 </thead>
-                                <tbody id="short-table-body">
+                                <tbody>
                                     {% for signal in short_signals %}
                                     <tr class="short-bg">
                                         <td>{{ loop.index }}</td>
                                         <td>{{ signal.symbol }}</td>
-                                        <td>{{ signal.price|round(4) }}</td>
-                                        <td>{{ signal.short_prob }}%</td>
-                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
-                                        <td>{{ signal.adx|round(2) }}</td>
+                                        <td>{{ signal.price }}</td>
+                                        <td>{{ signal.entry }}</td>
+                                        <td>{{ signal.distance }}%</td>
+                                        <td class="text-danger">{{ signal.sl }}</td>
+                                        <td class="text-success">{{ signal.tp1 }}</td>
+                                        <td class="text-success">{{ signal.tp2 }}</td>
+                                        <td class="volume-{{ signal.volume }}">{{ signal.volume|replace('-', ' ')|title }}</td>
+                                        <td>{{ signal.adx }}</td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
                                                 <i class="fas fa-chart-line"></i>
                                             </a>
                                         </td>
                                     </tr>
-                                    {% else %}
-                                    <tr>
-                                        <td colspan="7" class="text-center">No hay señales SHORT disponibles</td>
-                                    </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
+                        {% else %}
+                        <div class="alert alert-warning">
+                            No se encontraron señales SHORT en este momento
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -305,29 +351,39 @@
     <script>
         // Variables globales
         let marketChart, longStatsChart, shortStatsChart, scatterChart;
-        let currentData = {
-            long_signals: {{ long_signals|tojson }},
-            short_signals: {{ short_signals|tojson }},
-            scatter_data: {{ scatter_data|tojson }},
-            crypto_count: {{ crypto_count }},
-            signal_count: {{ signal_count }},
-            avg_adx_long: {{ avg_adx_long }},
-            avg_adx_short: {{ avg_adx_short }}
-        };
-
+        let lastUpdateTimestamp = "{{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}";
+        
         // Función para inicializar gráficos
         function initCharts() {
             // Gráfico de resumen
             const marketCtx = document.getElementById('marketChart').getContext('2d');
             marketChart = new Chart(marketCtx, {
                 type: 'doughnut',
-                data: getMarketChartData(),
+                data: {
+                    labels: ['LONG', 'SHORT', 'Neutral'],
+                    datasets: [{
+                        data: [
+                            {{ long_signals|length }}, 
+                            {{ short_signals|length }}, 
+                            {{ 150 - long_signals|length - short_signals|length }}
+                        ],
+                        backgroundColor: [
+                            'rgba(46, 204, 113, 0.7)',
+                            'rgba(231, 76, 60, 0.7)',
+                            'rgba(149, 165, 166, 0.7)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { position: 'bottom' },
-                        title: { display: true, text: 'Distribución de Señales' }
+                        title: {
+                            display: true,
+                            text: 'Distribución de Señales'
+                        }
                     }
                 }
             });
@@ -336,12 +392,32 @@
             const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
             longStatsChart = new Chart(longStatsCtx, {
                 type: 'bar',
-                data: getLongStatsChartData(),
+                data: {
+                    labels: ['Distancia a Entrada'],
+                    datasets: [{
+                        label: 'Distancia Promedio (%)',
+                        data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
+                        backgroundColor: 'rgba(46, 204, 113, 0.7)'
+                    }]
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Distancia (%)' } } },
-                    plugins: { title: { display: true, text: 'Estadísticas Señales LONG' } }
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Distancia (%)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Estadísticas Señales LONG'
+                        }
+                    }
                 }
             });
             
@@ -349,99 +425,62 @@
             const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
             shortStatsChart = new Chart(shortStatsCtx, {
                 type: 'bar',
-                data: getShortStatsChartData(),
+                data: {
+                    labels: ['Distancia a Entrada'],
+                    datasets: [{
+                        label: 'Distancia Promedio (%)',
+                        data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
+                        backgroundColor: 'rgba(231, 76, 60, 0.7)'
+                    }]
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Distancia (%)' } } },
-                    plugins: { title: { display: true, text: 'Estadísticas Señales SHORT' } }
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Distancia (%)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Estadísticas Señales SHORT'
+                        }
+                    }
                 }
             });
             
             // Gráfico de dispersión
             const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-            scatterChart = new Chart(scatterCtx, {
-                type: 'scatter',
-                data: getScatterChartData(),
-                options: getScatterChartOptions()
-            });
-        }
-
-        // Funciones para obtener datos de gráficos
-        function getMarketChartData() {
-            const longCount = currentData.long_signals.length;
-            const shortCount = currentData.short_signals.length;
-            const neutralCount = currentData.crypto_count - longCount - shortCount;
+            const scatterData = JSON.parse('{{ scatter_data|safe }}');
             
-            return {
-                labels: ['LONG', 'SHORT', 'Neutral'],
-                datasets: [{
-                    data: [longCount, shortCount, neutralCount],
-                    backgroundColor: [
-                        'rgba(46, 204, 113, 0.7)',
-                        'rgba(231, 76, 60, 0.7)',
-                        'rgba(149, 165, 166, 0.7)'
-                    ],
-                    borderWidth: 1
-                }]
-            };
-        }
-
-        function getLongStatsChartData() {
-            const avgProb = currentData.long_signals.length > 0 ? 
-                currentData.long_signals.reduce((sum, s) => sum + s.long_prob, 0) / currentData.long_signals.length : 0;
-            
-            return {
-                labels: ['Probabilidad Promedio'],
-                datasets: [{
-                    label: 'Probabilidad Promedio (%)',
-                    data: [avgProb],
-                    backgroundColor: 'rgba(46, 204, 113, 0.7)'
-                }]
-            };
-        }
-
-        function getShortStatsChartData() {
-            const avgProb = currentData.short_signals.length > 0 ? 
-                currentData.short_signals.reduce((sum, s) => sum + s.short_prob, 0) / currentData.short_signals.length : 0;
-            
-            return {
-                labels: ['Probabilidad Promedio'],
-                datasets: [{
-                    label: 'Probabilidad Promedio (%)',
-                    data: [avgProb],
-                    backgroundColor: 'rgba(231, 76, 60, 0.7)'
-                }]
-            };
-        }
-
-        function getScatterChartData() {
             // Mapeo de colores por volumen
             const volumeColors = {
-                'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-                'Alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-                'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-                'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-                'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+                'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+                'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+                'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+                'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+                'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
             };
             
             // Preparar datos para el gráfico
             const datasets = [];
-            const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
+            const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
             
             volumes.forEach(vol => {
-                const data = currentData.scatter_data
-                    .filter(item => item.volume === vol)
-                    .map(item => ({
-                        x: item.short_prob,
-                        y: item.long_prob,
-                        symbol: item.symbol,
-                        price: item.price
-                    }));
+                const data = scatterData.filter(item => item.volume === vol).map(item => ({
+                    x: item.short_prob,
+                    y: item.long_prob,
+                    symbol: item.symbol
+                }));
                 
                 if (data.length > 0) {
                     datasets.push({
-                        label: vol,
+                        label: vol.replace('-', ' ').toUpperCase(),
                         data: data,
                         backgroundColor: volumeColors[vol],
                         pointRadius: 8,
@@ -450,193 +489,127 @@
                 }
             });
             
-            return { datasets };
-        }
-
-        function getScatterChartOptions() {
-            return {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        title: { display: true, text: 'Probabilidad SHORT (%)' },
-                        min: 0,
-                        max: 100,
-                        ticks: { callback: value => value + '%' }
-                    },
-                    y: {
-                        title: { display: true, text: 'Probabilidad LONG (%)' },
-                        min: 0,
-                        max: 100,
-                        ticks: { callback: value => value + '%' }
-                    }
+            // Crear gráfico de dispersión
+            scatterChart = new Chart(scatterCtx, {
+                type: 'scatter',
+                data: {
+                    datasets: datasets
                 },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: context => {
-                                const data = context.raw;
-                                return `${data.symbol}: ${data.price} USDT - LONG ${data.y}%, SHORT ${data.x}%`;
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Probabilidad SHORT (%)'
+                            },
+                            min: 0,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Probabilidad LONG (%)'
+                            },
+                            min: 0,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
                             }
                         }
                     },
-                    title: { display: true, text: 'Probabilidades de Trading por Criptomoneda' },
-                    legend: { display: true, position: 'bottom' }
-                },
-                animation: { duration: 2000, easing: 'easeOutQuart' }
-            };
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.raw.symbol + ': LONG ' + context.raw.y + '%, SHORT ' + context.raw.x + '%';
+                                }
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Probabilidades de Trading por Criptomoneda'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'bottom'
+                        }
+                    },
+                    animation: {
+                        duration: 2000,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            });
+            
+            // Filtro por volumen
+            document.getElementById('volume-filter').addEventListener('change', function() {
+                const filter = this.value;
+                scatterChart.data.datasets.forEach(dataset => {
+                    dataset.hidden = filter !== 'all' && !dataset.label.toLowerCase().includes(filter);
+                });
+                scatterChart.update();
+            });
         }
-
-        // Función para actualizar datos
-        function fetchData() {
-            fetch('/data')
-                .then(response => {
-                    if (!response.ok) throw new Error('Error en la respuesta del servidor');
-                    return response.json();
-                })
+        
+        // Función para actualizar manualmente
+        function manualUpdate() {
+            const updateBtn = document.getElementById('manual-update');
+            const statusEl = document.getElementById('update-status');
+            
+            updateBtn.disabled = true;
+            statusEl.textContent = 'Actualizando...';
+            statusEl.className = 'update-indicator updating';
+            
+            fetch('/update', { method: 'POST' })
+                .then(response => response.json())
                 .then(data => {
-                    currentData = {
-                        long_signals: data.long_signals,
-                        short_signals: data.short_signals,
-                        scatter_data: data.scatter_data,
-                        crypto_count: currentData.crypto_count,
-                        signal_count: data.long_signals.length + data.short_signals.length,
-                        avg_adx_long: data.long_signals.length > 0 ? 
-                            data.long_signals.reduce((sum, s) => sum + s.adx, 0) / data.long_signals.length : 0,
-                        avg_adx_short: data.short_signals.length > 0 ? 
-                            data.short_signals.reduce((sum, s) => sum + s.adx, 0) / data.short_signals.length : 0
-                    };
-                    
-                    // Actualizar estado
-                    const lastUpdate = luxon.DateTime.fromISO(data.last_update).toFormat('yyyy-MM-dd HH:mm:ss');
-                    document.getElementById('last-update').textContent = lastUpdate;
-                    document.getElementById('signal-count').textContent = currentData.signal_count;
-                    document.getElementById('long-count').textContent = currentData.long_signals.length;
-                    document.getElementById('short-count').textContent = currentData.short_signals.length;
-                    document.getElementById('avg-adx-long').textContent = currentData.avg_adx_long.toFixed(2);
-                    document.getElementById('avg-adx-short').textContent = currentData.avg_adx_short.toFixed(2);
-                    
-                    // Actualizar gráficos
-                    updateCharts();
-                    updateTables();
+                    if (data.status === 'update_started') {
+                        // Verificar estado periódicamente
+                        const checkInterval = setInterval(() => {
+                            fetch('/')
+                                .then(response => response.text())
+                                .then(html => {
+                                    const parser = new DOMParser();
+                                    const doc = parser.parseFromString(html, 'text/html');
+                                    const newTimestamp = doc.getElementById('last-update').textContent;
+                                    
+                                    if (newTimestamp !== lastUpdateTimestamp) {
+                                        clearInterval(checkInterval);
+                                        location.reload();
+                                    }
+                                });
+                        }, 3000);
+                    }
                 })
                 .catch(error => {
-                    console.error('Error fetching data:', error);
+                    console.error('Update error:', error);
+                    statusEl.textContent = 'Error en actualización';
+                    updateBtn.disabled = false;
                 });
         }
-
-        // Función para actualizar gráficos
-        function updateCharts() {
-            // Actualizar datos de gráficos
-            marketChart.data = getMarketChartData();
-            longStatsChart.data = getLongStatsChartData();
-            shortStatsChart.data = getShortStatsChartData();
-            scatterChart.data = getScatterChartData();
-            
-            // Actualizar gráficos
-            marketChart.update();
-            longStatsChart.update();
-            shortStatsChart.update();
-            scatterChart.update();
-        }
-
-        // Función para actualizar tablas
-        function updateTables() {
-            // Actualizar tabla LONG
-            const longTableBody = document.getElementById('long-table-body');
-            longTableBody.innerHTML = '';
-            
-            if (currentData.long_signals.length === 0) {
-                longTableBody.innerHTML = '<tr><td colspan="7" class="text-center">No hay señales LONG disponibles</td></tr>';
-            } else {
-                currentData.long_signals.slice(0, 50).forEach((signal, index) => {
-                    const row = document.createElement('tr');
-                    row.className = 'long-bg';
-                    row.innerHTML = `
-                        <td>${index + 1}</td>
-                        <td>${signal.symbol}</td>
-                        <td>${signal.price.toFixed(4)}</td>
-                        <td>${signal.long_prob}%</td>
-                        <td class="volume-${signal.volume.toLowerCase().replace(' ', '-')}">${signal.volume}</td>
-                        <td>${signal.adx.toFixed(2)}</td>
-                        <td>
-                            <a href="/chart/${signal.symbol}/long" class="btn btn-sm btn-info">
-                                <i class="fas fa-chart-line"></i>
-                            </a>
-                        </td>
-                    `;
-                    longTableBody.appendChild(row);
-                });
-            }
-            
-            // Actualizar tabla SHORT
-            const shortTableBody = document.getElementById('short-table-body');
-            shortTableBody.innerHTML = '';
-            
-            if (currentData.short_signals.length === 0) {
-                shortTableBody.innerHTML = '<tr><td colspan="7" class="text-center">No hay señales SHORT disponibles</td></tr>';
-            } else {
-                currentData.short_signals.slice(0, 50).forEach((signal, index) => {
-                    const row = document.createElement('tr');
-                    row.className = 'short-bg';
-                    row.innerHTML = `
-                        <td>${index + 1}</td>
-                        <td>${signal.symbol}</td>
-                        <td>${signal.price.toFixed(4)}</td>
-                        <td>${signal.short_prob}%</td>
-                        <td class="volume-${signal.volume.toLowerCase().replace(' ', '-')}">${signal.volume}</td>
-                        <td>${signal.adx.toFixed(2)}</td>
-                        <td>
-                            <a href="/chart/${signal.symbol}/short" class="btn btn-sm btn-info">
-                                <i class="fas fa-chart-line"></i>
-                            </a>
-                        </td>
-                    `;
-                    shortTableBody.appendChild(row);
-                });
-            }
-        }
-
-        // Event listeners
-        document.getElementById('volume-filter').addEventListener('change', function() {
-            const filter = this.value;
-            scatterChart.data.datasets.forEach(dataset => {
-                dataset.hidden = filter !== 'all' && dataset.label !== filter;
-            });
-            scatterChart.update();
-        });
-
-        document.getElementById('update-btn').addEventListener('click', function() {
-            const formData = new FormData(document.getElementById('filters-form'));
-            const params = Object.fromEntries(formData.entries());
-            
-            fetch('/update-params', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(params)
-            })
-            .then(response => {
-                if (response.ok) {
-                    alert('Parámetros actualizados correctamente');
-                    fetchData();
-                } else {
-                    alert('Error actualizando parámetros');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error de conexión');
-            });
-        });
-
-        // Inicializar gráficos
-        initCharts();
         
-        // Actualizar datos cada 60 segundos
-        setInterval(fetchData, 60000);
+        // Auto-refresh cada 60 segundos
+        function startAutoRefresh() {
+            setTimeout(() => {
+                location.reload();
+            }, 60000);
+        }
         
-        // Actualizar datos inmediatamente después de cargar
-        setTimeout(fetchData, 5000);
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            document.getElementById('manual-update').addEventListener('click', manualUpdate);
+            startAutoRefresh();
+        });
     </script>
 </body>
 </html>
