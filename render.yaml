@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: cryptosignals
+    name: cryptotrendwgta
     env: python
     buildCommand: chmod +x build.sh && ./build.sh
     startCommand: gunicorn app:app
