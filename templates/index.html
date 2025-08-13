@@ -30,33 +30,24 @@
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; position: relative; }
         .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.7; }
-        .volume-very-high { background-color: #4CAF50; }   /* Verde */
-        .volume-high { background-color: #2196F3; }        /* Azul */
-        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
-        .volume-low { background-color: #FF9800; }         /* Naranja */
-        .volume-very-low { background-color: #F44336; }    /* Rojo */
+        .volume-muy-alto { background-color: #4CAF50; }   /* Verde */
+        .volume-alto { background-color: #2196F3; }        /* Azul */
+        .volume-medio { background-color: #FFEB3B; }      /* Amarillo */
+        .volume-bajo { background-color: #FF9800; }         /* Naranja */
+        .volume-muy-bajo { background-color: #F44336; }    /* Rojo */
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
-        .debug-info {
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 12px;
-            z-index: 1000;
-        }
+        
+        /* Colores de volumen para celdas */
+        .volume-muy-alto { background-color: #4CAF50; color: white; }
+        .volume-alto { background-color: #2196F3; color: white; }
+        .volume-medio { background-color: #FFEB3B; }
+        .volume-bajo { background-color: #FF9800; color: white; }
+        .volume-muy-bajo { background-color: #F44336; color: white; }
     </style>
 </head>
 <body>
-    <div class="debug-info">
-        Señales: {{ long_signals|length }}L / {{ short_signals|length }}S | 
-        Scatter: {{ scatter_count }} puntos | 
-        Actualizado: {{ last_update.strftime('%H:%M:%S') }}
-    </div>
-    
     <div class="container py-4">
         <header class="d-flex justify-content-between align-items-center mb-4 border-bottom">
             <div>
@@ -465,8 +456,8 @@
         
         // Gráfico de dispersión
         const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = JSON.parse('{{ scatter_data|safe }}');
-        console.log("Datos de dispersión:", scatterData);
+        const scatterData = {{ scatter_data|safe }};
+        console.log("Scatter data:", scatterData);
         
         // Mapeo de colores por volumen
         const volumeColors = {
@@ -479,7 +470,8 @@
         
         // Preparar datos para el gráfico
         const datasets = [];
-        const volumeGroups = {
+        const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
+        const volumeLabels = {
             'muy-alto': 'Muy Alto',
             'alto': 'Alto',
             'medio': 'Medio',
@@ -487,25 +479,27 @@
             'muy-bajo': 'Muy Bajo'
         };
         
-        for (const [volumeKey, volumeLabel] of Object.entries(volumeGroups)) {
-            const data = scatterData
-                .filter(item => item.volume.toLowerCase().replace(' ', '-') === volumeKey)
-                .map(item => ({
-                    x: item.short_prob,
-                    y: item.long_prob,
-                    symbol: item.symbol
-                }));
+        volumes.forEach(vol => {
+            const data = scatterData.filter(item => {
+                // Normalizar el volumen del ítem
+                const itemVol = item.volume.toLowerCase().replace(' ', '-');
+                return itemVol === vol;
+            }).map(item => ({
+                x: item.short_prob,
+                y: item.long_prob,
+                symbol: item.symbol
+            }));
             
             if (data.length > 0) {
                 datasets.push({
-                    label: volumeLabel,
+                    label: volumeLabels[vol],
                     data: data,
-                    backgroundColor: volumeColors[volumeKey],
+                    backgroundColor: volumeColors[vol],
                     pointRadius: 8,
                     pointHoverRadius: 10
                 });
             }
-        }
+        });
         
         // Crear gráfico de dispersión
         const scatterChart = new Chart(scatterCtx, {
