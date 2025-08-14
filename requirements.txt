@@ -3,5 +3,6 @@ flask-caching
 requests
 pandas
 numpy
-plotly
+matplotlib
 gunicorn
+python-dotenv
