@@ -38,10 +38,32 @@
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
-        .crypto-summary { background-color: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .crypto-summary h3 { border-bottom: 2px solid #0d6efd; padding-bottom: 10px; }
-        .crypto-stats { display: flex; justify-content: space-between; }
-        .stat-card { background: white; padding: 10px; border-radius: 8px; text-align: center; width: 32%; }
+        .crypto-info-card {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .crypto-info-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .crypto-info-item {
+            text-align: center;
+            flex: 1;
+        }
+        .crypto-info-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .crypto-info-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
     </style>
 </head>
 <body>
@@ -63,22 +85,20 @@
             </div>
         </header>
 
-        <!-- Resumen de criptomonedas y señales -->
-        <div class="crypto-summary">
-            <h3>Resumen del Sistema</h3>
-            <div class="crypto-stats">
-                <div class="stat-card">
-                    <h4>Criptomonedas Analizadas</h4>
-                    <p class="display-6">{{ scatter_data|length }}</p>
-                    <p class="text-muted">({{ scatter_data|length }} pares USDT)</p>
+        <!-- Panel informativo de criptomonedas -->
+        <div class="crypto-info-card">
+            <div class="crypto-info-content">
+                <div class="crypto-info-item">
+                    <div class="crypto-info-number">{{ processed_cryptos }}</div>
+                    <div class="crypto-info-label">CRIPTOMONEDAS ANALIZADAS</div>
                 </div>
-                <div class="stat-card">
-                    <h4>Señales LONG</h4>
-                    <p class="display-6 text-success">{{ long_signals|length }}</p>
+                <div class="crypto-info-item">
+                    <div class="crypto-info-number">{{ long_signals|length }}</div>
+                    <div class="crypto-info-label">SEÑALES LONG</div>
                 </div>
-                <div class="stat-card">
-                    <h4>Señales SHORT</h4>
-                    <p class="display-6 text-danger">{{ short_signals|length }}</p>
+                <div class="crypto-info-item">
+                    <div class="crypto-info-number">{{ short_signals|length }}</div>
+                    <div class="crypto-info-label">SEÑALES SHORT</div>
                 </div>
             </div>
         </div>
@@ -86,7 +106,7 @@
         <!-- Sección de Filtros -->
         <div class="filter-section">
             <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
-            <form method="GET" id="filters-form">
+            <form method="POST" id="filters-form">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
@@ -382,7 +402,7 @@
                     data: [
                         {{ long_signals|length }}, 
                         {{ short_signals|length }}, 
-                        {{ scatter_data|length - long_signals|length - short_signals|length }}
+                        {{ 150 - long_signals|length - short_signals|length }}
                     ],
                     backgroundColor: [
                         'rgba(46, 204, 113, 0.7)',
@@ -477,32 +497,41 @@
         
         // Mapeo de colores por volumen
         const volumeColors = {
-            'muy-alto': 'rgba(76, 175, 80, 0.8)',     // Verde
-            'alto': 'rgba(33, 150, 243, 0.8)',        // Azul
-            'medio': 'rgba(255, 235, 59, 0.8)',       // Amarillo
-            'bajo': 'rgba(255, 152, 0, 0.8)',         // Naranja
-            'muy-bajo': 'rgba(244, 67, 54, 0.8)'      // Rojo
+            'muy-alto': 'rgba(76, 175, 80, 0.8)',   // Verde
+            'alto': 'rgba(33, 150, 243, 0.8)',      // Azul
+            'medio': 'rgba(255, 235, 59, 0.8)',     // Amarillo
+            'bajo': 'rgba(255, 152, 0, 0.8)',       // Naranja
+            'muy-bajo': 'rgba(244, 67, 54, 0.8)'    // Rojo
         };
         
         // Preparar datos para el gráfico
         const datasets = [];
-        const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
+        const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
+        const volumeLabels = {
+            'muy-alto': 'Muy Alto',
+            'alto': 'Alto',
+            'medio': 'Medio',
+            'bajo': 'Bajo',
+            'muy-bajo': 'Muy Bajo'
+        };
         
         volumes.forEach(vol => {
-            const volumeKey = vol.toLowerCase().replace(' ', '-');
-            const data = scatterData.filter(item => item.volume === vol).map(item => ({
-                x: item.long_prob,
-                y: item.short_prob,
+            const data = scatterData.filter(item => {
+                const volumeClass = item.volume.toLowerCase().replace(' ', '-');
+                return volumeClass === vol;
+            }).map(item => ({
+                x: item.short_prob,
+                y: item.long_prob,
                 symbol: item.symbol
             }));
             
             if (data.length > 0) {
                 datasets.push({
-                    label: vol,
+                    label: volumeLabels[vol],
                     data: data,
-                    backgroundColor: volumeColors[volumeKey],
-                    pointRadius: 8,
-                    pointHoverRadius: 10
+                    backgroundColor: volumeColors[vol],
+                    pointRadius: 6,
+                    pointHoverRadius: 8
                 });
             }
         });
@@ -520,7 +549,7 @@
                     x: {
                         title: {
                             display: true,
-                            text: 'Probabilidad LONG (%)'
+                            text: 'Probabilidad SHORT (%)'
                         },
                         min: 0,
                         max: 100,
@@ -533,7 +562,7 @@
                     y: {
                         title: {
                             display: true,
-                            text: 'Probabilidad SHORT (%)'
+                            text: 'Probabilidad LONG (%)'
                         },
                         min: 0,
                         max: 100,
@@ -548,7 +577,7 @@
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return context.raw.symbol + ': LONG ' + context.raw.x + '%, SHORT ' + context.raw.y + '%';
+                                return context.raw.symbol + ': LONG ' + context.raw.y.toFixed(1) + '%, SHORT ' + context.raw.x.toFixed(1) + '%';
                             }
                         }
                     },
