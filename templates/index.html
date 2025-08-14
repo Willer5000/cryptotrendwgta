@@ -38,11 +38,15 @@
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
-        .volume-muy-alto { color: #4CAF50; font-weight: bold; }
-        .volume-alto { color: #2196F3; font-weight: bold; }
-        .volume-medio { color: #FFEB3B; font-weight: bold; }
-        .volume-bajo { color: #FF9800; font-weight: bold; }
-        .volume-muy-bajo { color: #F44336; font-weight: bold; }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .status-active { background-color: #4CAF50; }
+        .status-inactive { background-color: #F44336; }
     </style>
 </head>
 <body>
@@ -51,7 +55,8 @@
             <div>
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
-                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: <span id="last-update">{{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</span></p>
+                <p class="text-muted">Estado: <span id="system-status"><span class="status-indicator status-inactive"></span> Actualizando...</span></p>
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
@@ -353,231 +358,335 @@
     </div>
 
     <script>
-        // Gráfico de resumen
-        const marketCtx = document.getElementById('marketChart').getContext('2d');
-        const marketChart = new Chart(marketCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['LONG', 'SHORT', 'Neutral'],
-                datasets: [{
-                    data: [
-                        {{ long_signals|length }}, 
-                        {{ short_signals|length }}, 
-                        {{ 150 - long_signals|length - short_signals|length }}
-                    ],
-                    backgroundColor: [
-                        'rgba(46, 204, 113, 0.7)',
-                        'rgba(231, 76, 60, 0.7)',
-                        'rgba(149, 165, 166, 0.7)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom' },
-                    title: {
-                        display: true,
-                        text: 'Distribución de Señales'
+        // Variables globales
+        let scatterChart = null;
+        let marketChart = null;
+        let longStatsChart = null;
+        let shortStatsChart = null;
+        
+        // Función para actualizar todos los gráficos
+        function updateAllCharts() {
+            fetch('/data')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Error en la respuesta del servidor');
                     }
-                }
-            }
-        });
-        
-        // Gráfico de fuerza de tendencia LONG
-        const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
-        const longStatsChart = new Chart(longStatsCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Distancia a Entrada'],
-                datasets: [{
-                    label: 'Distancia Promedio (%)',
-                    data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
-                    backgroundColor: 'rgba(46, 204, 113, 0.7)'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { 
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Distancia (%)'
-                        }
-                    }
-                },
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Estadísticas Señales LONG'
-                    }
-                }
-            }
-        });
-        
-        // Gráfico de fuerza de tendencia SHORT
-        const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
-        const shortStatsChart = new Chart(shortStatsCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Distancia a Entrada'],
-                datasets: [{
-                    label: 'Distancia Promedio (%)',
-                    data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
-                    backgroundColor: 'rgba(231, 76, 60, 0.7)'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { 
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Distancia (%)'
-                        }
-                    }
-                },
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Estadísticas Señales SHORT'
-                    }
-                }
-            }
-        });
-        
-        // Gráfico de dispersión
-        const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        const scatterData = JSON.parse('{{ scatter_data|safe }}');
-        
-        // Mapeo de colores por volumen
-        const volumeColors = {
-            'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-            'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-            'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-            'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
-        };
-        
-        // Preparar datos para el gráfico
-        const datasets = [];
-        const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
-        const volumeLabels = {
-            'muy-alto': 'Muy Alto',
-            'alto': 'Alto',
-            'medio': 'Medio',
-            'bajo': 'Bajo',
-            'muy-bajo': 'Muy Bajo'
-        };
-        
-        volumes.forEach(vol => {
-            const data = scatterData.filter(item => {
-                // Normalizar el volumen para coincidir con las claves
-                const itemVol = item.volume.toLowerCase().replace(' ', '-');
-                return itemVol === vol;
-            }).map(item => ({
-                x: item.short_prob,
-                y: item.long_prob,
-                symbol: item.symbol
-            }));
-            
-            if (data.length > 0) {
-                datasets.push({
-                    label: volumeLabels[vol],
-                    data: data,
-                    backgroundColor: volumeColors[vol],
-                    pointRadius: 8,
-                    pointHoverRadius: 10
+                    return response.json();
+                })
+                .then(data => {
+                    // Actualizar última actualización
+                    document.getElementById('last-update').textContent = data.last_update;
+                    document.getElementById('system-status').innerHTML = 
+                        '<span class="status-indicator status-active"></span> Activo';
+                    
+                    // Actualizar gráfico de dispersión
+                    updateScatterChart(data.scatter_data);
+                    
+                    // Actualizar gráficos de estadísticas
+                    updateMarketCharts(data.long_signals, data.short_signals);
+                    
+                    // Actualizar tablas de señales
+                    updateSignalTables(data.long_signals, data.short_signals);
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                    document.getElementById('system-status').innerHTML = 
+                        '<span class="status-indicator status-inactive"></span> Error de conexión';
                 });
-            }
-        });
+        }
         
-        // Crear gráfico de dispersión
-        const scatterChart = new Chart(scatterCtx, {
-            type: 'scatter',
-            data: {
-                datasets: datasets
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Probabilidad SHORT (%)'
-                        },
-                        min: 0,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
-                            }
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'Probabilidad LONG (%)'
-                        },
-                        min: 0,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return context.raw.symbol + ': LONG ' + context.raw.y + '%, SHORT ' + context.raw.x + '%';
-                            }
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Probabilidades de Trading por Criptomoneda'
-                    },
-                    legend: {
-                        display: true,
-                        position: 'bottom'
-                    }
-                },
-                animation: {
-                    duration: 2000,
-                    easing: 'easeOutQuart'
-                }
+        // Actualizar gráfico de dispersión
+        function updateScatterChart(scatterData) {
+            const scatterCtx = document.getElementById('scatterChart').getContext('2d');
+            
+            // Destruir gráfico existente si existe
+            if (scatterChart) {
+                scatterChart.destroy();
             }
-        });
-        
-        // Filtro por volumen
-        document.getElementById('volume-filter').addEventListener('change', function() {
-            const filter = this.value.toLowerCase().replace(' ', '-');
-            scatterChart.data.datasets.forEach(dataset => {
-                // Ocultar todos los datasets si no es 'all'
-                if (filter === 'all') {
-                    dataset.hidden = false;
-                } else {
-                    // Comparar con la etiqueta normalizada
-                    dataset.hidden = (dataset.label.toLowerCase().replace(' ', '-') !== filter);
+            
+            // Mapeo de colores por volumen
+            const volumeColors = {
+                'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+                'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+                'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+                'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+                'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+            };
+            
+            // Preparar datos para el gráfico
+            const datasets = [];
+            const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
+            
+            volumes.forEach(vol => {
+                const data = scatterData.filter(item => {
+                    const volClass = item.volume.toLowerCase().replace(' ', '-');
+                    return volClass === vol;
+                }).map(item => ({
+                    x: item.short_prob,
+                    y: item.long_prob,
+                    symbol: item.symbol
+                }));
+                
+                if (data.length > 0) {
+                    datasets.push({
+                        label: vol,
+                        data: data,
+                        backgroundColor: volumeColors[vol],
+                        pointRadius: 8,
+                        pointHoverRadius: 10
+                    });
                 }
             });
-            scatterChart.update();
-        });
+            
+            // Crear gráfico de dispersión
+            scatterChart = new Chart(scatterCtx, {
+                type: 'scatter',
+                data: {
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Probabilidad SHORT (%)'
+                            },
+                            min: 0,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Probabilidad LONG (%)'
+                            },
+                            min: 0,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.raw.symbol + ': LONG ' + context.raw.y + '%, SHORT ' + context.raw.x + '%';
+                                }
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Probabilidades de Trading por Criptomoneda'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'bottom'
+                        }
+                    },
+                    animation: {
+                        duration: 2000,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            });
+            
+            // Filtro por volumen
+            document.getElementById('volume-filter').addEventListener('change', function() {
+                const filter = this.value.toLowerCase().replace(' ', '-');
+                scatterChart.data.datasets.forEach(dataset => {
+                    dataset.hidden = filter !== 'all' && dataset.label !== filter;
+                });
+                scatterChart.update();
+            });
+        }
         
-        // Auto-refresh cada 60 segundos
-        setTimeout(() => {
-            location.reload();
-        }, 60000);
+        // Actualizar gráficos de estadísticas
+        function updateMarketCharts(longSignals, shortSignals) {
+            // Destruir gráficos existentes si existen
+            if (marketChart) marketChart.destroy();
+            if (longStatsChart) longStatsChart.destroy();
+            if (shortStatsChart) shortStatsChart.destroy();
+            
+            // Gráfico de resumen
+            const marketCtx = document.getElementById('marketChart').getContext('2d');
+            marketChart = new Chart(marketCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['LONG', 'SHORT', 'Neutral'],
+                    datasets: [{
+                        data: [
+                            longSignals.length, 
+                            shortSignals.length, 
+                            150 - longSignals.length - shortSignals.length
+                        ],
+                        backgroundColor: [
+                            'rgba(46, 204, 113, 0.7)',
+                            'rgba(231, 76, 60, 0.7)',
+                            'rgba(149, 165, 166, 0.7)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        title: {
+                            display: true,
+                            text: 'Distribución de Señales'
+                        }
+                    }
+                }
+            });
+            
+            // Gráfico de fuerza de tendencia LONG
+            const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
+            longStatsChart = new Chart(longStatsCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Distancia a Entrada'],
+                    datasets: [{
+                        label: 'Distancia Promedio (%)',
+                        data: [longSignals.length > 0 ? 
+                            longSignals.reduce((sum, signal) => sum + signal.distance, 0) / longSignals.length : 0],
+                        backgroundColor: 'rgba(46, 204, 113, 0.7)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Distancia (%)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Estadísticas Señales LONG'
+                        }
+                    }
+                }
+            });
+            
+            // Gráfico de fuerza de tendencia SHORT
+            const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
+            shortStatsChart = new Chart(shortStatsCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Distancia a Entrada'],
+                    datasets: [{
+                        label: 'Distancia Promedio (%)',
+                        data: [shortSignals.length > 0 ? 
+                            shortSignals.reduce((sum, signal) => sum + signal.distance, 0) / shortSignals.length : 0],
+                        backgroundColor: 'rgba(231, 76, 60, 0.7)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Distancia (%)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Estadísticas Señales SHORT'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Actualizar tablas de señales
+        function updateSignalTables(longSignals, shortSignals) {
+            // Actualizar tabla LONG
+            const longTable = document.querySelector('#longTable tbody');
+            longTable.innerHTML = '';
+            
+            longSignals.forEach((signal, index) => {
+                const row = document.createElement('tr');
+                row.className = 'long-bg';
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${signal.symbol}</td>
+                    <td>${signal.price}</td>
+                    <td>${signal.entry}</td>
+                    <td>${signal.distance}%</td>
+                    <td class="text-danger">${signal.sl}</td>
+                    <td class="text-success">${signal.tp1}</td>
+                    <td class="text-success">${signal.tp2}</td>
+                    <td class="volume-${signal.volume.toLowerCase().replace(' ', '-')}">${signal.volume}</td>
+                    <td>${signal.adx}</td>
+                    <td>
+                        <a href="/chart/${signal.symbol}/long" class="btn btn-sm btn-info">
+                            <i class="fas fa-chart-line"></i>
+                        </a>
+                    </td>
+                `;
+                longTable.appendChild(row);
+            });
+            
+            // Actualizar tabla SHORT
+            const shortTable = document.querySelector('#shortTable tbody');
+            shortTable.innerHTML = '';
+            
+            shortSignals.forEach((signal, index) => {
+                const row = document.createElement('tr');
+                row.className = 'short-bg';
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${signal.symbol}</td>
+                    <td>${signal.price}</td>
+                    <td>${signal.entry}</td>
+                    <td>${signal.distance}%</td>
+                    <td class="text-danger">${signal.sl}</td>
+                    <td class="text-success">${signal.tp1}</td>
+                    <td class="text-success">${signal.tp2}</td>
+                    <td class="volume-${signal.volume.toLowerCase().replace(' ', '-')}">${signal.volume}</td>
+                    <td>${signal.adx}</td>
+                    <td>
+                        <a href="/chart/${signal.symbol}/short" class="btn btn-sm btn-info">
+                            <i class="fas fa-chart-line"></i>
+                        </a>
+                    </td>
+                `;
+                shortTable.appendChild(row);
+            });
+        }
+        
+        // Inicializar gráficos al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            // Crear gráficos iniciales con datos del servidor
+            const scatterData = JSON.parse('{{ scatter_data|safe }}');
+            updateScatterChart(scatterData);
+            
+            // Configurar actualización periódica
+            setInterval(updateAllCharts, 30000);  // Actualizar cada 30 segundos
+            
+            // Actualizar inmediatamente
+            updateAllCharts();
+        });
     </script>
 </body>
 </html>
