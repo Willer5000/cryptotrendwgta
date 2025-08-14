@@ -38,20 +38,21 @@
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
-        .info-box {
+        .crypto-info-box {
             background-color: #e9f7fe;
             border-left: 5px solid #2196F3;
             padding: 15px;
             margin-bottom: 20px;
             border-radius: 5px;
         }
-        .crypto-list {
-            max-height: 150px;
-            overflow-y: auto;
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
+        .crypto-point {
+            position: absolute;
+            font-size: 10px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            pointer-events: none;
+            color: white;
+            z-index: 5;
         }
     </style>
 </head>
@@ -74,31 +75,34 @@
             </div>
         </header>
 
-        <!-- Información de análisis -->
-        <div class="info-box">
-            <h4><i class="fas fa-info-circle"></i> Información del Análisis</h4>
+        <!-- Información sobre criptomonedas y señales -->
+        <div class="crypto-info-box">
             <div class="row">
-                <div class="col-md-3">
-                    <p><strong>Criptos analizadas:</strong> {{ num_cryptos }}</p>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-coins fa-2x text-warning me-3"></i>
+                        <div>
+                            <h5 class="mb-0">Criptomonedas Analizadas</h5>
+                            <p class="mb-0">{{ crypto_count }} / 150</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <p><strong>Señales LONG:</strong> {{ long_signals|length }}</p>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-arrow-up fa-2x text-success me-3"></i>
+                        <div>
+                            <h5 class="mb-0">Señales LONG</h5>
+                            <p class="mb-0">{{ long_signals|length }}</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <p><strong>Señales SHORT:</strong> {{ short_signals|length }}</p>
-                </div>
-                <div class="col-md-3">
-                    <p><strong>Total de señales:</strong> {{ long_signals|length + short_signals|length }}</p>
-                </div>
-            </div>
-            
-            <div class="row mt-3">
-                <div class="col-md-12">
-                    <p><strong>Criptomonedas analizadas (USDT pairs):</strong></p>
-                    <div class="crypto-list">
-                        {% for crypto in cryptos_analizadas %}
-                        <span class="badge bg-secondary me-1 mb-1">{{ crypto }}-USDT</span>
-                        {% endfor %}
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-arrow-down fa-2x text-danger me-3"></i>
+                        <div>
+                            <h5 class="mb-0">Señales SHORT</h5>
+                            <p class="mb-0">{{ short_signals|length }}</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -107,7 +111,7 @@
         <!-- Sección de Filtros -->
         <div class="filter-section">
             <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
-            <form method="POST" id="filters-form" action="/update">
+            <form method="POST" id="filters-form">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
@@ -271,6 +275,8 @@
                     <div class="grid-line vertical" style="left: 66.6%;"></div>
                     <div class="grid-line horizontal" style="top: 33.3%;"></div>
                     <div class="grid-line horizontal" style="top: 66.6%;"></div>
+                    
+                    <!-- Aquí se añadirán los puntos de las criptomonedas dinámicamente -->
                 </div>
             </div>
         </div>
@@ -403,7 +409,7 @@
                     data: [
                         {{ long_signals|length }}, 
                         {{ short_signals|length }}, 
-                        {{ num_cryptos - long_signals|length - short_signals|length }}
+                        {{ 150 - long_signals|length - short_signals|length }}
                     ],
                     backgroundColor: [
                         'rgba(46, 204, 113, 0.7)',
@@ -498,29 +504,19 @@
         
         // Mapeo de colores por volumen
         const volumeColors = {
-            'muy-alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'alto': 'rgba(54, 162, 235, 0.8)',     // Azul
-            'medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-            'bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-            'muy-bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
+            'Alto': 'rgba(54, 162, 235, 0.8)',     // Azul
+            'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
+            'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
+            'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
         };
         
         // Preparar datos para el gráfico
         const datasets = [];
-        const volumes = ['muy-alto', 'alto', 'medio', 'bajo', 'muy-bajo'];
-        const volumeLabels = {
-            'muy-alto': 'Muy Alto',
-            'alto': 'Alto',
-            'medio': 'Medio',
-            'bajo': 'Bajo',
-            'muy-bajo': 'Muy Bajo'
-        };
+        const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
         
         volumes.forEach(vol => {
-            const data = scatterData.filter(item => {
-                const itemVol = item.volume.toLowerCase().replace(' ', '-');
-                return itemVol === vol;
-            }).map(item => ({
+            const data = scatterData.filter(item => item.volume === vol).map(item => ({
                 x: item.short_prob,
                 y: item.long_prob,
                 symbol: item.symbol
@@ -528,11 +524,11 @@
             
             if (data.length > 0) {
                 datasets.push({
-                    label: volumeLabels[vol],
+                    label: vol,
                     data: data,
                     backgroundColor: volumeColors[vol],
-                    pointRadius: 8,
-                    pointHoverRadius: 10
+                    pointRadius: 5,  // Puntos más pequeños
+                    pointHoverRadius: 7
                 });
             }
         });
@@ -598,12 +594,26 @@
             }
         });
         
+        // Añadir etiquetas de texto sobre los puntos
+        scatterData.forEach(item => {
+            const x = item.short_prob;
+            const y = item.long_prob;
+            const symbol = item.symbol;
+            
+            const pointElement = document.createElement('div');
+            pointElement.className = 'crypto-point';
+            pointElement.textContent = symbol;
+            pointElement.style.left = `${(x / 100) * 100}%`;
+            pointElement.style.top = `${100 - y}%`;  // Invertir eje Y
+            
+            document.querySelector('.scatter-chart-container').appendChild(pointElement);
+        });
+        
         // Filtro por volumen
         document.getElementById('volume-filter').addEventListener('change', function() {
-            const filter = this.value.toLowerCase().replace(' ', '-');
+            const filter = this.value;
             scatterChart.data.datasets.forEach(dataset => {
-                const datasetVol = dataset.label.toLowerCase().replace(' ', '-');
-                dataset.hidden = filter !== 'all' && datasetVol !== filter;
+                dataset.hidden = filter !== 'all' && dataset.label !== filter;
             });
             scatterChart.update();
         });
@@ -612,37 +622,6 @@
         setTimeout(() => {
             location.reload();
         }, 60000);
-        
-        // Manejar el envío del formulario
-        document.getElementById('filters-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const params = {};
-            for (const [key, value] of formData.entries()) {
-                params[key] = value;
-            }
-            
-            try {
-                const response = await fetch('/update', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    },
-                    body: new URLSearchParams(params)
-                });
-                
-                const result = await response.json();
-                if (result.status === 'success') {
-                    alert('Parámetros actualizados correctamente. Recargando...');
-                    setTimeout(() => location.reload(), 2000);
-                } else {
-                    alert('Error: ' + result.message);
-                }
-            } catch (error) {
-                alert('Error al actualizar parámetros: ' + error.message);
-            }
-        });
     </script>
 </body>
 </html>
