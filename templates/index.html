@@ -6,45 +6,245 @@
     <title>wgta Crypto Trading Signals</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --zone-high-long: rgba(46, 204, 113, 0.2);
+            --zone-mid-long: rgba(46, 204, 113, 0.1);
+            --zone-high-short: rgba(231, 76, 60, 0.2);
+            --zone-mid-short: rgba(231, 76, 60, 0.1);
+            --zone-neutral: rgba(255, 235, 59, 0.2);
+        }
+        
+        body { 
+            background-color: #f8f9fa; 
+            padding-top: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .info-box {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
         .signal-card { transition: transform 0.3s; }
         .signal-card:hover { transform: translateY(-5px); }
         .long-bg { background-color: #e8f5e9; }
         .short-bg { background-color: #ffebee; }
-        .volume-high { color: #d32f2f; font-weight: bold; }
-        .volume-medium { color: #f57c00; }
         .chart-container { position: relative; height: 300px; margin-bottom: 20px; }
         .signal-table th { position: sticky; top: 0; background: white; z-index: 10; }
         .signal-table-container { max-height: 600px; overflow-y: auto; }
         .badge-long { background-color: #4CAF50; }
         .badge-short { background-color: #F44336; }
+        .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .scatter-chart-container { height: 600px; position: relative; }
+        
+        .volume-very-high { background-color: #4CAF50; color: white; padding: 2px 5px; border-radius: 3px; }
+        .volume-high { background-color: #2196F3; color: white; padding: 2px 5px; border-radius: 3px; }
+        .volume-medium { background-color: #FFEB3B; padding: 2px 5px; border-radius: 3px; }
+        .volume-low { background-color: #FF9800; color: white; padding: 2px 5px; border-radius: 3px; }
+        .volume-very-low { background-color: #F44336; color: white; padding: 2px 5px; border-radius: 3px; }
+        
+        .crypto-point {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            z-index: 10;
+        }
+        
+        .crypto-label {
+            position: absolute;
+            font-size: 9px;
+            font-weight: bold;
+            transform: translate(-50%, -100%);
+            white-space: nowrap;
+            z-index: 20;
+            text-shadow: 1px 1px 2px white;
+            pointer-events: none;
+        }
+        
+        .btc-label {
+            font-size: 10px;
+            color: #FFD700 !important;
+            text-shadow: 0 0 3px rgba(0,0,0,0.7);
+        }
+        
+        .zone {
+            position: absolute;
+            opacity: 0.2;
+            z-index: 5;
+        }
+        
+        .zone-long-high { background-color: var(--zone-high-long); }
+        .zone-long-mid { background-color: var(--zone-mid-long); }
+        .zone-short-high { background-color: var(--zone-high-short); }
+        .zone-short-mid { background-color: var(--zone-mid-short); }
+        .zone-neutral { background-color: var(--zone-neutral); }
+        
+        .grid-line {
+            position: absolute;
+            background-color: rgba(0,0,0,0.1);
+            z-index: 0;
+        }
+        
+        .grid-line.vertical {
+            width: 1px;
+            height: 100%;
+        }
+        
+        .grid-line.horizontal {
+            height: 1px;
+            width: 100%;
+        }
+        
+        .status-card {
+            transition: all 0.3s;
+        }
+        
+        .status-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body>
     <div class="container py-4">
-        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom">
+        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
             <div>
-                <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
-                <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
-                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                <h1 class="mb-1"><i class="fas fa-chart-line text-primary"></i> wgta Crypto Trading Signals</h1>
+                <p class="text-muted mb-0">Sistema automatizado de detección de oportunidades de trading</p>
+                <p class="text-muted mb-0"><i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</p>
             </div>
             <div class="text-end">
-                <p class="mb-0">Autor: wgta</p>
-                <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary">
+                <p class="mb-1">Autor: wgta</p>
+                <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary mb-1">
                     <i class="fab fa-github"></i> GitHub
                 </a>
-                <a href="/manual" class="btn btn-sm btn-outline-info">
+                <a href="/manual" class="btn btn-sm btn-outline-info mb-1">
                     <i class="fas fa-book"></i> Manual
                 </a>
             </div>
         </header>
 
+        <!-- Panel de información -->
+        <div class="info-box mb-4">
+            <div class="row text-center">
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="card status-card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <i class="fas fa-coins"></i> Criptos Analizadas
+                        </div>
+                        <div class="card-body">
+                            <h2 class="mb-0">{{ cryptos_count }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="card status-card h-100">
+                        <div class="card-header bg-success text-white">
+                            <i class="fas fa-arrow-up"></i> Señales LONG
+                        </div>
+                        <div class="card-body">
+                            <h2 class="mb-0">{{ long_signals|length }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <div class="card status-card h-100">
+                        <div class="card-header bg-danger text-white">
+                            <i class="fas fa-arrow-down"></i> Señales SHORT
+                        </div>
+                        <div class="card-body">
+                            <h2 class="mb-0">{{ short_signals|length }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card status-card h-100">
+                        <div class="card-header bg-info text-white">
+                            <i class="fas fa-signal"></i> Total Señales
+                        </div>
+                        <div class="card-body">
+                            <h2 class="mb-0">{{ long_signals|length + short_signals|length }}</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Filtros -->
+        <div class="filter-section mb-4">
+            <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
+            <form method="POST" id="filters-form">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Temporalidad</label>
+                        <select name="timeframe" class="form-select">
+                            {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
+                            <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
+                                {{ tf }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">EMA Rápida</label>
+                        <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control" min="5" max="50">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">EMA Lenta</label>
+                        <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control" min="10" max="100">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">ADX Período</label>
+                        <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control" min="5" max="50">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">ADX Nivel</label>
+                        <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" min="10" max="50">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">RSI Período</label>
+                        <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control" min="5" max="30">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">S/R Ventana</label>
+                        <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control" min="20" max="100">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">Máximo Riesgo (%)</label>
+                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1" min="0.5" max="5">
+                    </div>
+                    
+                    <div class="col-md-12 mt-4">
+                        <button type="submit" class="btn btn-primary w-100 py-2">
+                            <i class="fas fa-sync-alt me-2"></i> Actualizar Parámetros y Recargar Datos
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Gráficos de resumen -->
         <div class="row mb-4">
-            <div class="col-md-4">
+            <div class="col-md-4 mb-3 mb-md-0">
                 <div class="card h-100">
-                    <div class="card-header bg-primary text-white">
-                        <h2 class="h5 mb-0"><i class="fas fa-chart-pie"></i> Resumen del Mercado</h2>
+                    <div class="card-header bg-primary text-white d-flex align-items-center">
+                        <i class="fas fa-chart-pie me-2"></i>
+                        <span>Resumen del Mercado</span>
                     </div>
                     <div class="card-body">
                         <div class="chart-container">
@@ -54,10 +254,11 @@
                 </div>
             </div>
             
-            <div class="col-md-4">
+            <div class="col-md-4 mb-3 mb-md-0">
                 <div class="card h-100">
-                    <div class="card-header bg-success text-white">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG</h2>
+                    <div class="card-header bg-success text-white d-flex align-items-center">
+                        <i class="fas fa-arrow-up me-2"></i>
+                        <span>Señales LONG</span>
                     </div>
                     <div class="card-body">
                         <div class="chart-container">
@@ -69,8 +270,9 @@
             
             <div class="col-md-4">
                 <div class="card h-100">
-                    <div class="card-header bg-danger text-white">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT</h2>
+                    <div class="card-header bg-danger text-white d-flex align-items-center">
+                        <i class="fas fa-arrow-down me-2"></i>
+                        <span>Señales SHORT</span>
                     </div>
                     <div class="card-body">
                         <div class="chart-container">
@@ -81,17 +283,60 @@
             </div>
         </div>
 
+        <!-- Panel de Probabilidades -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0"><i class="fas fa-chart-scatter me-2"></i> Probabilidades de Trading</h2>
+                <div>
+                    <label class="me-2 text-white">Filtrar por Volumen:</label>
+                    <select id="volume-filter" class="form-select form-select-sm d-inline-block w-auto">
+                        <option value="all">Todos</option>
+                        <option value="Muy Alto">Muy Alto</option>
+                        <option value="Alto">Alto</option>
+                        <option value="Medio">Medio</option>
+                        <option value="Bajo">Bajo</option>
+                        <option value="Muy Bajo">Muy Bajo</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body position-relative p-0">
+                <div class="scatter-chart-container" id="scatterChart">
+                    <!-- Zonas de probabilidad -->
+                    <div class="zone zone-long-high" style="top: 66.6%; left: 0; width: 33.3%; height: 33.3%;"></div>
+                    <div class="zone zone-long-mid" style="top: 66.6%; left: 33.3%; width: 33.3%; height: 33.3%;"></div>
+                    <div class="zone zone-neutral" style="top: 66.6%; left: 66.6%; width: 33.3%; height: 33.3%;"></div>
+                    
+                    <div class="zone zone-long-mid" style="top: 33.3%; left: 0; width: 33.3%; height: 33.3%;"></div>
+                    <div class="zone zone-neutral" style="top: 33.3%; left: 33.3%; width: 33.3%; height: 33.3%;"></div>
+                    <div class="zone zone-short-mid" style="top: 33.3%; left: 66.6%; width: 33.3%; height: 33.3%;"></div>
+                    
+                    <div class="zone zone-neutral" style="top: 0; left: 0; width: 33.3%; height: 33.3%;"></div>
+                    <div class="zone zone-short-mid" style="top: 0; left: 33.3%; width: 33.3%; height: 33.3%;"></div>
+                    <div class="zone zone-short-high" style="top: 0; left: 66.6%; width: 33.3%; height: 33.3%;"></div>
+                    
+                    <!-- Líneas de división -->
+                    <div class="grid-line vertical" style="left: 33.3%;"></div>
+                    <div class="grid-line vertical" style="left: 66.6%;"></div>
+                    <div class="grid-line horizontal" style="top: 33.3%;"></div>
+                    <div class="grid-line horizontal" style="top: 66.6%;"></div>
+                    
+                    <!-- Aquí se dibujarán los puntos -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Tablas de señales -->
         <div class="row">
-            <div class="col-md-6">
-                <div class="card mb-4">
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
                     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }})</h2>
-                        <span class="badge badge-long">ADX Prom: {{ avg_adx_long }}</span>
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up me-2"></i> Señales LONG ({{ long_signals|length }})</h2>
+                        <span class="badge bg-light text-dark">ADX Prom: {{ avg_adx_long }}</span>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-0">
                         {% if long_signals %}
                         <div class="signal-table-container">
-                            <table class="table table-hover signal-table">
+                            <table class="table table-hover signal-table mb-0">
                                 <thead class="table-light">
                                     <tr>
                                         <th>#</th>
@@ -103,7 +348,6 @@
                                         <th>TP1</th>
                                         <th>TP2</th>
                                         <th>Volumen</th>
-                                        <th>ADX</th>
                                         <th>Gráfico</th>
                                     </tr>
                                 </thead>
@@ -112,14 +356,17 @@
                                     <tr class="long-bg">
                                         <td>{{ loop.index }}</td>
                                         <td>{{ signal.symbol }}</td>
-                                        <td>{{ signal.price }}</td>
-                                        <td>{{ signal.entry }}</td>
-                                        <td>{{ signal.distance }}%</td>
-                                        <td class="text-danger">{{ signal.sl }}</td>
-                                        <td class="text-success">{{ signal.tp1 }}</td>
-                                        <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-high">{{ signal.volume }}</td>
-                                        <td>{{ signal.adx }}</td>
+                                        <td>{{ signal.price|round(4) }}</td>
+                                        <td>{{ signal.entry|round(4) }}</td>
+                                        <td>{{ signal.distance|round(2) }}%</td>
+                                        <td class="text-danger">{{ signal.sl|round(4) }}</td>
+                                        <td class="text-success">{{ signal.tp1|round(4) }}</td>
+                                        <td class="text-success">{{ signal.tp2|round(4) }}</td>
+                                        <td>
+                                            <span class="volume-{{ signal.volume|lower|replace(' ', '-') }}">
+                                                {{ signal.volume }}
+                                            </span>
+                                        </td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
                                                 <i class="fas fa-chart-line"></i>
@@ -131,8 +378,8 @@
                             </table>
                         </div>
                         {% else %}
-                        <div class="alert alert-warning">
-                            No se encontraron señales LONG en este momento
+                        <div class="alert alert-warning m-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i> No se encontraron señales LONG en este momento
                         </div>
                         {% endif %}
                     </div>
@@ -140,15 +387,15 @@
             </div>
             
             <div class="col-md-6">
-                <div class="card">
+                <div class="card h-100">
                     <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
-                        <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down me-2"></i> Señales SHORT ({{ short_signals|length }})</h2>
+                        <span class="badge bg-light text-dark">ADX Prom: {{ avg_adx_short }}</span>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-0">
                         {% if short_signals %}
                         <div class="signal-table-container">
-                            <table class="table table-hover signal-table">
+                            <table class="table table-hover signal-table mb-0">
                                 <thead class="table-light">
                                     <tr>
                                         <th>#</th>
@@ -160,7 +407,6 @@
                                         <th>TP1</th>
                                         <th>TP2</th>
                                         <th>Volumen</th>
-                                        <th>ADX</th>
                                         <th>Gráfico</th>
                                     </tr>
                                 </thead>
@@ -169,14 +415,17 @@
                                     <tr class="short-bg">
                                         <td>{{ loop.index }}</td>
                                         <td>{{ signal.symbol }}</td>
-                                        <td>{{ signal.price }}</td>
-                                        <td>{{ signal.entry }}</td>
-                                        <td>{{ signal.distance }}%</td>
-                                        <td class="text-danger">{{ signal.sl }}</td>
-                                        <td class="text-success">{{ signal.tp1 }}</td>
-                                        <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-high">{{ signal.volume }}</td>
-                                        <td>{{ signal.adx }}</td>
+                                        <td>{{ signal.price|round(4) }}</td>
+                                        <td>{{ signal.entry|round(4) }}</td>
+                                        <td>{{ signal.distance|round(2) }}%</td>
+                                        <td class="text-danger">{{ signal.sl|round(4) }}</td>
+                                        <td class="text-success">{{ signal.tp1|round(4) }}</td>
+                                        <td class="text-success">{{ signal.tp2|round(4) }}</td>
+                                        <td>
+                                            <span class="volume-{{ signal.volume|lower|replace(' ', '-') }}">
+                                                {{ signal.volume }}
+                                            </span>
+                                        </td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
                                                 <i class="fas fa-chart-line"></i>
@@ -188,8 +437,8 @@
                             </table>
                         </div>
                         {% else %}
-                        <div class="alert alert-warning">
-                            No se encontraron señales SHORT en este momento
+                        <div class="alert alert-warning m-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i> No se encontraron señales SHORT en este momento
                         </div>
                         {% endif %}
                     </div>
@@ -209,7 +458,7 @@
                     data: [
                         {{ long_signals|length }}, 
                         {{ short_signals|length }}, 
-                        {{ 150 - long_signals|length - short_signals|length }}
+                        {{ cryptos_count - long_signals|length - short_signals|length }}
                     ],
                     backgroundColor: [
                         'rgba(46, 204, 113, 0.7)',
@@ -221,6 +470,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: { position: 'bottom' },
                     title: {
@@ -231,7 +481,7 @@
             }
         });
         
-        // Gráfico de estadísticas LONG
+        // Gráfico de distancia promedio
         const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
         const longStatsChart = new Chart(longStatsCtx, {
             type: 'bar',
@@ -245,8 +495,15 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 scales: {
-                    y: { beginAtZero: true }
+                    y: { 
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Distancia (%)'
+                        }
+                    }
                 },
                 plugins: {
                     title: {
@@ -257,7 +514,6 @@
             }
         });
         
-        // Gráfico de estadísticas SHORT
         const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
         const shortStatsChart = new Chart(shortStatsCtx, {
             type: 'bar',
@@ -271,8 +527,15 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 scales: {
-                    y: { beginAtZero: true }
+                    y: { 
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Distancia (%)'
+                        }
+                    }
                 },
                 plugins: {
                     title: {
@@ -283,10 +546,85 @@
             }
         });
         
+        // Dibujar puntos en el gráfico de dispersión
+        function drawScatterChart() {
+            const scatterData = JSON.parse('{{ scatter_data|safe }}');
+            const container = document.getElementById('scatterChart');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            // Limpiar puntos anteriores
+            document.querySelectorAll('.crypto-point, .crypto-label').forEach(el => el.remove());
+            
+            // Colores por volumen
+            const volumeColors = {
+                'Muy Alto': '#4CAF50',   // Verde
+                'Alto': '#2196F3',       // Azul
+                'Medio': '#FFEB3B',      // Amarillo
+                'Bajo': '#FF9800',       // Naranja
+                'Muy Bajo': '#F44336'    // Rojo
+            };
+            
+            // Dibujar cada punto
+            scatterData.forEach(item => {
+                const x = (item.long_prob / 100) * width;
+                const y = height - (item.short_prob / 100) * height;
+                
+                // Crear punto
+                const point = document.createElement('div');
+                point.className = 'crypto-point';
+                point.style.left = `${x}px`;
+                point.style.top = `${y}px`;
+                point.style.backgroundColor = volumeColors[item.volume];
+                
+                // Crear etiqueta
+                const label = document.createElement('div');
+                label.className = `crypto-label ${item.symbol === 'BTC' ? 'btc-label' : ''}`;
+                label.style.left = `${x}px`;
+                label.style.top = `${y}px`;
+                label.textContent = item.symbol;
+                
+                // Agregar al contenedor
+                container.appendChild(point);
+                container.appendChild(label);
+            });
+        }
+        
+        // Inicializar y redibujar al cambiar tamaño
+        window.addEventListener('load', drawScatterChart);
+        window.addEventListener('resize', drawScatterChart);
+        
+        // Filtro por volumen
+        document.getElementById('volume-filter').addEventListener('change', function() {
+            const filter = this.value;
+            const points = document.querySelectorAll('.crypto-point, .crypto-label');
+            
+            points.forEach(point => {
+                if (filter === 'all') {
+                    point.style.display = '';
+                } else {
+                    const volumeClass = point.className.includes('crypto-point') ? 
+                        point.style.backgroundColor.toLowerCase() : 
+                        point.previousElementSibling.style.backgroundColor.toLowerCase();
+                    
+                    const volumeMap = {
+                        '#4caf50': 'Muy Alto',
+                        '#2196f3': 'Alto',
+                        '#ffeb3b': 'Medio',
+                        '#ff9800': 'Bajo',
+                        '#f44336': 'Muy Bajo'
+                    };
+                    
+                    point.style.display = volumeMap[volumeClass] === filter ? '' : 'none';
+                }
+            });
+        });
+        
         // Auto-refresh cada 60 segundos
-        setTimeout(() => {
+        setInterval(() => {
             location.reload();
         }, 60000);
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
