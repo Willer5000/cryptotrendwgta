@@ -1,7 +1,7 @@
 flask
-flask_caching
+flask-caching
 requests
 pandas
 numpy
-matplotlib
+plotly
 gunicorn
