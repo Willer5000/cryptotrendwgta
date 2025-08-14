@@ -1,7 +1,7 @@
 services:
   - type: web
-    name: cryptotrendwgta
+    name: wgta-crypto-signals
     env: python
-    buildCommand: ./build.sh
-    startCommand: gunicorn app:app
     plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn app:app"
