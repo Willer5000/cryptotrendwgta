@@ -4,4 +4,4 @@ services:
     env: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "gunicorn app:app"
+    startCommand: "gunicorn app:app --workers 1 --timeout 300"
