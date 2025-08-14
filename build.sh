@@ -1,8 +1,11 @@
 #!/bin/bash
-echo ">>> Updating pip and setuptools"
-python -m pip install --upgrade pip setuptools wheel
+echo ">>> Actualizando pip y setuptools"
+pip install --upgrade pip setuptools wheel
 
-echo ">>> Installing dependencies"
+echo ">>> Instalando dependencias"
 pip install -r requirements.txt --no-cache-dir
 
-echo ">>> Installation completed"
+echo ">>> Permisos de ejecución"
+chmod +x app.py
+
+echo ">>> Instalación completada"
