@@ -6,5 +6,4 @@ numpy
 matplotlib
 gunicorn
 plotly
-talib
-python-binance
+scipy
