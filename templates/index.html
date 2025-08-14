@@ -20,6 +20,8 @@
         .signal-card:hover { transform: translateY(-5px); }
         .long-bg { background-color: #e8f5e9; }
         .short-bg { background-color: #ffebee; }
+        .volume-high { color: #d32f2f; font-weight: bold; }
+        .volume-medium { color: #f57c00; }
         .chart-container { position: relative; height: 300px; margin-bottom: 20px; }
         .signal-table th { position: sticky; top: 0; background: white; z-index: 10; }
         .signal-table-container { max-height: 600px; overflow-y: auto; }
@@ -28,21 +30,21 @@
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; position: relative; }
         .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.7; }
-        .volume-very-high { background-color: #4CAF50; }
-        .volume-high { background-color: #2196F3; }
-        .volume-medium { background-color: #FFEB3B; }
-        .volume-low { background-color: #FF9800; }
-        .volume-very-low { background-color: #F44336; }
+        .volume-very-high { background-color: #4CAF50; }   /* Verde */
+        .volume-high { background-color: #2196F3; }        /* Azul */
+        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
+        .volume-low { background-color: #FF9800; }         /* Naranja */
+        .volume-very-low { background-color: #F44336; }    /* Rojo */
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
         
-        /* Colores de volumen para tablas */
-        .volume-Muy-Alto { background-color: #4CAF50; color: white; }
-        .volume-Alto { background-color: #2196F3; color: white; }
-        .volume-Medio { background-color: #FFEB3B; }
-        .volume-Bajo { background-color: #FF9800; color: white; }
-        .volume-Muy-Bajo { background-color: #F44336; color: white; }
+        /* Clases para volumen */
+        .volume-muy-alto { color: #4CAF50; font-weight: bold; }
+        .volume-alto { color: #2196F3; font-weight: bold; }
+        .volume-medio { color: #FFC107; font-weight: bold; }
+        .volume-bajo { color: #FF9800; font-weight: bold; }
+        .volume-muy-bajo { color: #F44336; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -67,7 +69,7 @@
         <!-- Sección de Filtros -->
         <div class="filter-section">
             <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
-            <form id="filters-form" onsubmit="event.preventDefault(); updateParams()">
+            <form method="POST" action="/update-params">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
@@ -111,8 +113,8 @@
                     </div>
                     
                     <div class="col-md-3">
-                        <label class="form-label">Máximo Riesgo (%)</label>
-                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1" min="0.1" max="5">
+                        <label class="form-label">Divergencia Lookback</label>
+                        <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control" min="5" max="50">
                     </div>
                     
                     <div class="col-md-12 mt-4">
@@ -245,7 +247,6 @@
                                         <th>Distancia</th>
                                         <th>SL</th>
                                         <th>TP1</th>
-                                        <th>TP2</th>
                                         <th>Volumen</th>
                                         <th>ADX</th>
                                         <th>Gráfico</th>
@@ -261,8 +262,7 @@
                                         <td>{{ signal.distance }}%</td>
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
-                                        <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-{{ signal.volume|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
@@ -302,7 +302,6 @@
                                         <th>Distancia</th>
                                         <th>SL</th>
                                         <th>TP1</th>
-                                        <th>TP2</th>
                                         <th>Volumen</th>
                                         <th>ADX</th>
                                         <th>Gráfico</th>
@@ -318,8 +317,7 @@
                                         <td>{{ signal.distance }}%</td>
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
-                                        <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-{{ signal.volume|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
@@ -448,11 +446,11 @@
         
         // Mapeo de colores por volumen
         const volumeColors = {
-            'Muy Alto': 'rgba(46, 204, 113, 0.8)',  // Verde
-            'Alto': 'rgba(54, 162, 235, 0.8)',      // Azul
-            'Medio': 'rgba(255, 206, 86, 0.8)',     // Amarillo
-            'Bajo': 'rgba(255, 159, 64, 0.8)',      // Naranja
-            'Muy Bajo': 'rgba(255, 99, 132, 0.8)'   // Rojo
+            'Muy Alto': 'rgba(76, 175, 80, 0.8)',    // Verde
+            'Alto': 'rgba(33, 150, 243, 0.8)',       // Azul
+            'Medio': 'rgba(255, 235, 59, 0.8)',      // Amarillo
+            'Bajo': 'rgba(255, 152, 0, 0.8)',        // Naranja
+            'Muy Bajo': 'rgba(244, 67, 54, 0.8)'     // Rojo
         };
         
         // Preparar datos para el gráfico
@@ -518,7 +516,7 @@
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return `${context.raw.symbol}: LONG ${context.raw.y}%, SHORT ${context.raw.x}%`;
+                                return context.raw.symbol + ': LONG ' + context.raw.y + '%, SHORT ' + context.raw.x + '%';
                             }
                         }
                     },
@@ -546,29 +544,6 @@
             });
             scatterChart.update();
         });
-        
-        // Actualizar parámetros
-        function updateParams() {
-            const formData = new FormData(document.getElementById('filters-form'));
-            const params = Object.fromEntries(formData.entries());
-            
-            fetch('/update', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams(params)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert('Parámetros actualizados correctamente');
-                    location.reload();
-                } else {
-                    alert('Error actualizando parámetros: ' + data.message);
-                }
-            });
-        }
         
         // Auto-refresh cada 60 segundos
         setTimeout(() => {
