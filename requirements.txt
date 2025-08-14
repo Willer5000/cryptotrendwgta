@@ -6,3 +6,4 @@ numpy
 matplotlib
 gunicorn
 plotly
+python-dateutil
