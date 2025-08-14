@@ -7,5 +7,4 @@ matplotlib
 gunicorn
 plotly
 talib
-pandas-ta
-concurrent-log-handler
+python-binance
