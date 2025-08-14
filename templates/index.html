@@ -54,6 +54,13 @@
             margin: 2px;
             font-size: 0.85rem;
         }
+        .signal-badge {
+            font-size: 0.75rem;
+            padding: 3px 6px;
+            border-radius: 4px;
+        }
+        .badge-long { background-color: #4CAF50; color: white; }
+        .badge-short { background-color: #F44336; color: white; }
     </style>
 </head>
 <body>
@@ -150,6 +157,11 @@
                     <div class="col-md-3">
                         <label class="form-label">Umbral S/R (%)</label>
                         <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1" min="0.1" max="5">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label">Volumen Mínimo</label>
+                        <input type="number" name="volume_threshold" value="{{ params.volume_threshold }}" class="form-control" step="1000" min="0">
                     </div>
                     
                     <div class="col-md-12 mt-4">
@@ -260,7 +272,9 @@
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">
+                                            {{ signal.volume }}
+                                        </td>
                                         <td>{{ signal.adx }}</td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
@@ -317,7 +331,9 @@
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">
+                                            {{ signal.volume }}
+                                        </td>
                                         <td>{{ signal.adx }}</td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
@@ -383,7 +399,7 @@
                 labels: ['Distancia a Entrada'],
                 datasets: [{
                     label: 'Distancia Promedio (%)',
-                    data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
+                    data: [{{ long_stats.distance | default(0) }}],
                     backgroundColor: 'rgba(46, 204, 113, 0.7)'
                 }]
             },
@@ -416,7 +432,7 @@
                 labels: ['Distancia a Entrada'],
                 datasets: [{
                     label: 'Distancia Promedio (%)',
-                    data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
+                    data: [{{ short_stats.distance | default(0) }}],
                     backgroundColor: 'rgba(231, 76, 60, 0.7)'
                 }]
             },
@@ -486,29 +502,6 @@
             }
         });
         
-        // Traza especial para Bitcoin si está presente
-        const btcData = scatterData.find(item => item.symbol === 'BTC');
-        if (btcData) {
-            traces.push({
-                x: [btcData.long_prob],
-                y: [btcData.short_prob],
-                text: ['BTC'],
-                mode: 'markers+text',
-                type: 'scatter',
-                name: 'Bitcoin',
-                marker: {
-                    size: 12,
-                    color: '#FFD700',
-                    symbol: 'star'
-                },
-                textfont: {
-                    size: 12,
-                    color: '#FFD700'
-                },
-                hoverinfo: 'text+x+y'
-            });
-        }
-        
         // Diseño del gráfico
         const layout = {
             title: 'Probabilidades de Trading por Criptomoneda',
@@ -575,7 +568,7 @@
             const visibleTraces = [];
             
             traces.forEach((trace, index) => {
-                if (filter === 'all' || trace.name === filter || trace.name === 'Bitcoin') {
+                if (filter === 'all' || trace.name === filter) {
                     visibleTraces.push(index);
                 }
             });
