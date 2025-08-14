@@ -1,7 +1,7 @@
 services:
   - type: web
-    name: cryptotrend
+    name: cryptotrendwgta
     env: python
-    buildCommand: chmod +x build.sh && ./build.sh
+    buildCommand: ./build.sh
     startCommand: gunicorn app:app
     plan: free
