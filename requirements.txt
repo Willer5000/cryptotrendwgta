@@ -6,4 +6,6 @@ numpy
 matplotlib
 gunicorn
 plotly
-python-dateutil
+talib
+pandas-ta
+concurrent-log-handler
