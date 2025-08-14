@@ -1,5 +1,5 @@
-Flask
-Flask-Caching
+flask
+flask-caching
 requests
 pandas
 numpy
