@@ -38,6 +38,11 @@
         .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
         .grid-line.vertical { width: 1px; height: 100%; }
         .grid-line.horizontal { height: 1px; width: 100%; }
+        .volume-muy-alto { color: #4CAF50; font-weight: bold; }
+        .volume-alto { color: #2196F3; font-weight: bold; }
+        .volume-medio { color: #FFEB3B; font-weight: bold; }
+        .volume-bajo { color: #FF9800; font-weight: bold; }
+        .volume-muy-bajo { color: #F44336; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -62,7 +67,7 @@
         <!-- Sección de Filtros -->
         <div class="filter-section">
             <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
-            <form method="POST" action="/update_params" id="filters-form">
+            <form method="POST" id="filters-form">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
@@ -267,7 +272,7 @@
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-{{ signal.volume | replace(' ', '-') | lower }}">{{ signal.volume }}</td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
@@ -324,7 +329,7 @@
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-{{ signal.volume | replace(' ', '-') | lower }}">{{ signal.volume }}</td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
                                         <td>{{ signal.adx }}</td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
@@ -473,8 +478,9 @@
         
         volumes.forEach(vol => {
             const data = scatterData.filter(item => {
-                const volClass = item.volume.toLowerCase().replace(' ', '-');
-                return volClass === vol;
+                // Normalizar el volumen para coincidir con las claves
+                const itemVol = item.volume.toLowerCase().replace(' ', '-');
+                return itemVol === vol;
             }).map(item => ({
                 x: item.short_prob,
                 y: item.long_prob,
@@ -557,7 +563,13 @@
         document.getElementById('volume-filter').addEventListener('change', function() {
             const filter = this.value.toLowerCase().replace(' ', '-');
             scatterChart.data.datasets.forEach(dataset => {
-                dataset.hidden = filter !== 'all' && dataset.label.toLowerCase().replace(' ', '-') !== filter;
+                // Ocultar todos los datasets si no es 'all'
+                if (filter === 'all') {
+                    dataset.hidden = false;
+                } else {
+                    // Comparar con la etiqueta normalizada
+                    dataset.hidden = (dataset.label.toLowerCase().replace(' ', '-') !== filter);
+                }
             });
             scatterChart.update();
         });
