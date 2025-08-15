@@ -17,11 +17,11 @@ import math
 import logging
 import plotly
 import plotly.graph_objs as go
-import sqlite3
-import atexit
+from threading import Lock
+import traceback
 
 app = Flask(__name__)
-cache = Cache(app, config={'CACHE_TYPE': 'simple'})
+cache = Cache(app, config={'CACHE_TYPE': 'simple', 'CACHE_DEFAULT_TIMEOUT': 300})
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -43,76 +43,12 @@ DEFAULTS = {
     'price_distance_threshold': 1.0
 }
 
-# Base de datos para señales históricas
-HISTORICAL_DB = 'historical_signals.db'
-
-def init_db():
-    conn = sqlite3.connect(HISTORICAL_DB)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS signals
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  symbol TEXT,
-                  signal_type TEXT,
-                  entry REAL,
-                  sl REAL,
-                  tp1 REAL,
-                  tp2 REAL,
-                  volume TEXT,
-                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-    conn.commit()
-    conn.close()
-
-init_db()
-
-def save_historical_signal(signal, signal_type):
-    try:
-        conn = sqlite3.connect(HISTORICAL_DB)
-        c = conn.cursor()
-        c.execute('''INSERT INTO signals 
-                    (symbol, signal_type, entry, sl, tp1, tp2, volume)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                 (signal['symbol'], signal_type, signal['entry'], 
-                  signal['sl'], signal['tp1'], signal['tp2'], signal['volume']))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error guardando señal histórica: {str(e)}")
-
-def get_historical_signals(limit=20):
-    try:
-        conn = sqlite3.connect(HISTORICAL_DB)
-        c = conn.cursor()
-        c.execute('''SELECT * FROM signals 
-                     ORDER BY timestamp DESC LIMIT ?''', (limit,))
-        signals = []
-        for row in c.fetchall():
-            signals.append({
-                'id': row[0],
-                'symbol': row[1],
-                'signal_type': row[2],
-                'entry': row[3],
-                'sl': row[4],
-                'tp1': row[5],
-                'tp2': row[6],
-                'volume': row[7],
-                'timestamp': row[8]
-            })
-        conn.close()
-        return signals
-    except Exception as e:
-        logger.error(f"Error obteniendo señales históricas: {str(e)}")
-        return []
-
 # Leer lista de criptomonedas
 def load_cryptos():
-    try:
-        with open(CRYPTOS_FILE, 'r') as f:
-            cryptos = [line.strip() for line in f.readlines() if line.strip()]
-            logger.info(f"Cargadas {len(cryptos)} criptomonedas")
-            return cryptos
-    except Exception as e:
-        logger.error(f"Error cargando criptomonedas: {str(e)}")
-        return []
+    with open(CRYPTOS_FILE, 'r') as f:
+        cryptos = [line.strip() for line in f.readlines() if line.strip()]
+    logger.info(f"Cargadas {len(cryptos)} criptomonedas desde archivo")
+    return cryptos
 
 # Obtener datos de KuCoin con manejo de errores mejorado
 def get_kucoin_data(symbol, timeframe):
@@ -128,51 +64,35 @@ def get_kucoin_data(symbol, timeframe):
     url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}-USDT"
     
     try:
-        response = requests.get(url, timeout=25)
-        if response.status_code != 200:
-            logger.warning(f"Respuesta HTTP {response.status_code} para {symbol}")
-            return None
-            
-        try:
+        response = requests.get(url, timeout=20)
+        if response.status_code == 200:
             data = response.json()
-        except json.JSONDecodeError:
-            logger.error(f"Respuesta JSON inválida para {symbol}")
-            return None
-            
-        if data.get('code') != '200000':
-            logger.warning(f"Error en API KuCoin para {symbol}: {data.get('msg')}")
-            return None
-            
-        if not data.get('data'):
-            logger.warning(f"Datos vacíos para {symbol}")
-            return None
-            
-        candles = data['data']
-        candles.reverse()
-        
-        if len(candles) < 100:
-            logger.warning(f"Datos insuficientes para {symbol}: {len(candles)} velas")
-            return None
-        
-        df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
-        
-        for col in ['open', 'close', 'high', 'low', 'volume']:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-        
-        df = df.dropna()
-        
-        if len(df) < 50:
-            logger.warning(f"Datos insuficientes después de limpieza para {symbol}: {len(df)} velas")
-            return None
-        
-        df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='s')
-        return df
-    except requests.exceptions.Timeout:
-        logger.warning(f"Timeout al obtener datos para {symbol}")
-        return None
+            if data.get('code') == '200000' and data.get('data'):
+                candles = data['data']
+                candles.reverse()
+                
+                if len(candles) < 100:
+                    logger.warning(f"Datos insuficientes para {symbol}: {len(candles)} velas")
+                    return None
+                
+                df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
+                
+                for col in ['open', 'close', 'high', 'low', 'volume']:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                
+                df = df.dropna()
+                
+                if len(df) < 50:
+                    logger.warning(f"Datos insuficientes después de limpieza para {symbol}: {len(df)} velas")
+                    return None
+                
+                df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='s')
+                return df
+        else:
+            logger.warning(f"Respuesta inesperada de KuCoin para {symbol}: {response.text}")
     except Exception as e:
-        logger.error(f"Error general obteniendo datos para {symbol}: {str(e)}")
-        return None
+        logger.error(f"Error fetching data for {symbol}: {str(e)}")
+    return None
 
 # Implementación manual de EMA
 def calculate_ema(series, window):
@@ -192,7 +112,7 @@ def calculate_rsi(series, window=14):
     avg_gain = gain.ewm(alpha=1/window, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1/window, adjust=False).mean()
     
-    rs = avg_gain / (avg_loss + 1e-10)  # Evitar división por cero
+    rs = avg_gain / (avg_loss + 1e-10)
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
@@ -221,11 +141,11 @@ def calculate_adx(high, low, close, window):
         minus_di = 100 * (minus_dm.ewm(alpha=1/window, adjust=False).mean() / atr)
         
         # Calcular ADX
-        dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).replace([np.inf, -np.inf], 0)
+        dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di)).replace([np.inf, -np.inf], 0)
         adx = dx.ewm(alpha=1/window, adjust=False).mean()
         return adx, plus_di, minus_di
     except Exception as e:
-        logger.error(f"Error calculando ADX: {str(e)}")
+        logger.error(f"Error calculating ADX: {str(e)}")
         return pd.Series([0] * len(close)), pd.Series([0] * len(close)), pd.Series([0] * len(close))
 
 # Calcular indicadores manualmente
@@ -254,26 +174,24 @@ def calculate_indicators(df, params):
         logger.error(f"Error calculando indicadores: {str(e)}")
         return None
 
-# Detectar soportes y resistencias mejorado
+# Detectar soportes y resistencias mejorado con clustering
 def find_support_resistance(df, window):
     try:
         if len(df) < window:
             return [], []
         
-        # Identificar pivots de soporte (mínimos locales)
-        support_levels = []
-        for i in range(window, len(df) - window):
-            if df['low'].iloc[i] == df['low'].iloc[i-window:i+window].min():
-                support_levels.append(df['low'].iloc[i])
+        # Identificar pivots significativos
+        df['high_pivot'] = df['high'].rolling(window=3, center=True).max()
+        df['low_pivot'] = df['low'].rolling(window=3, center=True).min()
         
-        # Identificar pivots de resistencia (máximos locales)
-        resistance_levels = []
-        for i in range(window, len(df) - window):
-            if df['high'].iloc[i] == df['high'].iloc[i-window:i+window].max():
-                resistance_levels.append(df['high'].iloc[i])
+        high_pivots = df[df['high'] == df['high_pivot']]
+        low_pivots = df[df['low'] == df['low_pivot']]
         
-        # Consolidar niveles cercanos (agrupar niveles similares)
-        def consolidate_levels(levels, threshold=0.02):
+        resistances = high_pivots['high'].tolist()
+        supports = low_pivots['low'].tolist()
+        
+        # Consolidar niveles cercanos
+        def consolidate_levels(levels, threshold=0.005):
             if not levels:
                 return []
                 
@@ -281,24 +199,22 @@ def find_support_resistance(df, window):
             consolidated = []
             current_group = [levels[0]]
             
-            for i in range(1, len(levels)):
-                if levels[i] - current_group[0] < current_group[0] * threshold:
-                    current_group.append(levels[i])
+            for level in levels[1:]:
+                if level <= current_group[-1] * (1 + threshold):
+                    current_group.append(level)
                 else:
-                    avg_level = sum(current_group) / len(current_group)
-                    consolidated.append(avg_level)
-                    current_group = [levels[i]]
+                    # Calcular nivel consolidado como el precio más frecuente en el grupo
+                    consolidated.append(np.median(current_group))
+                    current_group = [level]
                     
-            if current_group:
-                avg_level = sum(current_group) / len(current_group)
-                consolidated.append(avg_level)
-                
+            consolidated.append(np.median(current_group))
             return consolidated
         
-        supports = consolidate_levels(support_levels)
-        resistances = consolidate_levels(resistance_levels)
+        supports = consolidate_levels(supports)
+        resistances = consolidate_levels(resistances)
         
-        return supports, resistances
+        # Mantener solo los niveles más significativos
+        return supports[-5:], resistances[-5:]
     except Exception as e:
         logger.error(f"Error buscando S/R: {str(e)}")
         return [], []
@@ -306,14 +222,14 @@ def find_support_resistance(df, window):
 # Clasificar volumen
 def classify_volume(current_vol, avg_vol):
     try:
-        if avg_vol <= 0 or current_vol is None:
+        if avg_vol == 0 or current_vol is None or avg_vol is None:
             return 'Muy Bajo'
         
         ratio = current_vol / avg_vol
-        if ratio > 2.5: return 'Muy Alto'
-        if ratio > 1.8: return 'Alto'
-        if ratio > 1.2: return 'Medio'
-        if ratio > 0.6: return 'Bajo'
+        if ratio > 2.0: return 'Muy Alto'
+        if ratio > 1.5: return 'Alto'
+        if ratio > 1.0: return 'Medio'
+        if ratio > 0.5: return 'Bajo'
         return 'Muy Bajo'
     except:
         return 'Muy Bajo'
@@ -321,35 +237,34 @@ def classify_volume(current_vol, avg_vol):
 # Detectar divergencias mejorado
 def detect_divergence(df, lookback):
     try:
-        if len(df) < lookback + 10:
+        if len(df) < lookback + 1:
             return None
             
-        # Obtener los últimos datos
+        # Seleccionar los últimos datos
         recent = df.iloc[-lookback:]
         
-        # Encontrar máximos relevantes para divergencia bajista
+        # Buscar máximos/mínimos recientes
         max_idx = recent['high'].idxmax()
-        current_high = recent['high'].iloc[-1]
-        current_rsi = recent['rsi'].iloc[-1]
+        min_idx = recent['low'].idxmin()
         
+        # Divergencia bajista
         if not pd.isna(max_idx):
-            max_high = df.loc[max_idx, 'high']
-            max_rsi = df.loc[max_idx, 'rsi']
+            price_high = df.loc[max_idx, 'high']
+            rsi_high = df.loc[max_idx, 'rsi']
+            current_price = df.iloc[-1]['close']
+            current_rsi = df.iloc[-1]['rsi']
             
-            # Divergencia bajista: precio hace nuevo máximo, RSI no lo confirma
-            if current_high > max_high and current_rsi < max_rsi and current_rsi > 65:
+            if current_price > price_high and current_rsi < rsi_high and current_rsi > 70:
                 return 'bearish'
         
-        # Encontrar mínimos relevantes para divergencia alcista
-        min_idx = recent['low'].idxmin()
-        current_low = recent['low'].iloc[-1]
-        
+        # Divergencia alcista
         if not pd.isna(min_idx):
-            min_low = df.loc[min_idx, 'low']
-            min_rsi = df.loc[min_idx, 'rsi']
+            price_low = df.loc[min_idx, 'low']
+            rsi_low = df.loc[min_idx, 'rsi']
+            current_price = df.iloc[-1]['close']
+            current_rsi = df.iloc[-1]['rsi']
             
-            # Divergencia alcista: precio hace nuevo mínimo, RSI no lo confirma
-            if current_low < min_low and current_rsi > min_rsi and current_rsi < 35:
+            if current_price < price_low and current_rsi > rsi_low and current_rsi < 30:
                 return 'bullish'
         
         return None
@@ -371,11 +286,11 @@ def calculate_distance_to_level(price, levels, threshold_percent):
 
 # Analizar una criptomoneda mejorado
 def analyze_crypto(symbol, params):
-    df = get_kucoin_data(symbol, params['timeframe'])
-    if df is None or len(df) < 50:
-        return None, None, 0, 0, 'Muy Bajo'
-    
     try:
+        df = get_kucoin_data(symbol, params['timeframe'])
+        if df is None or len(df) < 50:
+            return None, None, 0, 0, 'Muy Bajo'
+        
         df = calculate_indicators(df, params)
         if df is None or len(df) < 20:
             return None, None, 0, 0, 'Muy Bajo'
@@ -387,77 +302,63 @@ def analyze_crypto(symbol, params):
         volume_class = classify_volume(last['volume'], avg_vol)
         divergence = detect_divergence(df, params['divergence_lookback'])
         
-        # Detectar quiebres con confirmación de cierre
+        # Detectar quiebres con volumen
         is_breakout = False
-        if resistances:
-            resistance_break = any(last['close'] > r * 1.01 for r in resistances)
-            if resistance_break:
-                # Verificar que el cierre anterior estaba por debajo
-                prev_close = df.iloc[-2]['close']
-                is_breakout = all(prev_close < r * 0.99 for r in resistances if last['close'] > r)
-        
         is_breakdown = False
-        if supports:
-            support_break = any(last['close'] < s * 0.99 for s in supports)
-            if support_break:
-                # Verificar que el cierre anterior estaba por encima
-                prev_close = df.iloc[-2]['close']
-                is_breakdown = all(prev_close > s * 1.01 for s in supports if last['close'] < s)
         
-        # Determinar tendencia con múltiples factores
-        trend_up = last['ema_fast'] > last['ema_slow'] and last['close'] > last['ema_slow']
-        trend_down = last['ema_fast'] < last['ema_slow'] and last['close'] < last['ema_slow']
+        if resistances:
+            for r in resistances:
+                if last['close'] > r * 1.005 and last['volume'] > avg_vol * 1.2:
+                    is_breakout = True
+                    break
+                    
+        if supports:
+            for s in supports:
+                if last['close'] < s * 0.995 and last['volume'] > avg_vol * 1.2:
+                    is_breakdown = True
+                    break
+        
+        # Determinar tendencia con EMAs
+        trend = 'up' if last['ema_fast'] > last['ema_slow'] else 'down'
+        trend_strength = 1 if last['adx'] > params['adx_level'] else 0.5
         
         # Calcular probabilidades mejoradas
         long_prob = 0
         short_prob = 0
         
         # Criterios para LONG
-        if trend_up: 
-            long_prob += 30
-            if last['adx'] > params['adx_level']: 
-                long_prob += 20  # Tendencia fuerte
-                
-        if is_breakout: 
-            long_prob += 25
-        elif divergence == 'bullish': 
-            long_prob += 20
-            
-        if volume_class in ['Alto', 'Muy Alto']: 
-            long_prob += 15
-            
-        if calculate_distance_to_level(last['close'], supports, params['price_distance_threshold']): 
-            long_prob += 10
-            
+        if trend == 'up': 
+            long_prob += 30 * trend_strength
+            if is_breakout: 
+                long_prob += 25
+            if divergence == 'bullish' and last['rsi'] < 40:
+                long_prob += 20
+            if volume_class in ['Alto', 'Muy Alto']: 
+                long_prob += 15
+            if calculate_distance_to_level(last['close'], supports, params['price_distance_threshold']): 
+                long_prob += 10
+        
         # Criterios para SHORT
-        if trend_down: 
-            short_prob += 30
-            if last['adx'] > params['adx_level']: 
-                short_prob += 20  # Tendencia fuerte
-                
-        if is_breakdown: 
-            short_prob += 25
-        elif divergence == 'bearish': 
-            short_prob += 20
-            
-        if volume_class in ['Alto', 'Muy Alto']: 
-            short_prob += 15
-            
-        if calculate_distance_to_level(last['close'], resistances, params['price_distance_threshold']): 
-            short_prob += 10
-            
+        if trend == 'down': 
+            short_prob += 30 * trend_strength
+            if is_breakdown: 
+                short_prob += 25
+            if divergence == 'bearish' and last['rsi'] > 60:
+                short_prob += 20
+            if volume_class in ['Alto', 'Muy Alto']: 
+                short_prob += 15
+            if calculate_distance_to_level(last['close'], resistances, params['price_distance_threshold']): 
+                short_prob += 10
+        
         # Normalizar probabilidades
         total = long_prob + short_prob
         if total > 0:
             long_prob = (long_prob / total) * 100
             short_prob = (short_prob / total) * 100
-        else:
-            long_prob = 50
-            short_prob = 50
         
         # Señales LONG
         long_signal = None
-        if long_prob >= 65 and volume_class in ['Alto', 'Muy Alto']:
+        if long_prob >= 60 and volume_class in ['Alto', 'Muy Alto']:
             # Encontrar soporte más cercano para SL
             next_supports = [s for s in supports if s < last['close']]
             sl = max(next_supports) * 0.995 if next_supports else last['close'] * (1 - params['max_risk_percent']/100)
@@ -476,12 +377,13 @@ def analyze_crypto(symbol, params):
                 'tp2': round(entry + risk * 2, 4),
                 'volume': volume_class,
                 'adx': round(last['adx'], 2) if not pd.isna(last['adx']) else 0,
-                'distance': round(((entry - last['close']) / last['close']) * 100, 2)
+                'distance': round(((entry - last['close']) / last['close']) * 100, 2),
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M')
             }
         
         # Señales SHORT
         short_signal = None
-        if short_prob >= 65 and volume_class in ['Alto', 'Muy Alto']:
+        if short_prob >= 60 and volume_class in ['Alto', 'Muy Alto']:
             # Encontrar resistencia más cercana para SL
             next_resistances = [r for r in resistances if r > last['close']]
             sl = min(next_resistances) * 1.005 if next_resistances else last['close'] * (1 + params['max_risk_percent']/100)
@@ -500,15 +402,17 @@ def analyze_crypto(symbol, params):
                 'tp2': round(entry - risk * 2, 4),
                 'volume': volume_class,
                 'adx': round(last['adx'], 2) if not pd.isna(last['adx']) else 0,
-                'distance': round(((last['close'] - entry) / last['close']) * 100, 2)
+                'distance': round(((last['close'] - entry) / last['close']) * 100, 2),
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M')
             }
         
         return long_signal, short_signal, long_prob, short_prob, volume_class
     except Exception as e:
-        logger.error(f"Error analizando {symbol}: {str(e)}")
-        return None, None, 50, 50, 'Muy Bajo'
+        logger.error(f"Error analyzing {symbol}: {str(e)}")
+        logger.error(traceback.format_exc())
+        return None, None, 0, 0, 'Muy Bajo'
 
-# Tarea en segundo plano optimizada
+# Tarea en segundo plano optimizada con manejo de estado
 def background_update():
     while True:
         start_time = time.time()
@@ -518,23 +422,35 @@ def background_update():
             long_signals = []
             short_signals = []
             scatter_data = []
+            historical_signals = cache.get('historical_signals') or []
             
-            total_cryptos = len(cryptos)
-            processed = 0
+            # Conservar solo señales históricas de las últimas 24 horas
+            now = datetime.now()
+            historical_signals = [s for s in historical_signals 
+                                if (now - datetime.strptime(s['timestamp'], '%Y-%m-%d %H:%M')) < timedelta(hours=24)]
             
             # Procesar en lotes
-            batch_size = 15
-            for i in range(0, total_cryptos, batch_size):
+            batch_size = 20
+            total = len(cryptos)
+            processed = 0
+            
+            for i in range(0, total, batch_size):
                 batch = cryptos[i:i+batch_size]
                 for crypto in batch:
                     try:
                         long_signal, short_signal, long_prob, short_prob, volume_class = analyze_crypto(crypto, DEFAULTS)
+                        
                         if long_signal:
                             long_signals.append(long_signal)
-                            save_historical_signal(long_signal, 'LONG')
+                            # Agregar a históricos
+                            long_signal['type'] = 'LONG'
+                            historical_signals.append(long_signal)
+                            
                         if short_signal:
                             short_signals.append(short_signal)
-                            save_historical_signal(short_signal, 'SHORT')
+                            # Agregar a históricos
+                            short_signal['type'] = 'SHORT'
+                            historical_signals.append(short_signal)
                         
                         scatter_data.append({
                             'symbol': crypto,
@@ -542,15 +458,20 @@ def background_update():
                             'short_prob': short_prob,
                             'volume': volume_class
                         })
+                        processed += 1
+                        
+                        # Actualizar progreso
+                        progress = (processed / total) * 100
+                        if processed % 10 == 0:
+                            logger.info(f"Progreso: {processed}/{total} ({progress:.1f}%)")
+                            
                     except Exception as e:
                         logger.error(f"Error procesando {crypto}: {str(e)}")
-                    finally:
+                        logger.error(traceback.format_exc())
                         processed += 1
-                        progress = (processed / total_cryptos) * 100
-                        logger.info(f"Progreso: {processed}/{total_cryptos} ({progress:.1f}%)")
                 
                 # Pausa entre lotes para evitar sobrecarga
-                time.sleep(2)
+                time.sleep(1)
             
             # Ordenar por fuerza de tendencia (ADX)
             long_signals.sort(key=lambda x: x['adx'], reverse=True)
@@ -560,49 +481,82 @@ def background_update():
             cache.set('long_signals', long_signals)
             cache.set('short_signals', short_signals)
             cache.set('scatter_data', scatter_data)
+            cache.set('historical_signals', historical_signals)
             cache.set('last_update', datetime.now())
             
             elapsed = time.time() - start_time
             logger.info(f"Actualización completada en {elapsed:.2f}s: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(scatter_data)} cryptos analizadas")
         except Exception as e:
             logger.error(f"Error en actualización de fondo: {str(e)}")
-            import traceback
             logger.error(traceback.format_exc())
         
         time.sleep(CACHE_TIME)
 
 # Iniciar hilo de actualización
-update_thread = threading.Thread(target=background_update, daemon=True)
-update_thread.start()
-logger.info("Hilo de actualización iniciado")
+try:
+    update_thread = threading.Thread(target=background_update, daemon=True)
+    update_thread.start()
+    logger.info("Hilo de actualización iniciado")
+except Exception as e:
+    logger.error(f"No se pudo iniciar el hilo de actualización: {str(e)}")
 
 @app.route('/')
 def index():
-    long_signals = cache.get('long_signals') or []
-    short_signals = cache.get('short_signals') or []
-    scatter_data = cache.get('scatter_data') or []
-    last_update = cache.get('last_update') or datetime.now()
-    historical_signals = get_historical_signals(20)
-    
-    # Estadísticas
-    signal_count = len(long_signals) + len(short_signals)
-    avg_adx_long = np.mean([s['adx'] for s in long_signals]) if long_signals else 0
-    avg_adx_short = np.mean([s['adx'] for s in short_signals]) if short_signals else 0
-    
-    # Información de criptomonedas analizadas
-    cryptos_analyzed = len(scatter_data)
-    
-    return render_template('index.html', 
-                           long_signals=long_signals[:50], 
-                           short_signals=short_signals[:50],
-                           historical_signals=historical_signals,
-                           last_update=last_update,
-                           params=DEFAULTS,
-                           signal_count=signal_count,
-                           avg_adx_long=round(avg_adx_long, 2),
-                           avg_adx_short=round(avg_adx_short, 2),
-                           scatter_data=scatter_data,
-                           cryptos_analyzed=cryptos_analyzed)
+    try:
+        # Obtener datos con timeout
+        start_time = time.time()
+        timeout = 10  # segundos
+        
+        while time.time() - start_time < timeout:
+            long_signals = cache.get('long_signals')
+            short_signals = cache.get('short_signals')
+            scatter_data = cache.get('scatter_data')
+            last_update = cache.get('last_update')
+            historical_signals = cache.get('historical_signals') or []
+            
+            if (long_signals is not None and 
+                short_signals is not None and 
+                scatter_data is not None and 
+                last_update is not None):
+                break
+            time.sleep(0.5)
+        else:
+            # Timeout alcanzado
+            logger.warning("Timeout al obtener datos de caché")
+            long_signals = []
+            short_signals = []
+            scatter_data = []
+            last_update = datetime.now()
+            historical_signals = []
+        
+        # Estadísticas
+        signal_count = len(long_signals) + len(short_signals)
+        avg_adx_long = np.mean([s['adx'] for s in long_signals]) if long_signals else 0
+        avg_adx_short = np.mean([s['adx'] for s in short_signals]) if short_signals else 0
+        
+        # Información de criptomonedas analizadas
+        cryptos_analyzed = len(scatter_data)
+        
+        # Filtrar señales históricas para la vela anterior
+        now = datetime.now()
+        historical_signals = [s for s in historical_signals 
+                            if (now - datetime.strptime(s['timestamp'], '%Y-%m-%d %H:%M')) < timedelta(hours=2)]
+        
+        return render_template('index.html', 
+                               long_signals=long_signals[:50], 
+                               short_signals=short_signals[:50],
+                               historical_signals=historical_signals[:50],
+                               last_update=last_update,
+                               params=DEFAULTS,
+                               signal_count=signal_count,
+                               avg_adx_long=round(avg_adx_long, 2),
+                               avg_adx_short=round(avg_adx_short, 2),
+                               scatter_data=scatter_data,
+                               cryptos_analyzed=cryptos_analyzed)
+    except Exception as e:
+        logger.error(f"Error en ruta principal: {str(e)}")
+        logger.error(traceback.format_exc())
+        return render_template('error.html', message="Error al cargar datos. Por favor intente más tarde.")
 
 @app.route('/chart/<symbol>/<signal_type>')
 def get_chart(symbol, signal_type):
@@ -686,6 +640,15 @@ def get_chart(symbol, signal_type):
 def manual():
     return render_template('manual.html')
 
+@app.route('/status')
+def status():
+    return jsonify({
+        'status': 'active',
+        'last_update': cache.get('last_update') or datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'long_signals': len(cache.get('long_signals') or []),
+        'short_signals': len(cache.get('short_signals') or [])
+    })
+
 @app.route('/update_params', methods=['POST'])
 def update_params():
     try:
@@ -713,28 +676,6 @@ def update_params():
             'status': 'error',
             'message': f"Error actualizando parámetros: {str(e)}"
         }), 500
-
-@app.route('/status')
-def status():
-    last_update = cache.get('last_update') or datetime.now()
-    long_signals = cache.get('long_signals') or []
-    short_signals = cache.get('short_signals') or []
-    scatter_data = cache.get('scatter_data') or []
-    
-    return jsonify({
-        'status': 'ready',
-        'last_update': last_update.strftime('%Y-%m-%d %H:%M:%S'),
-        'long_signals_count': len(long_signals),
-        'short_signals_count': len(short_signals),
-        'cryptos_analyzed': len(scatter_data)
-    })
-
-# Manejar cierre de la aplicación
-def on_exit():
-    logger.info("Aplicación cerrada")
-    # Guardar estado actual en caché persistente si es necesario
-
-atexit.register(on_exit)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
