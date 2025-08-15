@@ -10,10 +10,6 @@
         .chart-container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .chart-title { text-align: center; margin-bottom: 20px; }
         .chart-img { width: 100%; }
-        .signal-info { margin-top: 20px; padding: 15px; border-radius: 8px; }
-        .long-info { background-color: #e8f5e9; border-left: 4px solid #4CAF50; }
-        .short-info { background-color: #ffebee; border-left: 4px solid #F44336; }
-        .info-item { margin-bottom: 5px; }
     </style>
 </head>
 <body>
@@ -25,24 +21,6 @@
             </a>
         </div>
         <img src="data:image/png;base64,{{ plot_url }}" alt="Gráfico de {{ symbol }}" class="chart-img">
-        
-        <div class="signal-info {{ 'long-info' if signal_type == 'long' else 'short-info' }}">
-            <h4>Información de la Señal</h4>
-            <div class="row">
-                <div class="col-md-4">
-                    <p class="info-item"><strong>Precio actual:</strong> {{ signal.price }}</p>
-                    <p class="info-item"><strong>Entrada recomendada:</strong> {{ signal.entry }}</p>
-                </div>
-                <div class="col-md-4">
-                    <p class="info-item"><strong>Stop Loss:</strong> {{ signal.sl }}</p>
-                    <p class="info-item"><strong>Take Profit 1:</strong> {{ signal.tp1 }}</p>
-                </div>
-                <div class="col-md-4">
-                    <p class="info-item"><strong>Take Profit 2:</strong> {{ signal.tp2 }}</p>
-                    <p class="info-item"><strong>Volumen:</strong> {{ signal.volume }}</p>
-                </div>
-            </div>
-        </div>
     </div>
 </body>
 </html>
