@@ -1,7 +1,9 @@
 flask
+flask-caching
 requests
 pandas
 numpy
 matplotlib
 gunicorn
 plotly
+scipy
