@@ -18,6 +18,7 @@ import logging
 import plotly
 import plotly.graph_objs as go
 from threading import Lock
+from scipy.signal import argrelextrema
 
 app = Flask(__name__)
 cache = Cache(app, config={'CACHE_TYPE': 'simple'})
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
-CACHE_TIME = 300  # 5 minutos para actualizaciones más frecuentes
+CACHE_TIME = 300  # 5 minutos
 DEFAULTS = {
     'timeframe': '1h',
     'ema_fast': 9,
@@ -45,9 +46,10 @@ DEFAULTS = {
 # Leer lista de criptomonedas
 def load_cryptos():
     with open(CRYPTOS_FILE, 'r') as f:
-        return [line.strip() for line in f.readlines() if line.strip()]
+        cryptos = [line.strip() for line in f.readlines() if line.strip()]
+    return cryptos
 
-# Obtener datos de KuCoin
+# Obtener datos de KuCoin con manejo de errores mejorado
 def get_kucoin_data(symbol, timeframe):
     tf_mapping = {
         '30m': '30min',
@@ -85,9 +87,8 @@ def get_kucoin_data(symbol, timeframe):
                 
                 df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='s')
                 return df
-            else:
-                logger.warning(f"Respuesta inesperada de KuCoin para {symbol}: {data.get('msg')}")
-                return None
+        else:
+            logger.warning(f"Error en la respuesta de KuCoin para {symbol}: {response.status_code}")
     except Exception as e:
         logger.error(f"Error fetching data for {symbol}: {str(e)}")
     return None
@@ -122,7 +123,7 @@ def calculate_adx(high, low, close, window):
     try:
         # Calcular +DM y -DM
         plus_dm = high.diff()
-        minus_dm = low.diff().abs()
+        minus_dm = -low.diff()
         
         plus_dm[plus_dm <= 0] = 0
         minus_dm[minus_dm <= 0] = 0
@@ -138,8 +139,8 @@ def calculate_adx(high, low, close, window):
         plus_di = 100 * (plus_dm.ewm(alpha=1/window, adjust=False).mean() / atr)
         minus_di = 100 * (minus_dm.ewm(alpha=1/window, adjust=False).mean() / atr)
         
-        # Calcular ADX
-        dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di)).replace([np.inf, -np.inf], 0)
+        # Calcular DX y ADX
+        dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10))
         adx = dx.ewm(alpha=1/window, adjust=False).mean()
         return adx, plus_di, minus_di
     except Exception as e:
@@ -377,8 +378,13 @@ def analyze_crypto(symbol, params):
         logger.error(f"Error analyzing {symbol}: {str(e)}")
         return None, None, 0, 0, 'Muy Bajo'
 
+# Almacenar señales históricas (últimas 24 horas)
+historical_signals = []
+historical_lock = Lock()
+
 # Tarea en segundo plano optimizada
 def background_update():
+    global historical_signals
     while True:
         start_time = time.time()
         try:
@@ -387,14 +393,13 @@ def background_update():
             long_signals = []
             short_signals = []
             scatter_data = []
+            new_historical = []
             
-            # Guardar señales previas
-            prev_long_signals = cache.get('long_signals') or []
-            prev_short_signals = cache.get('short_signals') or []
+            total_cryptos = len(cryptos)
+            processed = 0
             
             # Procesar en lotes
-            batch_size = 20
-            total_cryptos = len(cryptos)
+            batch_size = 10
             for i in range(0, total_cryptos, batch_size):
                 batch = cryptos[i:i+batch_size]
                 for crypto in batch:
@@ -402,9 +407,22 @@ def background_update():
                         long_signal, short_signal, long_prob, short_prob, volume_class = analyze_crypto(crypto, DEFAULTS)
                         if long_signal:
                             long_signals.append(long_signal)
+                            new_historical.append({
+                                'symbol': crypto,
+                                'signal': 'LONG',
+                                'time': datetime.now(),
+                                'details': long_signal
+                            })
                         if short_signal:
                             short_signals.append(short_signal)
+                            new_historical.append({
+                                'symbol': crypto,
+                                'signal': 'SHORT',
+                                'time': datetime.now(),
+                                'details': short_signal
+                            })
                         
+                        # Siempre agregar al gráfico de dispersión
                         scatter_data.append({
                             'symbol': crypto,
                             'long_prob': long_prob,
@@ -413,28 +431,32 @@ def background_update():
                         })
                     except Exception as e:
                         logger.error(f"Error procesando {crypto}: {str(e)}")
+                    processed += 1
+                    logger.info(f"Progreso: {processed}/{total_cryptos} ({(processed/total_cryptos)*100:.1f}%)")
                 
-                # Actualizar progreso en caché
-                progress = min(i + batch_size, total_cryptos)
-                cache.set('progress', f"{progress}/{total_cryptos} ({(progress/total_cryptos)*100:.1f}%)")
                 # Pausa entre lotes
                 time.sleep(1)
             
-            # Ordenar por fuerza de tendencia (ADX)
+            # Ordenar señales
             long_signals.sort(key=lambda x: x['adx'], reverse=True)
             short_signals.sort(key=lambda x: x['adx'], reverse=True)
+            
+            # Actualizar histórico (mantener solo 24 horas)
+            with historical_lock:
+                historical_signals.extend(new_historical)
+                # Filtrar señales más antiguas de 24 horas
+                cutoff = datetime.now() - timedelta(hours=24)
+                historical_signals = [s for s in historical_signals if s['time'] > cutoff]
             
             # Actualizar caché
             cache.set('long_signals', long_signals)
             cache.set('short_signals', short_signals)
-            cache.set('prev_long_signals', prev_long_signals)
-            cache.set('prev_short_signals', prev_short_signals)
             cache.set('scatter_data', scatter_data)
             cache.set('last_update', datetime.now())
-            cache.set('cryptos_analyzed', len(scatter_data))
+            cache.set('cryptos_analyzed', total_cryptos)
             
             elapsed = time.time() - start_time
-            logger.info(f"Actualización completada en {elapsed:.2f}s: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(scatter_data)} cryptos analizadas")
+            logger.info(f"Actualización completada en {elapsed:.2f}s: {len(long_signals)} LONG, {len(short_signals)} SHORT, {total_cryptos} cryptos analizadas")
         except Exception as e:
             logger.error(f"Error en actualización de fondo: {str(e)}")
         
@@ -449,8 +471,6 @@ logger.info("Hilo de actualización iniciado")
 def index():
     long_signals = cache.get('long_signals') or []
     short_signals = cache.get('short_signals') or []
-    prev_long_signals = cache.get('prev_long_signals') or []
-    prev_short_signals = cache.get('prev_short_signals') or []
     scatter_data = cache.get('scatter_data') or []
     last_update = cache.get('last_update') or datetime.now()
     cryptos_analyzed = cache.get('cryptos_analyzed') or 0
@@ -460,17 +480,14 @@ def index():
     avg_adx_long = np.mean([s['adx'] for s in long_signals]) if long_signals else 0
     avg_adx_short = np.mean([s['adx'] for s in short_signals]) if short_signals else 0
     
-    # Combinar señales previas (quitando duplicados por símbolo)
-    prev_signals_map = {}
-    for signal in prev_long_signals + prev_short_signals:
-        prev_signals_map[signal['symbol']] = signal
-    
-    prev_signals = list(prev_signals_map.values())
+    # Obtener señales históricas (últimas 24 horas)
+    with historical_lock:
+        historical_display = historical_signals[-20:]  # Últimas 20 señales
     
     return render_template('index.html', 
                            long_signals=long_signals[:50], 
                            short_signals=short_signals[:50],
-                           prev_signals=prev_signals[:50],  # Máximo 50 señales previas
+                           historical_signals=historical_display,
                            last_update=last_update,
                            params=DEFAULTS,
                            signal_count=signal_count,
@@ -591,10 +608,11 @@ def update_params():
 
 @app.route('/status')
 def status():
-    progress = cache.get('progress') or '0/0 (0%)'
     return jsonify({
-        'status': 'running',
-        'progress': progress
+        'last_update': cache.get('last_update').strftime('%Y-%m-%d %H:%M:%S') if cache.get('last_update') else None,
+        'cryptos_analyzed': cache.get('cryptos_analyzed') or 0,
+        'long_signals_count': len(cache.get('long_signals') or []),
+        'short_signals_count': len(cache.get('short_signals') or [])
     })
 
 if __name__ == '__main__':
