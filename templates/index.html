@@ -21,6 +21,8 @@
         .signal-card:hover { transform: translateY(-5px); }
         .long-bg { background-color: #e8f5e9; }
         .short-bg { background-color: #ffebee; }
+        .prev-long-bg { background-color: #e8f5e9; opacity: 0.8; }
+        .prev-short-bg { background-color: #ffebee; opacity: 0.8; }
         .volume-high { color: #d32f2f; font-weight: bold; }
         .volume-medium { color: #f57c00; }
         .chart-container { position: relative; height: 300px; margin-bottom: 20px; }
@@ -71,10 +73,18 @@
             width: 3rem;
             height: 3rem;
         }
-        .history-table th {
-            background-color: #f8f9fa;
-            position: sticky;
-            top: 0;
+        .signal-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .signal-long {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .signal-short {
+            background-color: #F44336;
+            color: white;
         }
     </style>
 </head>
@@ -84,6 +94,7 @@
             <span class="visually-hidden">Cargando...</span>
         </div>
         <p class="mt-3">Analizando mercados, por favor espere...</p>
+        <p id="loadingProgress">0% completado</p>
     </div>
 
     <div class="container py-4" style="display:none;" id="contentContainer">
@@ -182,8 +193,8 @@
                     </div>
                     
                     <div class="col-md-3">
-                        <label class="form-label">Fuerza Mín. Señal</label>
-                        <input type="number" name="min_signal_strength" value="{{ params.min_signal_strength }}" class="form-control" step="1" min="50" max="80">
+                        <label class="form-label">Mín Volumen</label>
+                        <input type="number" name="min_volume_ratio" value="{{ params.min_volume_ratio }}" class="form-control" step="0.1" min="0.5" max="3">
                     </div>
                     
                     <div class="col-md-12 mt-4">
@@ -372,17 +383,16 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Nueva tabla de señales históricas -->
-        <div class="card mt-4">
-            <div class="card-header bg-warning text-white d-flex justify-content-between align-items-center">
-                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Recientes (Vela Anterior)</h2>
-                <span class="badge bg-dark">{{ signal_history|length }} registros</span>
+
+        <!-- Tabla para señales de la vela anterior -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales de la Vela Anterior ({{ prev_signals|length }})</h2>
             </div>
             <div class="card-body">
-                {% if signal_history %}
-                <div class="table-responsive">
-                    <table class="table table-hover history-table">
+                {% if prev_signals %}
+                <div class="signal-table-container">
+                    <table class="table table-hover">
                         <thead class="table-light">
                             <tr>
                                 <th>#</th>
@@ -393,16 +403,15 @@
                                 <th>SL</th>
                                 <th>TP1</th>
                                 <th>TP2</th>
-                                <th>Hora</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for signal in signal_history %}
-                            <tr class="{{ 'long-bg' if signal.type == 'LONG' else 'short-bg' }}">
+                            {% for signal in prev_signals %}
+                            <tr class="{% if signal.type == 'LONG' %}prev-long-bg{% else %}prev-short-bg{% endif %}">
                                 <td>{{ loop.index }}</td>
                                 <td>{{ signal.symbol }}</td>
                                 <td>
-                                    <span class="badge {{ 'badge-long' if signal.type == 'LONG' else 'badge-short' }}">
+                                    <span class="signal-badge {% if signal.type == 'LONG' %}signal-long{% else %}signal-short{% endif %}">
                                         {{ signal.type }}
                                     </span>
                                 </td>
@@ -411,7 +420,6 @@
                                 <td class="text-danger">{{ signal.sl }}</td>
                                 <td class="text-success">{{ signal.tp1 }}</td>
                                 <td class="text-success">{{ signal.tp2 }}</td>
-                                <td>{{ signal.timestamp.strftime('%H:%M:%S') }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -419,7 +427,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-warning">
-                    No hay registros de señales recientes
+                    No se encontraron señales en la vela anterior
                 </div>
                 {% endif %}
             </div>
@@ -428,12 +436,14 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Ocultar loading y mostrar contenido después de 2 segundos
-        setTimeout(() => {
-            document.getElementById('loadingOverlay').style.display = 'none';
-            document.getElementById('contentContainer').style.display = 'block';
-            initializeCharts();
-        }, 2000);
+        // Mostrar contenido cuando esté listo
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                document.getElementById('loadingOverlay').style.display = 'none';
+                document.getElementById('contentContainer').style.display = 'block';
+                initializeCharts();
+            }, 1000);
+        });
 
         function initializeCharts() {
             // Gráfico de resumen
@@ -464,28 +474,17 @@
                         title: {
                             display: true,
                             text: 'Distribución de Señales'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const label = context.label || '';
-                                    const value = context.raw || 0;
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = Math.round((value / total) * 100);
-                                    return `${label}: ${value} (${percentage}%)`;
-                                }
-                            }
                         }
                     }
                 }
             });
             
-            // Gráfico de estadísticas LONG
+            // Gráfico de fuerza de tendencia LONG
             const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
             const longStatsChart = new Chart(longStatsCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Distancia Prom.', 'ADX Prom.'],
+                    labels: ['Distancia a Entrada', 'ADX Promedio'],
                     datasets: [{
                         label: 'Estadísticas LONG',
                         data: [
@@ -519,12 +518,12 @@
                 }
             });
             
-            // Gráfico de estadísticas SHORT
+            // Gráfico de fuerza de tendencia SHORT
             const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
             const shortStatsChart = new Chart(shortStatsCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Distancia Prom.', 'ADX Prom.'],
+                    labels: ['Distancia a Entrada', 'ADX Promedio'],
                     datasets: [{
                         label: 'Estadísticas SHORT',
                         data: [
@@ -586,7 +585,7 @@
                         type: 'scatter',
                         name: vol,
                         marker: {
-                            size: 10,
+                            size: 8,
                             color: volumeColors[vol],
                             opacity: 0.8
                         },
@@ -594,8 +593,7 @@
                         hoverlabel: {
                             bgcolor: 'rgba(0,0,0,0.7)',
                             font: {
-                                color: 'white',
-                                size: 14
+                                color: 'white'
                             }
                         }
                     };
@@ -603,6 +601,29 @@
                     traces.push(trace);
                 }
             });
+            
+            // Traza especial para Bitcoin si está presente
+            const btcData = scatterData.find(item => item.symbol === 'BTC');
+            if (btcData) {
+                traces.push({
+                    x: [btcData.long_prob],
+                    y: [btcData.short_prob],
+                    text: ['BTC'],
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    name: 'Bitcoin',
+                    marker: {
+                        size: 12,
+                        color: '#FFD700',
+                        symbol: 'star'
+                    },
+                    textfont: {
+                        size: 12,
+                        color: '#FFD700'
+                    },
+                    hoverinfo: 'text+x+y'
+                });
+            }
             
             // Diseño del gráfico
             const layout = {
@@ -658,8 +679,7 @@
                     orientation: 'h',
                     y: -0.2
                 },
-                margin: {t: 50, b: 80},
-                height: 600
+                margin: {t: 50, b: 80}
             };
             
             // Crear gráfico
@@ -671,7 +691,7 @@
                 const visibleTraces = [];
                 
                 traces.forEach((trace, index) => {
-                    if (filter === 'all' || trace.name === filter) {
+                    if (filter === 'all' || trace.name === filter || trace.name === 'Bitcoin') {
                         visibleTraces.push(index);
                     }
                 });
