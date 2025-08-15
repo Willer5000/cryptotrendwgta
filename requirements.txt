@@ -7,4 +7,3 @@ matplotlib
 gunicorn
 plotly
 scipy
-sqlite3
