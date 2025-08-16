@@ -6,4 +6,3 @@ numpy
 matplotlib
 gunicorn
 plotly
-scipy
