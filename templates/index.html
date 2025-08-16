@@ -54,49 +54,13 @@
             margin: 2px;
             font-size: 0.85rem;
         }
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(255, 255, 255, 0.9);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-        }
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
-        }
-        .progress {
-            width: 80%;
-            max-width: 500px;
-            margin-top: 20px;
-        }
-        .status-message {
-            margin-top: 15px;
-            font-size: 1.1rem;
-            text-align: center;
+        .historical-row {
+            background-color: #fffde7;
         }
     </style>
 </head>
 <body>
-    <div id="loadingOverlay" class="loading-overlay">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Cargando...</span>
-        </div>
-        <div class="status-message" id="statusMessage">Analizando mercados, por favor espere...</div>
-        <div class="progress mt-3">
-            <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%">0%</div>
-        </div>
-        <div class="mt-2" id="progressText">0 de 0 criptomonedas analizadas</div>
-        <div class="mt-3" id="lastUpdateText">Esperando datos...</div>
-    </div>
-
-    <div class="container py-4" style="display:none;" id="contentContainer">
+    <div class="container py-4">
         <header class="d-flex justify-content-between align-items-center mb-4 border-bottom">
             <div>
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
@@ -262,57 +226,6 @@
             </div>
         </div>
 
-        <!-- Nueva tabla de señales históricas -->
-        <div class="card mb-4">
-            <div class="card-header bg-warning text-white">
-                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
-            </div>
-            <div class="card-body">
-                {% if historical_signals %}
-                <div class="signal-table-container">
-                    <table class="table table-hover signal-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th>#</th>
-                                <th>Cripto</th>
-                                <th>Acción</th>
-                                <th>Entrada</th>
-                                <th>SL</th>
-                                <th>TP1</th>
-                                <th>TP2</th>
-                                <th>Volumen</th>
-                                <th>Hora</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for signal in historical_signals %}
-                            <tr class="{{ 'long-bg' if signal.type == 'LONG' else 'short-bg' }}">
-                                <td>{{ loop.index }}</td>
-                                <td>{{ signal.symbol }}</td>
-                                <td>
-                                    <span class="badge {{ 'badge-long' if signal.type == 'LONG' else 'badge-short' }}">
-                                        {{ signal.type }}
-                                    </span>
-                                </td>
-                                <td>{{ signal.entry }}</td>
-                                <td class="text-danger">{{ signal.sl }}</td>
-                                <td class="text-success">{{ signal.tp1 }}</td>
-                                <td class="text-success">{{ signal.tp2 }}</td>
-                                <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
-                                <td>{{ signal.timestamp.strftime('%H:%M') }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="alert alert-warning">
-                    No hay señales históricas disponibles
-                </div>
-                {% endif %}
-            </div>
-        </div>
-
         <div class="row">
             <div class="col-md-6">
                 <div class="card mb-4">
@@ -428,351 +341,358 @@
                 </div>
             </div>
         </div>
+
+        <!-- Tabla de señales históricas -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-white">
+                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    Estas son señales que se generaron en la vela anterior y aún pueden estar activas. Verifique el gráfico para confirmar.
+                </div>
+                {% if historical_signals %}
+                <div class="signal-table-container">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Cripto</th>
+                                <th>Acción</th>
+                                <th>Volumen</th>
+                                <th>Precio</th>
+                                <th>Entrada</th>
+                                <th>SL</th>
+                                <th>TP1</th>
+                                <th>TP2</th>
+                                <th>Gráfico</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for signal in historical_signals %}
+                            <tr class="historical-row">
+                                <td>{{ loop.index }}</td>
+                                <td>{{ signal.symbol }}</td>
+                                <td>
+                                    <span class="badge {% if signal.signal_type == 'LONG' %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ signal.signal_type }}
+                                    </span>
+                                </td>
+                                <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                <td>{{ signal.price }}</td>
+                                <td>{{ signal.entry }}</td>
+                                <td class="text-danger">{{ signal.sl }}</td>
+                                <td class="text-success">{{ signal.tp1 }}</td>
+                                <td class="text-success">{{ signal.tp2 }}</td>
+                                <td>
+                                    <a href="/chart/{{ signal.symbol }}/{{ signal.signal_type|lower }}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-chart-line"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    No se encontraron señales históricas en este momento
+                </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Función para verificar el estado de los datos
-        function checkDataStatus() {
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.cache_ready && !data.is_updating) {
-                        // Datos listos, ocultar overlay y mostrar contenido
-                        document.getElementById('loadingOverlay').style.display = 'none';
-                        document.getElementById('contentContainer').style.display = 'block';
-                        initializeCharts();
-                    } else {
-                        // Actualizar mensaje de estado
-                        const progress = data.progress || 0;
-                        const processed = data.processed || 0;
-                        const total = data.total_cryptos || 0;
-                        
-                        document.getElementById('progressBar').style.width = `${progress}%`;
-                        document.getElementById('progressBar').innerText = `${progress}%`;
-                        document.getElementById('progressText').innerText = `${processed} de ${total} criptomonedas analizadas`;
-                        
-                        if (data.last_update) {
-                            const lastUpdate = new Date(data.last_update);
-                            document.getElementById('lastUpdateText').innerText = 
-                                `Última actualización: ${lastUpdate.toLocaleTimeString()}`;
-                        }
-                        
-                        if (data.is_updating) {
-                            document.getElementById('statusMessage').innerText = 
-                                `Analizando mercados... ${progress}% completado`;
-                        } else {
-                            document.getElementById('statusMessage').innerText = 
-                                'Cargando datos históricos...';
-                        }
-                        
-                        // Revisar nuevamente en 5 segundos
-                        setTimeout(checkDataStatus, 5000);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error checking status:', error);
-                    document.getElementById('statusMessage').innerText = 
-                        'Error conectando al servidor. Reintentando...';
-                    setTimeout(checkDataStatus, 10000);
-                });
-        }
-
-        // Iniciar verificación de estado al cargar la página
-        document.addEventListener('DOMContentLoaded', function() {
-            checkDataStatus();
-        });
-
-        function initializeCharts() {
-            // Gráfico de resumen
-            const marketCtx = document.getElementById('marketChart').getContext('2d');
-            const marketChart = new Chart(marketCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['LONG', 'SHORT', 'Neutral'],
-                    datasets: [{
-                        data: [
-                            {{ long_signals|length }}, 
-                            {{ short_signals|length }}, 
-                            {{ cryptos_analyzed - long_signals|length - short_signals|length }}
-                        ],
-                        backgroundColor: [
-                            'rgba(46, 204, 113, 0.7)',
-                            'rgba(231, 76, 60, 0.7)',
-                            'rgba(149, 165, 166, 0.7)'
-                        ],
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'bottom' },
-                        title: {
-                            display: true,
-                            text: 'Distribución de Señales'
-                        }
+        // Gráfico de resumen
+        const marketCtx = document.getElementById('marketChart').getContext('2d');
+        const marketChart = new Chart(marketCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['LONG', 'SHORT', 'Neutral'],
+                datasets: [{
+                    data: [
+                        {{ long_signals|length }}, 
+                        {{ short_signals|length }}, 
+                        {{ cryptos_analyzed - long_signals|length - short_signals|length }}
+                    ],
+                    backgroundColor: [
+                        'rgba(46, 204, 113, 0.7)',
+                        'rgba(231, 76, 60, 0.7)',
+                        'rgba(149, 165, 166, 0.7)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    title: {
+                        display: true,
+                        text: 'Distribución de Señales'
                     }
                 }
-            });
-            
-            // Gráfico de fuerza de tendencia LONG
-            const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
-            const longStatsChart = new Chart(longStatsCtx, {
-                type: 'bar',
-                data: {
-                    labels: ['Distancia a Entrada', 'ADX Promedio'],
-                    datasets: [{
-                        label: 'Estadísticas LONG',
-                        data: [
-                            {{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }},
-                            {{ long_signals|map(attribute='adx')|sum / long_signals|length if long_signals else 0 }}
-                        ],
-                        backgroundColor: [
-                            'rgba(46, 204, 113, 0.7)',
-                            'rgba(52, 152, 219, 0.7)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { 
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Valor'
-                            }
-                        }
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Estadísticas Señales LONG'
-                        }
-                    }
-                }
-            });
-            
-            // Gráfico de fuerza de tendencia SHORT
-            const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
-            const shortStatsChart = new Chart(shortStatsCtx, {
-                type: 'bar',
-                data: {
-                    labels: ['Distancia a Entrada', 'ADX Promedio'],
-                    datasets: [{
-                        label: 'Estadísticas SHORT',
-                        data: [
-                            {{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }},
-                            {{ short_signals|map(attribute='adx')|sum / short_signals|length if short_signals else 0 }}
-                        ],
-                        backgroundColor: [
-                            'rgba(231, 76, 60, 0.7)',
-                            'rgba(52, 152, 219, 0.7)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { 
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Valor'
-                            }
-                        }
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Estadísticas Señales SHORT'
-                        }
-                    }
-                }
-            });
-            
-            // Gráfico de dispersión con Plotly
-            const scatterData = {{ scatter_data|tojson }};
-            
-            // Mapeo de colores por volumen
-            const volumeColors = {
-                'Muy Alto': '#4CAF50',   // Verde
-                'Alto': '#2196F3',       // Azul
-                'Medio': '#FFEB3B',      // Amarillo
-                'Bajo': '#FF9800',       // Naranja
-                'Muy Bajo': '#F44336'    // Rojo
-            };
-            
-            // Preparar datos para el gráfico
-            const traces = [];
-            const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
-            
-            volumes.forEach(vol => {
-                const data = scatterData.filter(item => item.volume === vol);
-                
-                if (data.length > 0) {
-                    const trace = {
-                        x: data.map(item => item.long_prob),
-                        y: data.map(item => item.short_prob),
-                        text: data.map(item => item.symbol),
-                        mode: 'markers',
-                        type: 'scatter',
-                        name: vol,
-                        marker: {
-                            size: 8,
-                            color: volumeColors[vol],
-                            opacity: 0.8
-                        },
-                        hoverinfo: 'text+x+y',
-                        hoverlabel: {
-                            bgcolor: 'rgba(0,0,0,0.7)',
-                            font: {
-                                color: 'white'
-                            }
-                        }
-                    };
-                    
-                    traces.push(trace);
-                }
-            });
-            
-            // Traza especial para Bitcoin si está presente
-            const btcData = scatterData.find(item => item.symbol === 'BTC');
-            if (btcData) {
-                traces.push({
-                    x: [btcData.long_prob],
-                    y: [btcData.short_prob],
-                    text: ['BTC'],
-                    mode: 'markers+text',
-                    type: 'scatter',
-                    name: 'Bitcoin',
-                    marker: {
-                        size: 12,
-                        color: '#FFD700',
-                        symbol: 'star'
-                    },
-                    textfont: {
-                        size: 12,
-                        color: '#FFD700'
-                    },
-                    hoverinfo: 'text+x+y'
-                });
             }
-            
-            // Diseño del gráfico
-            const layout = {
-                title: 'Probabilidades de Trading por Criptomoneda',
-                xaxis: {
-                    title: 'Probabilidad LONG (%)',
-                    range: [0, 100],
-                    gridcolor: 'rgba(0,0,0,0.1)',
-                    zerolinecolor: 'rgba(0,0,0,0.3)'
-                },
-                yaxis: {
-                    title: 'Probabilidad SHORT (%)',
-                    range: [0, 100],
-                    gridcolor: 'rgba(0,0,0,0.1)',
-                    zerolinecolor: 'rgba(0,0,0,0.3)'
-                },
-                shapes: [
-                    // Zonas de probabilidad
-                    {type: 'rect', x0: 0, x1: 33.3, y0: 0, y1: 33.3, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 33.3, x1: 66.6, y0: 0, y1: 33.3, fillcolor: 'rgba(231, 76, 60, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 0, y1: 33.3, fillcolor: 'rgba(231, 76, 60, 0.2)', line: {width: 0}},
-                    
-                    {type: 'rect', x0: 0, x1: 33.3, y0: 33.3, y1: 66.6, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 33.3, x1: 66.6, y0: 33.3, y1: 66.6, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 33.3, y1: 66.6, fillcolor: 'rgba(231, 76, 60, 0.1)', line: {width: 0}},
-                    
-                    {type: 'rect', x0: 0, x1: 33.3, y0: 66.6, y1: 100, fillcolor: 'rgba(46, 204, 113, 0.2)', line: {width: 0}},
-                    {type: 'rect', x0: 33.3, x1: 66.6, y0: 66.6, y1: 100, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 66.6, y1: 100, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
-                    
-                    // Líneas divisorias
-                    {type: 'line', x0: 33.3, x1: 33.3, y0: 0, y1: 100, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
-                    {type: 'line', x0: 66.6, x1: 66.6, y0: 0, y1: 100, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
-                    {type: 'line', x0: 0, x1: 100, y0: 33.3, y1: 33.3, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
-                    {type: 'line', x0: 0, x1: 100, y0: 66.6, y1: 66.6, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}}
-                ],
-                annotations: [
-                    {x: 16.65, y: 16.65, text: 'Neutral', showarrow: false, font: {size: 14}},
-                    {x: 50, y: 16.65, text: 'Short Medio', showarrow: false, font: {size: 14}},
-                    {x: 83.3, y: 16.65, text: 'Alto Short', showarrow: false, font: {size: 14}},
-                    
-                    {x: 16.65, y: 50, text: 'Long Medio', showarrow: false, font: {size: 14}},
-                    {x: 50, y: 50, text: 'Neutral', showarrow: false, font: {size: 14}},
-                    {x: 83.3, y: 50, text: 'Short Medio', showarrow: false, font: {size: 14}},
-                    
-                    {x: 16.65, y: 83.3, text: 'Alto Long', showarrow: false, font: {size: 14}},
-                    {x: 50, y: 83.3, text: 'Long Medio', showarrow: false, font: {size: 14}},
-                    {x: 83.3, y: 83.3, text: 'Neutral', showarrow: false, font: {size: 14}}
-                ],
-                hovermode: 'closest',
-                showlegend: true,
-                legend: {
-                    orientation: 'h',
-                    y: -0.2
-                },
-                margin: {t: 50, b: 80}
-            };
-            
-            // Crear gráfico
-            Plotly.newPlot('scatterPlot', traces, layout);
-            
-            // Filtro por volumen
-            document.getElementById('volume-filter').addEventListener('change', function() {
-                const filter = this.value;
-                const visibleTraces = [];
-                
-                traces.forEach((trace, index) => {
-                    if (filter === 'all' || trace.name === filter || trace.name === 'Bitcoin') {
-                        visibleTraces.push(index);
+        });
+        
+        // Gráfico de fuerza de tendencia LONG
+        const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
+        const longStatsChart = new Chart(longStatsCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Distancia a Entrada', 'ADX Promedio'],
+                datasets: [{
+                    label: 'Estadísticas LONG',
+                    data: [
+                        {{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }},
+                        {{ long_signals|map(attribute='adx')|sum / long_signals|length if long_signals else 0 }}
+                    ],
+                    backgroundColor: [
+                        'rgba(46, 204, 113, 0.7)',
+                        'rgba(52, 152, 219, 0.7)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Valor'
+                        }
                     }
-                });
-                
-                Plotly.restyle('scatterPlot', 'visible', traces.map((_, i) => visibleTraces.includes(i)));
-            });
-            
-            // Auto-refresh cada 60 segundos
-            setTimeout(() => {
-                location.reload();
-            }, 60000);
-            
-            // Manejar el envío del formulario
-            document.getElementById('filters-form').addEventListener('submit', async function(e) {
-                e.preventDefault();
-                
-                const formData = new FormData(this);
-                const params = Object.fromEntries(formData.entries());
-                
-                try {
-                    const response = await fetch('/update_params', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(params)
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (result.status === 'success') {
-                        alert('Parámetros actualizados correctamente. La página se recargará en 5 segundos.');
-                        setTimeout(() => {
-                            location.reload();
-                        }, 5000);
-                    } else {
-                        alert('Error al actualizar parámetros: ' + result.message);
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Estadísticas Señales LONG'
                     }
-                } catch (error) {
-                    alert('Error de conexión: ' + error.message);
                 }
+            }
+        });
+        
+        // Gráfico de fuerza de tendencia SHORT
+        const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
+        const shortStatsChart = new Chart(shortStatsCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Distancia a Entrada', 'ADX Promedio'],
+                datasets: [{
+                    label: 'Estadísticas SHORT',
+                    data: [
+                        {{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }},
+                        {{ short_signals|map(attribute='adx')|sum / short_signals|length if short_signals else 0 }}
+                    ],
+                    backgroundColor: [
+                        'rgba(231, 76, 60, 0.7)',
+                        'rgba(52, 152, 219, 0.7)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Valor'
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Estadísticas Señales SHORT'
+                    }
+                }
+            }
+        });
+        
+        // Gráfico de dispersión con Plotly
+        const scatterData = {{ scatter_data|tojson }};
+        
+        // Mapeo de colores por volumen
+        const volumeColors = {
+            'Muy Alto': '#4CAF50',   // Verde
+            'Alto': '#2196F3',       // Azul
+            'Medio': '#FFEB3B',      // Amarillo
+            'Bajo': '#FF9800',       // Naranja
+            'Muy Bajo': '#F44336'    // Rojo
+        };
+        
+        // Preparar datos para el gráfico
+        const traces = [];
+        const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
+        
+        volumes.forEach(vol => {
+            const data = scatterData.filter(item => item.volume === vol);
+            
+            if (data.length > 0) {
+                const trace = {
+                    x: data.map(item => item.long_prob),
+                    y: data.map(item => item.short_prob),
+                    text: data.map(item => item.symbol),
+                    mode: 'markers',
+                    type: 'scatter',
+                    name: vol,
+                    marker: {
+                        size: 8,
+                        color: volumeColors[vol],
+                        opacity: 0.8
+                    },
+                    hoverinfo: 'text+x+y',
+                    hoverlabel: {
+                        bgcolor: 'rgba(0,0,0,0.7)',
+                        font: {
+                            color: 'white'
+                        }
+                    }
+                };
+                
+                traces.push(trace);
+            }
+        });
+        
+        // Traza especial para Bitcoin si está presente
+        const btcData = scatterData.find(item => item.symbol === 'BTC');
+        if (btcData) {
+            traces.push({
+                x: [btcData.long_prob],
+                y: [btcData.short_prob],
+                text: ['BTC'],
+                mode: 'markers+text',
+                type: 'scatter',
+                name: 'Bitcoin',
+                marker: {
+                    size: 12,
+                    color: '#FFD700',
+                    symbol: 'star'
+                },
+                textfont: {
+                    size: 12,
+                    color: '#FFD700'
+                },
+                hoverinfo: 'text+x+y'
             });
         }
+        
+        // Diseño del gráfico
+        const layout = {
+            title: 'Probabilidades de Trading por Criptomoneda',
+            xaxis: {
+                title: 'Probabilidad LONG (%)',
+                range: [0, 100],
+                gridcolor: 'rgba(0,0,0,0.1)',
+                zerolinecolor: 'rgba(0,0,0,0.3)'
+            },
+            yaxis: {
+                title: 'Probabilidad SHORT (%)',
+                range: [0, 100],
+                gridcolor: 'rgba(0,0,0,0.1)',
+                zerolinecolor: 'rgba(0,0,0,0.3)'
+            },
+            shapes: [
+                // Zonas de probabilidad
+                {type: 'rect', x0: 0, x1: 33.3, y0: 0, y1: 33.3, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
+                {type: 'rect', x0: 33.3, x1: 66.6, y0: 0, y1: 33.3, fillcolor: 'rgba(231, 76, 60, 0.1)', line: {width: 0}},
+                {type: 'rect', x0: 66.6, x1: 100, y0: 0, y1: 33.3, fillcolor: 'rgba(231, 76, 60, 0.2)', line: {width: 0}},
+                
+                {type: 'rect', x0: 0, x1: 33.3, y0: 33.3, y1: 66.6, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
+                {type: 'rect', x0: 33.3, x1: 66.6, y0: 33.3, y1: 66.6, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
+                {type: 'rect', x0: 66.6, x1: 100, y0: 33.3, y1: 66.6, fillcolor: 'rgba(231, 76, 60, 0.1)', line: {width: 0}},
+                
+                {type: 'rect', x0: 0, x1: 33.3, y0: 66.6, y1: 100, fillcolor: 'rgba(46, 204, 113, 0.2)', line: {width: 0}},
+                {type: 'rect', x0: 33.3, x1: 66.6, y0: 66.6, y1: 100, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
+                {type: 'rect', x0: 66.6, x1: 100, y0: 66.6, y1: 100, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
+                
+                // Líneas divisorias
+                {type: 'line', x0: 33.3, x1: 33.3, y0: 0, y1: 100, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
+                {type: 'line', x0: 66.6, x1: 66.6, y0: 0, y1: 100, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
+                {type: 'line', x0: 0, x1: 100, y0: 33.3, y1: 33.3, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
+                {type: 'line', x0: 0, x1: 100, y0: 66.6, y1: 66.6, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}}
+            ],
+            annotations: [
+                {x: 16.65, y: 16.65, text: 'Neutral', showarrow: false, font: {size: 14}},
+                {x: 50, y: 16.65, text: 'Short Medio', showarrow: false, font: {size: 14}},
+                {x: 83.3, y: 16.65, text: 'Alto Short', showarrow: false, font: {size: 14}},
+                
+                {x: 16.65, y: 50, text: 'Long Medio', showarrow: false, font: {size: 14}},
+                {x: 50, y: 50, text: 'Neutral', showarrow: false, font: {size: 14}},
+                {x: 83.3, y: 50, text: 'Short Medio', showarrow: false, font: {size: 14}},
+                
+                {x: 16.65, y: 83.3, text: 'Alto Long', showarrow: false, font: {size: 14}},
+                {x: 50, y: 83.3, text: 'Long Medio', showarrow: false, font: {size: 14}},
+                {x: 83.3, y: 83.3, text: 'Neutral', showarrow: false, font: {size: 14}}
+            ],
+            hovermode: 'closest',
+            showlegend: true,
+            legend: {
+                orientation: 'h',
+                y: -0.2
+            },
+            margin: {t: 50, b: 80}
+        };
+        
+        // Crear gráfico
+        Plotly.newPlot('scatterPlot', traces, layout);
+        
+        // Filtro por volumen
+        document.getElementById('volume-filter').addEventListener('change', function() {
+            const filter = this.value;
+            const visibleTraces = [];
+            
+            traces.forEach((trace, index) => {
+                if (filter === 'all' || trace.name === filter || trace.name === 'Bitcoin') {
+                    visibleTraces.push(index);
+                }
+            });
+            
+            Plotly.restyle('scatterPlot', 'visible', traces.map((_, i) => visibleTraces.includes(i)));
+        });
+        
+        // Auto-refresh cada 60 segundos
+        setTimeout(() => {
+            location.reload();
+        }, 60000);
+        
+        // Manejar el envío del formulario
+        document.getElementById('filters-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const params = Object.fromEntries(formData.entries());
+            
+            try {
+                const response = await fetch('/update_params', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(params)
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    alert('Parámetros actualizados correctamente. La página se recargará en 5 segundos.');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 5000);
+                } else {
+                    alert('Error al actualizar parámetros: ' + result.message);
+                }
+            } catch (error) {
+                alert('Error de conexión: ' + error.message);
+            }
+        });
     </script>
 </body>
 </html>
