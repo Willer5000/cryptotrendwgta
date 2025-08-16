@@ -71,8 +71,25 @@
             width: 3rem;
             height: 3rem;
         }
-        .historical-table {
-            font-size: 0.9rem;
+        .historical-signal {
+            background-color: #f0f0f0;
+        }
+        .signal-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            z-index: 1000;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .status-updating {
+            background-color: #ffc107;
+            color: #000;
+        }
+        .status-completed {
+            background-color: #28a745;
+            color: #fff;
         }
     </style>
 </head>
@@ -82,15 +99,20 @@
             <span class="visually-hidden">Cargando...</span>
         </div>
         <p class="mt-3">Analizando mercados, por favor espere...</p>
-        <p id="loadingProgress">Esperando datos... Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        <p id="loadingProgress">0% completado</p>
+        <p id="lastUpdateInfo">Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</p>
     </div>
 
     <div class="container py-4" style="display:none;" id="contentContainer">
+        <div id="signalStatus" class="signal-status status-completed">
+            <i class="fas fa-sync-alt"></i> Datos actualizados
+        </div>
+        
         <header class="d-flex justify-content-between align-items-center mb-4 border-bottom">
             <div>
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
-                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: <span id="lastUpdateSpan">{{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</span></p>
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
@@ -108,13 +130,13 @@
             <h5><i class="fas fa-info-circle"></i> Información del Sistema</h5>
             <div class="row">
                 <div class="col-md-4">
-                    <p><strong>Criptomonedas analizadas:</strong> {{ cryptos_analyzed }}</p>
+                    <p><strong>Criptomonedas analizadas:</strong> <span id="cryptosAnalyzed">{{ cryptos_analyzed }}</span></p>
                 </div>
                 <div class="col-md-4">
-                    <p><strong>Señales LONG detectadas:</strong> {{ long_signals|length }}</p>
+                    <p><strong>Señales LONG detectadas:</strong> <span id="longSignalsCount">{{ long_signals|length }}</span></p>
                 </div>
                 <div class="col-md-4">
-                    <p><strong>Señales SHORT detectadas:</strong> {{ short_signals|length }}</p>
+                    <p><strong>Señales SHORT detectadas:</strong> <span id="shortSignalsCount">{{ short_signals|length }}</span></p>
                 </div>
             </div>
         </div>
@@ -366,46 +388,63 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Tabla de señales históricas -->
-        <div class="card mt-4">
-            <div class="card-header bg-warning text-white">
-                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales de la Vela Anterior</h2>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover historical-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th>#</th>
-                                <th>Cripto</th>
-                                <th>Acción</th>
-                                <th>Volumen</th>
-                                <th>Precio Entrada</th>
-                                <th>SL</th>
-                                <th>TP1</th>
-                                <th>TP2</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for signal in (long_signals + short_signals) if signal.timestamp < last_update %}
-                            <tr class="{{ 'long-bg' if signal in long_signals else 'short-bg' }}">
-                                <td>{{ loop.index }}</td>
-                                <td>{{ signal.symbol }}</td>
-                                <td>{{ 'LONG' if signal in long_signals else 'SHORT' }}</td>
-                                <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
-                                <td>{{ signal.entry }}</td>
-                                <td class="text-danger">{{ signal.sl }}</td>
-                                <td class="text-success">{{ signal.tp1 }}</td>
-                                <td class="text-success">{{ signal.tp2 }}</td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="8" class="text-center">No hay señales históricas en este momento</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+
+        <!-- Tabla para señales históricas (de la vela anterior) -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="signal-table-container">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Nº</th>
+                                        <th>Nomenclatura</th>
+                                        <th>Acción</th>
+                                        <th>Volumen</th>
+                                        <th>Precio Entrada</th>
+                                        <th>SL</th>
+                                        <th>TP1</th>
+                                        <th>TP2</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for signal in long_signals %}
+                                    <tr class="historical-signal">
+                                        <td>{{ loop.index }}</td>
+                                        <td>{{ signal.symbol }}-USDT</td>
+                                        <td><span class="badge bg-success">LONG</span></td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                        <td>{{ signal.entry }}</td>
+                                        <td class="text-danger">{{ signal.sl }}</td>
+                                        <td class="text-success">{{ signal.tp1 }}</td>
+                                        <td class="text-success">{{ signal.tp2 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                    {% for signal in short_signals %}
+                                    <tr class="historical-signal">
+                                        <td>{{ loop.index + long_signals|length }}</td>
+                                        <td>{{ signal.symbol }}-USDT</td>
+                                        <td><span class="badge bg-danger">SHORT</span></td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                        <td>{{ signal.entry }}</td>
+                                        <td class="text-danger">{{ signal.sl }}</td>
+                                        <td class="text-success">{{ signal.tp1 }}</td>
+                                        <td class="text-success">{{ signal.tp2 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                    {% if long_signals|length == 0 and short_signals|length == 0 %}
+                                    <tr>
+                                        <td colspan="8" class="text-center">No hay señales históricas disponibles</td>
+                                    </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -418,28 +457,58 @@
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
-                    const lastUpdate = new Date(data.last_update);
-                    const now = new Date();
-                    const diff = (now - lastUpdate) / 1000; // Diferencia en segundos
+                    // Actualizar información de carga
+                    document.getElementById('lastUpdateInfo').textContent = `Última actualización: ${data.last_update}`;
                     
-                    if (diff < 600) { // Si los datos tienen menos de 10 minutos
-                        document.getElementById('loadingOverlay').style.display = 'none';
-                        document.getElementById('contentContainer').style.display = 'block';
-                        initializeCharts();
-                    } else {
-                        document.getElementById('loadingProgress').innerText = 
-                            `Esperando datos... Última actualización: ${data.last_update}`;
+                    if (data.update_in_progress) {
+                        const progress = data.update_total > 0 ? Math.round((data.update_progress / data.update_total) * 100) : 0;
+                        document.getElementById('loadingProgress').textContent = `${progress}% completado`;
+                        document.getElementById('signalStatus').className = 'signal-status status-updating';
+                        document.getElementById('signalStatus').innerHTML = `<i class="fas fa-sync fa-spin"></i> Actualizando datos...`;
+                        
+                        // Verificar nuevamente después de 5 segundos
                         setTimeout(checkDataStatus, 5000);
+                    } else {
+                        if (data.cryptos_analyzed > 0) {
+                            // Ocultar overlay y mostrar contenido
+                            document.getElementById('loadingOverlay').style.display = 'none';
+                            document.getElementById('contentContainer').style.display = 'block';
+                            
+                            // Actualizar información en la página
+                            document.getElementById('cryptosAnalyzed').textContent = data.cryptos_analyzed;
+                            document.getElementById('longSignalsCount').textContent = data.long_signals_count;
+                            document.getElementById('shortSignalsCount').textContent = data.short_signals_count;
+                            document.getElementById('lastUpdateSpan').textContent = data.last_update;
+                            document.getElementById('signalStatus').className = 'signal-status status-completed';
+                            document.getElementById('signalStatus').innerHTML = `<i class="fas fa-check-circle"></i> Datos actualizados`;
+                            
+                            // Inicializar gráficos
+                            initializeCharts();
+                        } else {
+                            // Reintentar después de un tiempo
+                            setTimeout(checkDataStatus, 5000);
+                        }
                     }
                 })
                 .catch(error => {
                     console.error('Error checking status:', error);
+                    // Reintentar después de un tiempo
                     setTimeout(checkDataStatus, 5000);
                 });
         }
-        
-        // Iniciar verificación al cargar la página
-        document.addEventListener('DOMContentLoaded', checkDataStatus);
+
+        // Iniciar verificación de estado
+        document.addEventListener('DOMContentLoaded', function() {
+            checkDataStatus();
+            
+            // Ocultar loading si hay datos después de 15 segundos como máximo
+            setTimeout(() => {
+                if (document.getElementById('loadingOverlay').style.display !== 'none') {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    document.getElementById('contentContainer').style.display = 'block';
+                }
+            }, 15000);
+        });
 
         function initializeCharts() {
             // Gráfico de resumen
@@ -480,13 +549,10 @@
             const longStatsChart = new Chart(longStatsCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Distancia Promedio', 'ADX Promedio'],
+                    labels: ['Distancia a Entrada'],
                     datasets: [{
-                        label: 'Estadísticas LONG',
-                        data: [
-                            {{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }},
-                            {{ avg_adx_long }}
-                        ],
+                        label: 'Distancia Promedio (%)',
+                        data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
                         backgroundColor: 'rgba(46, 204, 113, 0.7)'
                     }]
                 },
@@ -498,7 +564,7 @@
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Valor'
+                                text: 'Distancia (%)'
                             }
                         }
                     },
@@ -516,13 +582,10 @@
             const shortStatsChart = new Chart(shortStatsCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Distancia Promedio', 'ADX Promedio'],
+                    labels: ['Distancia a Entrada'],
                     datasets: [{
-                        label: 'Estadísticas SHORT',
-                        data: [
-                            {{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }},
-                            {{ avg_adx_short }}
-                        ],
+                        label: 'Distancia Promedio (%)',
+                        data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
                         backgroundColor: 'rgba(231, 76, 60, 0.7)'
                     }]
                 },
@@ -534,7 +597,7 @@
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Valor'
+                                text: 'Distancia (%)'
                             }
                         }
                     },
