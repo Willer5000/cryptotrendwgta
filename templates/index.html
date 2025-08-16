@@ -60,7 +60,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(255, 255, 255, 0.8);
+            background-color: rgba(255, 255, 255, 0.9);
             z-index: 9999;
             display: flex;
             justify-content: center;
@@ -71,25 +71,19 @@
             width: 3rem;
             height: 3rem;
         }
-        .historical-signal {
-            background-color: #f0f0f0;
+        .historical-badge {
+            background-color: #6c757d;
+            color: white;
         }
-        .signal-status {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 10px 15px;
-            border-radius: 8px;
-            z-index: 1000;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        .card-header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
         }
-        .status-updating {
-            background-color: #ffc107;
-            color: #000;
-        }
-        .status-completed {
-            background-color: #28a745;
-            color: #fff;
+        .header-title {
+            margin-right: 15px;
+            margin-bottom: 5px;
         }
     </style>
 </head>
@@ -98,21 +92,18 @@
         <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Cargando...</span>
         </div>
-        <p class="mt-3">Analizando mercados, por favor espere...</p>
-        <p id="loadingProgress">0% completado</p>
-        <p id="lastUpdateInfo">Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        <h3 class="mt-3">Analizando mercados</h3>
+        <p>Por favor espere mientras procesamos los datos...</p>
+        <p id="loadingStatus">Iniciando análisis de criptomonedas</p>
+        <p id="lastUpdateStatus">Última actualización: --:--:--</p>
     </div>
 
     <div class="container py-4" style="display:none;" id="contentContainer">
-        <div id="signalStatus" class="signal-status status-completed">
-            <i class="fas fa-sync-alt"></i> Datos actualizados
-        </div>
-        
         <header class="d-flex justify-content-between align-items-center mb-4 border-bottom">
             <div>
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
-                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: <span id="lastUpdateSpan">{{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</span></p>
+                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: <span id="lastUpdate">{{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</span></p>
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
@@ -130,13 +121,13 @@
             <h5><i class="fas fa-info-circle"></i> Información del Sistema</h5>
             <div class="row">
                 <div class="col-md-4">
-                    <p><strong>Criptomonedas analizadas:</strong> <span id="cryptosAnalyzed">{{ cryptos_analyzed }}</span></p>
+                    <p><strong>Criptomonedas analizadas:</strong> {{ cryptos_analyzed }}</p>
                 </div>
                 <div class="col-md-4">
-                    <p><strong>Señales LONG detectadas:</strong> <span id="longSignalsCount">{{ long_signals|length }}</span></p>
+                    <p><strong>Señales LONG detectadas:</strong> {{ long_signals|length }}</p>
                 </div>
                 <div class="col-md-4">
-                    <p><strong>Señales SHORT detectadas:</strong> <span id="shortSignalsCount">{{ short_signals|length }}</span></p>
+                    <p><strong>Señales SHORT detectadas:</strong> {{ short_signals|length }}</p>
                 </div>
             </div>
         </div>
@@ -276,9 +267,11 @@
         <div class="row">
             <div class="col-md-6">
                 <div class="card mb-4">
-                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }})</h2>
-                        <span class="badge badge-long">ADX Prom: {{ avg_adx_long }}</span>
+                    <div class="card-header bg-success text-white">
+                        <div class="card-header-flex">
+                            <h2 class="h5 mb-0 header-title"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }})</h2>
+                            <span class="badge badge-long">ADX Prom: {{ avg_adx_long }}</span>
+                        </div>
                     </div>
                     <div class="card-body">
                         {% if long_signals %}
@@ -332,10 +325,12 @@
             </div>
             
             <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
-                        <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
+                <div class="card mb-4">
+                    <div class="card-header bg-danger text-white">
+                        <div class="card-header-flex">
+                            <h2 class="h5 mb-0 header-title"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
+                            <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
+                        </div>
                     </div>
                     <div class="card-body">
                         {% if short_signals %}
@@ -389,33 +384,37 @@
             </div>
         </div>
 
-        <!-- Tabla para señales históricas (de la vela anterior) -->
+        <!-- Tabla de Señales Históricas -->
         <div class="row mt-4">
-            <div class="col-md-12">
-                <div class="card">
+            <div class="col-md-6">
+                <div class="card mb-4">
                     <div class="card-header bg-secondary text-white">
-                        <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
+                        <div class="card-header-flex">
+                            <h2 class="h5 mb-0 header-title"><i class="fas fa-history"></i> Señales Históricas LONG ({{ historical_long|length }})</h2>
+                            <span class="badge historical-badge">Últimas 24h</span>
+                        </div>
                     </div>
                     <div class="card-body">
+                        {% if historical_long %}
                         <div class="signal-table-container">
-                            <table class="table table-hover">
+                            <table class="table table-hover signal-table">
                                 <thead class="table-light">
                                     <tr>
-                                        <th>Nº</th>
-                                        <th>Nomenclatura</th>
+                                        <th>#</th>
+                                        <th>Cripto</th>
                                         <th>Acción</th>
                                         <th>Volumen</th>
-                                        <th>Precio Entrada</th>
+                                        <th>Entrada</th>
                                         <th>SL</th>
                                         <th>TP1</th>
                                         <th>TP2</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for signal in long_signals %}
-                                    <tr class="historical-signal">
+                                    {% for signal in historical_long %}
+                                    <tr>
                                         <td>{{ loop.index }}</td>
-                                        <td>{{ signal.symbol }}-USDT</td>
+                                        <td>{{ signal.symbol }}</td>
                                         <td><span class="badge bg-success">LONG</span></td>
                                         <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
                                         <td>{{ signal.entry }}</td>
@@ -424,10 +423,47 @@
                                         <td class="text-success">{{ signal.tp2 }}</td>
                                     </tr>
                                     {% endfor %}
-                                    {% for signal in short_signals %}
-                                    <tr class="historical-signal">
-                                        <td>{{ loop.index + long_signals|length }}</td>
-                                        <td>{{ signal.symbol }}-USDT</td>
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-warning">
+                            No hay señales LONG históricas recientes
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <div class="card-header-flex">
+                            <h2 class="h5 mb-0 header-title"><i class="fas fa-history"></i> Señales Históricas SHORT ({{ historical_short|length }})</h2>
+                            <span class="badge historical-badge">Últimas 24h</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        {% if historical_short %}
+                        <div class="signal-table-container">
+                            <table class="table table-hover signal-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Cripto</th>
+                                        <th>Acción</th>
+                                        <th>Volumen</th>
+                                        <th>Entrada</th>
+                                        <th>SL</th>
+                                        <th>TP1</th>
+                                        <th>TP2</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for signal in historical_short %}
+                                    <tr>
+                                        <td>{{ loop.index }}</td>
+                                        <td>{{ signal.symbol }}</td>
                                         <td><span class="badge bg-danger">SHORT</span></td>
                                         <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
                                         <td>{{ signal.entry }}</td>
@@ -436,14 +472,14 @@
                                         <td class="text-success">{{ signal.tp2 }}</td>
                                     </tr>
                                     {% endfor %}
-                                    {% if long_signals|length == 0 and short_signals|length == 0 %}
-                                    <tr>
-                                        <td colspan="8" class="text-center">No hay señales históricas disponibles</td>
-                                    </tr>
-                                    {% endif %}
                                 </tbody>
                             </table>
                         </div>
+                        {% else %}
+                        <div class="alert alert-warning">
+                            No hay señales SHORT históricas recientes
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -452,64 +488,61 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Estado de la aplicación
+        let dataLoaded = false;
+        let checkCount = 0;
+        const maxChecks = 30; // Máximo de 3 minutos (30 * 6 segundos)
+        
         // Función para verificar el estado de los datos
         function checkDataStatus() {
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
-                    // Actualizar información de carga
-                    document.getElementById('lastUpdateInfo').textContent = `Última actualización: ${data.last_update}`;
-                    
-                    if (data.update_in_progress) {
-                        const progress = data.update_total > 0 ? Math.round((data.update_progress / data.update_total) * 100) : 0;
-                        document.getElementById('loadingProgress').textContent = `${progress}% completado`;
-                        document.getElementById('signalStatus').className = 'signal-status status-updating';
-                        document.getElementById('signalStatus').innerHTML = `<i class="fas fa-sync fa-spin"></i> Actualizando datos...`;
+                    if (data.status === 'ready') {
+                        // Datos listos, recargar la página
+                        document.getElementById('lastUpdateStatus').textContent = 
+                            `Última actualización: ${new Date(data.last_update).toLocaleTimeString()}`;
                         
-                        // Verificar nuevamente después de 5 segundos
-                        setTimeout(checkDataStatus, 5000);
+                        // Esperar 2 segundos para mostrar los datos
+                        setTimeout(() => {
+                            location.reload();
+                        }, 2000);
                     } else {
-                        if (data.cryptos_analyzed > 0) {
-                            // Ocultar overlay y mostrar contenido
-                            document.getElementById('loadingOverlay').style.display = 'none';
-                            document.getElementById('contentContainer').style.display = 'block';
-                            
-                            // Actualizar información en la página
-                            document.getElementById('cryptosAnalyzed').textContent = data.cryptos_analyzed;
-                            document.getElementById('longSignalsCount').textContent = data.long_signals_count;
-                            document.getElementById('shortSignalsCount').textContent = data.short_signals_count;
-                            document.getElementById('lastUpdateSpan').textContent = data.last_update;
-                            document.getElementById('signalStatus').className = 'signal-status status-completed';
-                            document.getElementById('signalStatus').innerHTML = `<i class="fas fa-check-circle"></i> Datos actualizados`;
-                            
-                            // Inicializar gráficos
-                            initializeCharts();
+                        // Continuar verificando
+                        checkCount++;
+                        document.getElementById('loadingStatus').textContent = 
+                            `Analizando criptomonedas (${checkCount}/${maxChecks})`;
+                        document.getElementById('lastUpdateStatus').textContent = 
+                            `Esperando datos... Última actualización: ${new Date(data.last_update).toLocaleTimeString()}`;
+                        
+                        if (checkCount < maxChecks) {
+                            setTimeout(checkDataStatus, 6000); // Verificar cada 6 segundos
                         } else {
-                            // Reintentar después de un tiempo
-                            setTimeout(checkDataStatus, 5000);
+                            // Tiempo de espera excedido
+                            document.getElementById('loadingStatus').innerHTML = 
+                                '<strong>Error:</strong> Tiempo de espera excedido. <button class="btn btn-sm btn-primary mt-2" onclick="location.reload()">Reintentar</button>';
                         }
                     }
                 })
                 .catch(error => {
                     console.error('Error checking status:', error);
-                    // Reintentar después de un tiempo
-                    setTimeout(checkDataStatus, 5000);
+                    checkCount++;
+                    
+                    if (checkCount < maxChecks) {
+                        setTimeout(checkDataStatus, 6000);
+                    } else {
+                        document.getElementById('loadingStatus').innerHTML = 
+                            '<strong>Error:</strong> No se pudo conectar con el servidor. <button class="btn btn-sm btn-primary mt-2" onclick="location.reload()">Reintentar</button>';
+                    }
                 });
         }
-
-        // Iniciar verificación de estado
+        
+        // Iniciar verificación al cargar la página
         document.addEventListener('DOMContentLoaded', function() {
             checkDataStatus();
-            
-            // Ocultar loading si hay datos después de 15 segundos como máximo
-            setTimeout(() => {
-                if (document.getElementById('loadingOverlay').style.display !== 'none') {
-                    document.getElementById('loadingOverlay').style.display = 'none';
-                    document.getElementById('contentContainer').style.display = 'block';
-                }
-            }, 15000);
         });
-
+        
+        // Inicializar gráficos cuando los datos estén disponibles
         function initializeCharts() {
             // Gráfico de resumen
             const marketCtx = document.getElementById('marketChart').getContext('2d');
@@ -549,11 +582,17 @@
             const longStatsChart = new Chart(longStatsCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Distancia a Entrada'],
+                    labels: ['Distancia a Entrada', 'ADX Promedio'],
                     datasets: [{
-                        label: 'Distancia Promedio (%)',
-                        data: [{{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }}],
-                        backgroundColor: 'rgba(46, 204, 113, 0.7)'
+                        label: 'Estadísticas LONG',
+                        data: [
+                            {{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }},
+                            {{ long_signals|map(attribute='adx')|sum / long_signals|length if long_signals else 0 }}
+                        ],
+                        backgroundColor: [
+                            'rgba(46, 204, 113, 0.7)',
+                            'rgba(52, 152, 219, 0.7)'
+                        ]
                     }]
                 },
                 options: {
@@ -564,7 +603,7 @@
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Distancia (%)'
+                                text: 'Valor'
                             }
                         }
                     },
@@ -582,11 +621,17 @@
             const shortStatsChart = new Chart(shortStatsCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Distancia a Entrada'],
+                    labels: ['Distancia a Entrada', 'ADX Promedio'],
                     datasets: [{
-                        label: 'Distancia Promedio (%)',
-                        data: [{{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }}],
-                        backgroundColor: 'rgba(231, 76, 60, 0.7)'
+                        label: 'Estadísticas SHORT',
+                        data: [
+                            {{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }},
+                            {{ short_signals|map(attribute='adx')|sum / short_signals|length if short_signals else 0 }}
+                        ],
+                        backgroundColor: [
+                            'rgba(231, 76, 60, 0.7)',
+                            'rgba(52, 152, 219, 0.7)'
+                        ]
                     }]
                 },
                 options: {
@@ -597,7 +642,7 @@
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Distancia (%)'
+                                text: 'Valor'
                             }
                         }
                     },
@@ -787,6 +832,11 @@
                     alert('Error de conexión: ' + error.message);
                 }
             });
+        }
+        
+        // Inicializar gráficos después de cargar
+        if ({{ scatter_data|length }} > 0) {
+            initializeCharts();
         }
     </script>
 </body>
