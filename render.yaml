@@ -4,4 +4,5 @@ services:
     env: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "gunicorn app:app --timeout 300"
+    startCommand: "gunicorn app:app"
+    healthCheckPath: "/health"
