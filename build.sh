@@ -1,4 +1,3 @@
 #!/bin/bash
-echo "Actualizando dependencias..."
-pip install --upgrade pip
+echo "Instalando dependencias..."
 pip install -r requirements.txt
