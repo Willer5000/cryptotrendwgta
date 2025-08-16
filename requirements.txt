@@ -1,8 +1,8 @@
 flask
-flask-caching
 requests
 pandas
 numpy
 matplotlib
 gunicorn
 plotly
+concurrent-log-handler
