@@ -3,5 +3,5 @@ services:
     name: wgta-crypto-signals
     env: python
     plan: free
-    buildCommand: "./build.sh"
+    buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn app:app"
