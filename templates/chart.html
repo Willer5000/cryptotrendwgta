@@ -10,6 +10,7 @@
         .chart-container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .chart-title { text-align: center; margin-bottom: 20px; }
         .chart-img { width: 100%; }
+        .signal-info { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
     </style>
 </head>
 <body>
@@ -21,6 +22,18 @@
             </a>
         </div>
         <img src="data:image/png;base64,{{ plot_url }}" alt="Gráfico de {{ symbol }}" class="chart-img">
+        
+        <div class="signal-info">
+            <h4>Interpretación del Gráfico</h4>
+            <ul>
+                <li><strong>Línea verde:</strong> EMA rápida ({{ DEFAULTS.ema_fast }} períodos)</li>
+                <li><strong>Línea azul:</strong> EMA lenta ({{ DEFAULTS.ema_slow }} períodos)</li>
+                <li><strong>Línea roja:</strong> Stop Loss (SL)</li>
+                <li><strong>Líneas azul/púrpura:</strong> Take Profit (TP1/TP2)</li>
+                <li><strong>Área púrpura:</strong> RSI - Indicador de momentum</li>
+                <li><strong>Área marrón:</strong> ADX - Indicador de fuerza de tendencia</li>
+            </ul>
+        </div>
     </div>
 </body>
 </html>
