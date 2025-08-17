@@ -31,28 +31,17 @@
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; position: relative; }
         .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.7; }
-        .volume-very-high { background-color: #4CAF50; }   /* Verde */
-        .volume-high { background-color: #2196F3; }        /* Azul */
-        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
-        .volume-low { background-color: #FF9800; }         /* Naranja */
-        .volume-very-low { background-color: #F44336; }    /* Rojo */
-        .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
-        .grid-line.vertical { width: 1px; height: 100%; }
-        .grid-line.horizontal { height: 1px; width: 100%; }
+        .volume-very-high { background-color: #4CAF50; }
+        .volume-high { background-color: #2196F3; }
+        .volume-medium { background-color: #FFEB3B; }
+        .volume-low { background-color: #FF9800; }
+        .volume-very-low { background-color: #F44336; }
         .info-box {
             background-color: #e9f7fe;
             border-left: 4px solid #1e88e5;
             padding: 15px;
             border-radius: 4px;
             margin-bottom: 20px;
-        }
-        .crypto-item {
-            display: inline-block;
-            background-color: #e0e0e0;
-            padding: 2px 8px;
-            border-radius: 12px;
-            margin: 2px;
-            font-size: 0.85rem;
         }
         .loading-overlay {
             position: fixed;
@@ -71,10 +60,23 @@
             width: 3rem;
             height: 3rem;
         }
-        .signal-history {
-            margin-top: 30px;
-            border-top: 1px solid #eee;
-            padding-top: 20px;
+        .progress {
+            height: 25px;
+            width: 80%;
+            margin-top: 20px;
+        }
+        .signal-type-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .signal-long {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .signal-short {
+            background-color: #F44336;
+            color: white;
         }
     </style>
 </head>
@@ -83,8 +85,11 @@
         <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Cargando...</span>
         </div>
-        <p class="mt-3">Analizando mercados, por favor espere...</p>
-        <p id="loadingProgress">Inicializando sistema...</p>
+        <h3 class="mt-3">Analizando mercados</h3>
+        <p id="loadingStatus">Preparando análisis...</p>
+        <div class="progress">
+            <div id="loadingProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+        </div>
     </div>
 
     <div class="container py-4" style="display:none;" id="contentContainer">
@@ -92,7 +97,7 @@
             <div>
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
-                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: <span id="lastUpdateTime"></span></p>
+                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: <span id="lastUpdateTime">{{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</span></p>
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
@@ -109,14 +114,17 @@
         <div class="info-box">
             <h5><i class="fas fa-info-circle"></i> Información del Sistema</h5>
             <div class="row">
-                <div class="col-md-4">
-                    <p><strong>Criptomonedas analizadas:</strong> <span id="cryptoCount">0</span></p>
+                <div class="col-md-3">
+                    <p><strong>Criptomonedas analizadas:</strong> <span id="cryptosAnalyzed">{{ cryptos_analyzed }}</span>/<span id="totalCryptos">{{ total_cryptos }}</span></p>
                 </div>
-                <div class="col-md-4">
-                    <p><strong>Señales LONG detectadas:</strong> <span id="longCount">0</span></p>
+                <div class="col-md-3">
+                    <p><strong>Señales LONG detectadas:</strong> <span id="longSignalsCount">{{ long_signals|length }}</span></p>
                 </div>
-                <div class="col-md-4">
-                    <p><strong>Señales SHORT detectadas:</strong> <span id="shortCount">0</span></p>
+                <div class="col-md-3">
+                    <p><strong>Señales SHORT detectadas:</strong> <span id="shortSignalsCount">{{ short_signals|length }}</span></p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>Progreso:</strong> <span id="progressStatus">{{ progress }}%</span></p>
                 </div>
             </div>
         </div>
@@ -191,6 +199,12 @@
             </form>
         </div>
 
+        <div class="d-flex justify-content-end mb-3">
+            <a href="/historical" class="btn btn-secondary">
+                <i class="fas fa-history"></i> Ver Señales Históricas
+            </a>
+        </div>
+
         <div class="row mb-4">
             <div class="col-md-4">
                 <div class="card h-100">
@@ -257,45 +271,113 @@
             <div class="col-md-6">
                 <div class="card mb-4">
                     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG (<span id="longSignalCount">0</span>)</h2>
-                        <span class="badge badge-long">ADX Prom: <span id="avgAdxLong">0</span></span>
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }})</h2>
+                        <span class="badge badge-long">ADX Prom: {{ avg_adx_long }}</span>
                     </div>
                     <div class="card-body">
-                        <div id="longSignalsContainer">
-                            <div class="alert alert-warning">
-                                Cargando señales LONG...
-                            </div>
+                        {% if long_signals %}
+                        <div class="signal-table-container">
+                            <table class="table table-hover signal-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Cripto</th>
+                                        <th>Precio</th>
+                                        <th>Entrada</th>
+                                        <th>Distancia</th>
+                                        <th>SL</th>
+                                        <th>TP1</th>
+                                        <th>TP2</th>
+                                        <th>Volumen</th>
+                                        <th>ADX</th>
+                                        <th>Gráfico</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for signal in long_signals %}
+                                    <tr class="long-bg">
+                                        <td>{{ loop.index }}</td>
+                                        <td>{{ signal.symbol }}</td>
+                                        <td>{{ signal.price }}</td>
+                                        <td>{{ signal.entry }}</td>
+                                        <td>{{ signal.distance }}%</td>
+                                        <td class="text-danger">{{ signal.sl }}</td>
+                                        <td class="text-success">{{ signal.tp1 }}</td>
+                                        <td class="text-success">{{ signal.tp2 }}</td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                        <td>{{ signal.adx }}</td>
+                                        <td>
+                                            <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
+                                                <i class="fas fa-chart-line"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
+                        {% else %}
+                        <div class="alert alert-warning">
+                            No se encontraron señales LONG en este momento
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
             
             <div class="col-md-6">
-                <div class="card mb-4">
+                <div class="card">
                     <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT (<span id="shortSignalCount">0</span>)</h2>
-                        <span class="badge badge-short">ADX Prom: <span id="avgAdxShort">0</span></span>
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
+                        <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
                     </div>
                     <div class="card-body">
-                        <div id="shortSignalsContainer">
-                            <div class="alert alert-warning">
-                                Cargando señales SHORT...
-                            </div>
+                        {% if short_signals %}
+                        <div class="signal-table-container">
+                            <table class="table table-hover signal-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Cripto</th>
+                                        <th>Precio</th>
+                                        <th>Entrada</th>
+                                        <th>Distancia</th>
+                                        <th>SL</th>
+                                        <th>TP1</th>
+                                        <th>TP2</th>
+                                        <th>Volumen</th>
+                                        <th>ADX</th>
+                                        <th>Gráfico</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for signal in short_signals %}
+                                    <tr class="short-bg">
+                                        <td>{{ loop.index }}</td>
+                                        <td>{{ signal.symbol }}</td>
+                                        <td>{{ signal.price }}</td>
+                                        <td>{{ signal.entry }}</td>
+                                        <td>{{ signal.distance }}%</td>
+                                        <td class="text-danger">{{ signal.sl }}</td>
+                                        <td class="text-success">{{ signal.tp1 }}</td>
+                                        <td class="text-success">{{ signal.tp2 }}</td>
+                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                        <td>{{ signal.adx }}</td>
+                                        <td>
+                                            <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
+                                                <i class="fas fa-chart-line"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tabla de señales históricas -->
-        <div class="card signal-history">
-            <div class="card-header bg-secondary text-white">
-                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Recientes (Vela Anterior)</h2>
-            </div>
-            <div class="card-body">
-                <div id="prevSignalsContainer">
-                    <div class="alert alert-info">
-                        Cargando señales recientes...
+                        {% else %}
+                        <div class="alert alert-warning">
+                            No se encontraron señales SHORT en este momento
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -305,49 +387,63 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Variables globales
-        let marketChart, longStatsChart, shortStatsChart;
-        let scatterTraces = [];
-        let lastUpdateTime = null;
-        
-        // Función para inicializar gráficos
-        function initializeCharts(data) {
-            // Actualizar información
-            document.getElementById('cryptoCount').textContent = data.cryptos_analyzed;
-            document.getElementById('longCount').textContent = data.long_signals.length;
-            document.getElementById('shortCount').textContent = data.short_signals.length;
-            document.getElementById('longSignalCount').textContent = data.long_signals.length;
-            document.getElementById('shortSignalCount').textContent = data.short_signals.length;
-            document.getElementById('lastUpdateTime').textContent = data.last_update;
-            
-            // Calcular ADX promedio
-            const avgAdxLong = data.long_signals.length > 0 ? 
-                (data.long_signals.reduce((sum, signal) => sum + signal.adx, 0) / data.long_signals.length).toFixed(2) : 0;
-            const avgAdxShort = data.short_signals.length > 0 ? 
-                (data.short_signals.reduce((sum, signal) => sum + signal.adx, 0) / data.short_signals.length).toFixed(2) : 0;
-            
-            document.getElementById('avgAdxLong').textContent = avgAdxLong;
-            document.getElementById('avgAdxShort').textContent = avgAdxShort;
-            
-            // Renderizar señales LONG
-            renderSignalTable('longSignalsContainer', data.long_signals, 'long');
-            
-            // Renderizar señales SHORT
-            renderSignalTable('shortSignalsContainer', data.short_signals, 'short');
-            
-            // Renderizar señales previas
-            renderPrevSignalTable('prevSignalsContainer', data.prev_signals);
-            
+        let checkStatusInterval;
+        let scatterPlotInitialized = false;
+
+        // Función para verificar el estado de los datos
+        function checkDataStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loadingProgressBar').style.width = data.progress + '%';
+                    document.getElementById('loadingStatus').innerHTML = `
+                        Analizando: ${data.cryptos_analyzed}/${data.total_cryptos} criptos<br>
+                        Señales: LONG ${data.long_signals_count} / SHORT ${data.short_signals_count}
+                    `;
+                    
+                    document.getElementById('cryptosAnalyzed').textContent = data.cryptos_analyzed;
+                    document.getElementById('totalCryptos').textContent = data.total_cryptos;
+                    document.getElementById('longSignalsCount').textContent = data.long_signals_count;
+                    document.getElementById('shortSignalsCount').textContent = data.short_signals_count;
+                    document.getElementById('progressStatus').textContent = data.progress + '%';
+                    
+                    const lastUpdate = new Date(data.last_update);
+                    document.getElementById('lastUpdateTime').textContent = lastUpdate.toLocaleString();
+                    
+                    // Si el procesamiento ha terminado, mostrar contenido
+                    if (!data.is_processing && data.cryptos_analyzed > 0) {
+                        clearInterval(checkStatusInterval);
+                        document.getElementById('loadingOverlay').style.display = 'none';
+                        document.getElementById('contentContainer').style.display = 'block';
+                        initializeCharts();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking status:', error);
+                    document.getElementById('loadingStatus').innerHTML = `
+                        Error obteniendo estado. Reintentando...
+                    `;
+                });
+        }
+
+        // Iniciar verificación de estado
+        document.addEventListener('DOMContentLoaded', function() {
+            checkStatusInterval = setInterval(checkDataStatus, 3000);
+            checkDataStatus();
+        });
+
+        function initializeCharts() {
             // Gráfico de resumen
             const marketCtx = document.getElementById('marketChart').getContext('2d');
-            marketChart = new Chart(marketCtx, {
+            const marketChart = new Chart(marketCtx, {
                 type: 'doughnut',
                 data: {
                     labels: ['LONG', 'SHORT', 'Neutral'],
                     datasets: [{
                         data: [
-                            data.long_signals.length, 
-                            data.short_signals.length, 
-                            data.cryptos_analyzed - data.long_signals.length - data.short_signals.length
+                            {{ long_signals|length }}, 
+                            {{ short_signals|length }}, 
+                            {{ cryptos_analyzed - long_signals|length - short_signals|length }}
                         ],
                         backgroundColor: [
                             'rgba(46, 204, 113, 0.7)',
@@ -372,16 +468,15 @@
             
             // Gráfico de fuerza de tendencia LONG
             const longStatsCtx = document.getElementById('longStatsChart').getContext('2d');
-            longStatsChart = new Chart(longStatsCtx, {
+            const longStatsChart = new Chart(longStatsCtx, {
                 type: 'bar',
                 data: {
                     labels: ['Distancia a Entrada', 'ADX Promedio'],
                     datasets: [{
                         label: 'Estadísticas LONG',
                         data: [
-                            data.long_signals.length > 0 ? 
-                                (data.long_signals.reduce((sum, signal) => sum + signal.distance, 0) / data.long_signals.length) : 0,
-                            avgAdxLong
+                            {{ long_signals|map(attribute='distance')|sum / long_signals|length if long_signals else 0 }},
+                            {{ long_signals|map(attribute='adx')|sum / long_signals|length if long_signals else 0 }}
                         ],
                         backgroundColor: [
                             'rgba(46, 204, 113, 0.7)',
@@ -412,16 +507,15 @@
             
             // Gráfico de fuerza de tendencia SHORT
             const shortStatsCtx = document.getElementById('shortStatsChart').getContext('2d');
-            shortStatsChart = new Chart(shortStatsCtx, {
+            const shortStatsChart = new Chart(shortStatsCtx, {
                 type: 'bar',
                 data: {
                     labels: ['Distancia a Entrada', 'ADX Promedio'],
                     datasets: [{
                         label: 'Estadísticas SHORT',
                         data: [
-                            data.short_signals.length > 0 ? 
-                                (data.short_signals.reduce((sum, signal) => sum + signal.distance, 0) / data.short_signals.length) : 0,
-                            avgAdxShort
+                            {{ short_signals|map(attribute='distance')|sum / short_signals|length if short_signals else 0 }},
+                            {{ short_signals|map(attribute='adx')|sum / short_signals|length if short_signals else 0 }}
                         ],
                         backgroundColor: [
                             'rgba(231, 76, 60, 0.7)',
@@ -451,29 +545,29 @@
             });
             
             // Gráfico de dispersión con Plotly
-            const scatterData = data.scatter_data;
+            const scatterData = {{ scatter_data|tojson }};
             
             // Mapeo de colores por volumen
             const volumeColors = {
-                'Muy Alto': '#4CAF50',   // Verde
-                'Alto': '#2196F3',       // Azul
-                'Medio': '#FFEB3B',      // Amarillo
-                'Bajo': '#FF9800',       // Naranja
-                'Muy Bajo': '#F44336'    // Rojo
+                'Muy Alto': '#4CAF50',
+                'Alto': '#2196F3',
+                'Medio': '#FFEB3B',
+                'Bajo': '#FF9800',
+                'Muy Bajo': '#F44336'
             };
             
             // Preparar datos para el gráfico
-            scatterTraces = [];
+            const traces = [];
             const volumes = ['Muy Alto', 'Alto', 'Medio', 'Bajo', 'Muy Bajo'];
             
             volumes.forEach(vol => {
-                const dataPoints = scatterData.filter(item => item.volume === vol);
+                const data = scatterData.filter(item => item.volume === vol);
                 
-                if (dataPoints.length > 0) {
+                if (data.length > 0) {
                     const trace = {
-                        x: dataPoints.map(item => item.long_prob),
-                        y: dataPoints.map(item => item.short_prob),
-                        text: dataPoints.map(item => item.symbol),
+                        x: data.map(item => item.long_prob),
+                        y: data.map(item => item.short_prob),
+                        text: data.map(item => item.symbol),
                         mode: 'markers',
                         type: 'scatter',
                         name: vol,
@@ -491,14 +585,14 @@
                         }
                     };
                     
-                    scatterTraces.push(trace);
+                    traces.push(trace);
                 }
             });
             
             // Traza especial para Bitcoin si está presente
             const btcData = scatterData.find(item => item.symbol === 'BTC');
             if (btcData) {
-                scatterTraces.push({
+                traces.push({
                     x: [btcData.long_prob],
                     y: [btcData.short_prob],
                     text: ['BTC'],
@@ -545,13 +639,7 @@
                     
                     {type: 'rect', x0: 0, x1: 33.3, y0: 66.6, y1: 100, fillcolor: 'rgba(46, 204, 113, 0.2)', line: {width: 0}},
                     {type: 'rect', x0: 33.3, x1: 66.6, y0: 66.6, y1: 100, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 66.6, y1: 100, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
-                    
-                    // Líneas divisorias
-                    {type: 'line', x0: 33.3, x1: 33.3, y0: 0, y1: 100, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
-                    {type: 'line', x0: 66.6, x1: 66.6, y0: 0, y1: 100, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
-                    {type: 'line', x0: 0, x1: 100, y0: 33.3, y1: 33.3, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
-                    {type: 'line', x0: 0, x1: 100, y0: 66.6, y1: 66.6, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}}
+                    {type: 'rect', x0: 66.6, x1: 100, y0: 66.6, y1: 100, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}}
                 ],
                 annotations: [
                     {x: 16.65, y: 16.65, text: 'Neutral', showarrow: false, font: {size: 14}},
@@ -576,240 +664,59 @@
             };
             
             // Crear gráfico
-            Plotly.newPlot('scatterPlot', scatterTraces, layout);
+            Plotly.newPlot('scatterPlot', traces, layout);
+            scatterPlotInitialized = true;
             
             // Filtro por volumen
             document.getElementById('volume-filter').addEventListener('change', function() {
                 const filter = this.value;
                 const visibleTraces = [];
                 
-                scatterTraces.forEach((trace, index) => {
+                traces.forEach((trace, index) => {
                     if (filter === 'all' || trace.name === filter || trace.name === 'Bitcoin') {
                         visibleTraces.push(index);
                     }
                 });
                 
-                Plotly.restyle('scatterPlot', 'visible', scatterTraces.map((_, i) => visibleTraces.includes(i)));
-            });
-        }
-        
-        // Función para renderizar tabla de señales
-        function renderSignalTable(containerId, signals, signalType) {
-            const container = document.getElementById(containerId);
-            if (!signals || signals.length === 0) {
-                container.innerHTML = `
-                    <div class="alert alert-warning">
-                        No se encontraron señales ${signalType.toUpperCase()} en este momento
-                    </div>
-                `;
-                return;
-            }
-            
-            const bgClass = signalType === 'long' ? 'long-bg' : 'short-bg';
-            const badgeClass = signalType === 'long' ? 'badge-long' : 'badge-short';
-            
-            let tableHtml = `
-                <div class="signal-table-container">
-                    <table class="table table-hover signal-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th>#</th>
-                                <th>Cripto</th>
-                                <th>Precio</th>
-                                <th>Entrada</th>
-                                <th>Distancia</th>
-                                <th>SL</th>
-                                <th>TP1</th>
-                                <th>TP2</th>
-                                <th>Volumen</th>
-                                <th>ADX</th>
-                                <th>Gráfico</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            
-            signals.forEach((signal, index) => {
-                tableHtml += `
-                    <tr class="${bgClass}">
-                        <td>${index + 1}</td>
-                        <td>${signal.symbol}</td>
-                        <td>${signal.price}</td>
-                        <td>${signal.entry}</td>
-                        <td>${signal.distance}%</td>
-                        <td class="text-danger">${signal.sl}</td>
-                        <td class="text-success">${signal.tp1}</td>
-                        <td class="text-success">${signal.tp2}</td>
-                        <td class="volume-${signal.volume.toLowerCase().replace(' ', '-')}">${signal.volume}</td>
-                        <td>${signal.adx}</td>
-                        <td>
-                            <a href="/chart/${signal.symbol}/${signalType}" class="btn btn-sm btn-info">
-                                <i class="fas fa-chart-line"></i>
-                            </a>
-                        </td>
-                    </tr>
-                `;
+                Plotly.restyle('scatterPlot', 'visible', traces.map((_, i) => visibleTraces.includes(i)));
             });
             
-            tableHtml += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
+            // Auto-refresh cada 60 segundos
+            setTimeout(() => {
+                location.reload();
+            }, 60000);
             
-            container.innerHTML = tableHtml;
-        }
-        
-        // Función para renderizar tabla de señales previas
-        function renderPrevSignalTable(containerId, signals) {
-            const container = document.getElementById(containerId);
-            if (!signals || signals.length === 0) {
-                container.innerHTML = `
-                    <div class="alert alert-info">
-                        No hay señales recientes en este momento
-                    </div>
-                `;
-                return;
-            }
-            
-            let tableHtml = `
-                <div class="signal-table-container">
-                    <table class="table table-hover signal-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th>#</th>
-                                <th>Cripto</th>
-                                <th>Acción</th>
-                                <th>Entrada</th>
-                                <th>SL</th>
-                                <th>TP1</th>
-                                <th>TP2</th>
-                                <th>Volumen</th>
-                                <th>ADX</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            
-            signals.forEach((signal, index) => {
-                const isLong = 'tp1' in signal && signal.tp1 > signal.entry;
-                const bgClass = isLong ? 'long-bg' : 'short-bg';
-                const action = isLong ? 'LONG' : 'SHORT';
-                const actionClass = isLong ? 'text-success' : 'text-danger';
+            // Manejar el envío del formulario
+            document.getElementById('filters-form').addEventListener('submit', async function(e) {
+                e.preventDefault();
                 
-                tableHtml += `
-                    <tr class="${bgClass}">
-                        <td>${index + 1}</td>
-                        <td>${signal.symbol}</td>
-                        <td class="${actionClass} fw-bold">${action}</td>
-                        <td>${signal.entry}</td>
-                        <td>${signal.sl}</td>
-                        <td>${signal.tp1}</td>
-                        <td>${signal.tp2}</td>
-                        <td class="volume-${signal.volume.toLowerCase().replace(' ', '-')}">${signal.volume}</td>
-                        <td>${signal.adx}</td>
-                    </tr>
-                `;
-            });
-            
-            tableHtml += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            container.innerHTML = tableHtml;
-        }
-        
-        // Función para cargar datos iniciales
-        async function loadInitialData() {
-            try {
-                // Obtener datos de la página inicial
-                const response = await fetch('/');
-                const html = await response.text();
+                const formData = new FormData(this);
+                const params = Object.fromEntries(formData.entries());
                 
-                // Crear un parser para extraer los datos incrustados
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                
-                // Extraer datos de las plantillas
-                const dataScript = doc.querySelector('script[type="application/json"]#initialData');
-                if (dataScript) {
-                    const data = JSON.parse(dataScript.textContent);
-                    return data;
-                }
-            } catch (error) {
-                console.error('Error loading initial data:', error);
-            }
-            return null;
-        }
-        
-        // Función para verificar el estado de los datos
-        async function checkDataStatus() {
-            try {
-                const response = await fetch('/status');
-                if (!response.ok) throw new Error('Network response was not ok');
-                
-                const status = await response.json();
-                document.getElementById('loadingProgress').textContent = 
-                    `Criptos analizadas: ${status.crypto_count} | Señales: LONG ${status.long_count} / SHORT ${status.short_count}`;
-                
-                // Si hay datos disponibles, cargar la página
-                if (status.crypto_count > 0) {
-                    const data = await loadInitialData();
-                    if (data) {
-                        document.getElementById('loadingOverlay').style.display = 'none';
-                        document.getElementById('contentContainer').style.display = 'block';
-                        initializeCharts(data);
+                try {
+                    const response = await fetch('/update_params', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(params)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        alert('Parámetros actualizados correctamente. La página se recargará en 5 segundos.');
+                        setTimeout(() => {
+                            location.reload();
+                        }, 5000);
                     } else {
-                        setTimeout(checkDataStatus, 3000);
+                        alert('Error al actualizar parámetros: ' + result.message);
                     }
-                } else {
-                    setTimeout(checkDataStatus, 5000);
+                } catch (error) {
+                    alert('Error de conexión: ' + error.message);
                 }
-            } catch (error) {
-                console.error('Error checking status:', error);
-                document.getElementById('loadingProgress').textContent = 
-                    'Error conectando al servidor, reintentando...';
-                setTimeout(checkDataStatus, 5000);
-            }
+            });
         }
-        
-        // Manejar el envío del formulario
-        document.getElementById('filters-form')?.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const params = Object.fromEntries(formData.entries());
-            
-            try {
-                const response = await fetch('/update_params', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(params)
-                });
-                
-                const result = await response.json();
-                
-                if (result.status === 'success') {
-                    alert('Parámetros actualizados correctamente. La página se recargará en 5 segundos.');
-                    setTimeout(() => {
-                        location.reload();
-                    }, 5000);
-                } else {
-                    alert('Error al actualizar parámetros: ' + result.message);
-                }
-            } catch (error) {
-                alert('Error de conexión: ' + error.message);
-            }
-        });
-        
-        // Iniciar verificación de estado
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(checkDataStatus, 1000);
-        });
     </script>
 </body>
 </html>
