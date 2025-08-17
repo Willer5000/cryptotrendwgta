@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Señales Históricas - wgta Crypto Trading Signals</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { padding: 20px; background-color: #f8f9fa; }
+        .chart-container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .chart-title { text-align: center; margin-bottom: 20px; }
+        .signal-table th { position: sticky; top: 0; background: white; z-index: 10; }
+        .signal-table-container { max-height: 600px; overflow-y: auto; }
+        .signal-type-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .signal-long {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .signal-short {
+            background-color: #F44336;
+            color: white;
+        }
+        .long-row {
+            background-color: #e8f5e9;
+        }
+        .short-row {
+            background-color: #ffebee;
+        }
+    </style>
+</head>
+<body>
+    <div class="chart-container">
+        <div class="chart-title">
+            <h2>Señales Históricas</h2>
+            <a href="/" class="btn btn-primary mt-3">
+                <i class="fas fa-arrow-left"></i> Volver al panel
+            </a>
+        </div>
+
+        <div class="table-responsive mt-4">
+            {% if signals %}
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Cripto</th>
+                        <th>Señal</th>
+                        <th>Precio Entrada</th>
+                        <th>SL</th>
+                        <th>TP1</th>
+                        <th>TP2</th>
+                        <th>Volumen</th>
+                        <th>ADX</th>
+                        <th>Hora</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for signal in signals %}
+                    <tr class="{{ 'long-row' if 'tp1' in signal and signal.entry < signal.tp1 else 'short-row' }}">
+                        <td>{{ loop.index }}</td>
+                        <td>{{ signal.symbol }}</td>
+                        <td>
+                            <span class="signal-type-badge {{ 'signal-long' if 'tp1' in signal and signal.entry < signal.tp1 else 'signal-short' }}">
+                                {{ 'LONG' if 'tp1' in signal and signal.entry < signal.tp1 else 'SHORT' }}
+                            </span>
+                        </td>
+                        <td>{{ signal.entry }}</td>
+                        <td class="text-danger">{{ signal.sl }}</td>
+                        <td class="text-success">{{ signal.tp1 }}</td>
+                        <td class="text-success">{{ signal.tp2 }}</td>
+                        <td>{{ signal.volume }}</td>
+                        <td>{{ signal.adx }}</td>
+                        <td>{{ signal.timestamp|datetimeformat('%H:%M') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="alert alert-warning text-center">
+                No se encontraron señales históricas
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
