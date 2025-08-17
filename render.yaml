@@ -5,4 +5,3 @@ services:
     plan: free
     buildCommand: "./build.sh"
     startCommand: "gunicorn app:app"
-    healthCheckPath: "/health"
