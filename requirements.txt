@@ -3,5 +3,5 @@ requests
 pandas
 numpy
 matplotlib
-plotly
 gunicorn
+plotly
