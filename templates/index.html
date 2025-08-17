@@ -31,17 +31,28 @@
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; position: relative; }
         .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.7; }
-        .volume-very-high { background-color: #4CAF50; }
-        .volume-high { background-color: #2196F3; }
-        .volume-medium { background-color: #FFEB3B; }
-        .volume-low { background-color: #FF9800; }
-        .volume-very-low { background-color: #F44336; }
+        .volume-very-high { background-color: #4CAF50; }   /* Verde */
+        .volume-high { background-color: #2196F3; }        /* Azul */
+        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
+        .volume-low { background-color: #FF9800; }         /* Naranja */
+        .volume-very-low { background-color: #F44336; }    /* Rojo */
+        .grid-line { position: absolute; background-color: rgba(0,0,0,0.1); z-index: 0; }
+        .grid-line.vertical { width: 1px; height: 100%; }
+        .grid-line.horizontal { height: 1px; width: 100%; }
         .info-box {
             background-color: #e9f7fe;
             border-left: 4px solid #1e88e5;
             padding: 15px;
             border-radius: 4px;
             margin-bottom: 20px;
+        }
+        .crypto-item {
+            display: inline-block;
+            background-color: #e0e0e0;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin: 2px;
+            font-size: 0.85rem;
         }
         .loading-overlay {
             position: fixed;
@@ -60,23 +71,10 @@
             width: 3rem;
             height: 3rem;
         }
-        .progress {
-            height: 25px;
-            width: 80%;
-            margin-top: 20px;
-        }
-        .signal-type-badge {
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        .signal-long {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .signal-short {
-            background-color: #F44336;
-            color: white;
+        .historical-table th {
+            background-color: #f0f0f0;
+            position: sticky;
+            top: 0;
         }
     </style>
 </head>
@@ -85,11 +83,8 @@
         <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Cargando...</span>
         </div>
-        <h3 class="mt-3">Analizando mercados</h3>
-        <p id="loadingStatus">Preparando análisis...</p>
-        <div class="progress">
-            <div id="loadingProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
-        </div>
+        <p class="mt-3" id="loadingMessage">Analizando mercados, por favor espere...</p>
+        <p id="loadingProgress">0% completado</p>
     </div>
 
     <div class="container py-4" style="display:none;" id="contentContainer">
@@ -97,7 +92,7 @@
             <div>
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
-                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: <span id="lastUpdateTime">{{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</span></p>
+                <p class="text-muted"><i class="fas fa-sync-alt"></i> Última actualización: <span id="lastUpdate">{{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}</span></p>
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
@@ -114,17 +109,14 @@
         <div class="info-box">
             <h5><i class="fas fa-info-circle"></i> Información del Sistema</h5>
             <div class="row">
-                <div class="col-md-3">
-                    <p><strong>Criptomonedas analizadas:</strong> <span id="cryptosAnalyzed">{{ cryptos_analyzed }}</span>/<span id="totalCryptos">{{ total_cryptos }}</span></p>
+                <div class="col-md-4">
+                    <p><strong>Criptomonedas analizadas:</strong> <span id="cryptosAnalyzed">{{ cryptos_analyzed }}</span></p>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <p><strong>Señales LONG detectadas:</strong> <span id="longSignalsCount">{{ long_signals|length }}</span></p>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <p><strong>Señales SHORT detectadas:</strong> <span id="shortSignalsCount">{{ short_signals|length }}</span></p>
-                </div>
-                <div class="col-md-3">
-                    <p><strong>Progreso:</strong> <span id="progressStatus">{{ progress }}%</span></p>
                 </div>
             </div>
         </div>
@@ -197,12 +189,6 @@
                     </div>
                 </div>
             </form>
-        </div>
-
-        <div class="d-flex justify-content-end mb-3">
-            <a href="/historical" class="btn btn-secondary">
-                <i class="fas fa-history"></i> Ver Señales Históricas
-            </a>
         </div>
 
         <div class="row mb-4">
@@ -382,53 +368,94 @@
                 </div>
             </div>
         </div>
+
+        <!-- Tabla de señales históricas (vela anterior) -->
+        <div class="card mt-4">
+            <div class="card-header bg-warning text-dark">
+                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
+            </div>
+            <div class="card-body">
+                {% if historical_signals %}
+                <div class="table-responsive">
+                    <table class="table table-hover historical-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Cripto</th>
+                                <th>Acción</th>
+                                <th>Volumen</th>
+                                <th>Entrada</th>
+                                <th>SL</th>
+                                <th>TP1</th>
+                                <th>TP2</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for signal in historical_signals %}
+                            <tr class="{{ 'long-bg' if signal.type == 'LONG' else 'short-bg' }}">
+                                <td>{{ loop.index }}</td>
+                                <td>{{ signal.symbol }}</td>
+                                <td><span class="badge {{ 'badge-long' if signal.type == 'LONG' else 'badge-short' }}">{{ signal.type }}</span></td>
+                                <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                <td>{{ signal.entry }}</td>
+                                <td class="text-danger">{{ signal.sl }}</td>
+                                <td class="text-success">{{ signal.tp1 }}</td>
+                                <td class="text-success">{{ signal.tp2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    No hay señales históricas disponibles
+                </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Variables globales
-        let checkStatusInterval;
-        let scatterPlotInitialized = false;
-
         // Función para verificar el estado de los datos
         function checkDataStatus() {
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('loadingProgressBar').style.width = data.progress + '%';
-                    document.getElementById('loadingStatus').innerHTML = `
-                        Analizando: ${data.cryptos_analyzed}/${data.total_cryptos} criptos<br>
-                        Señales: LONG ${data.long_signals_count} / SHORT ${data.short_signals_count}
-                    `;
-                    
-                    document.getElementById('cryptosAnalyzed').textContent = data.cryptos_analyzed;
-                    document.getElementById('totalCryptos').textContent = data.total_cryptos;
-                    document.getElementById('longSignalsCount').textContent = data.long_signals_count;
-                    document.getElementById('shortSignalsCount').textContent = data.short_signals_count;
-                    document.getElementById('progressStatus').textContent = data.progress + '%';
-                    
-                    const lastUpdate = new Date(data.last_update);
-                    document.getElementById('lastUpdateTime').textContent = lastUpdate.toLocaleString();
-                    
-                    // Si el procesamiento ha terminado, mostrar contenido
-                    if (!data.is_processing && data.cryptos_analyzed > 0) {
-                        clearInterval(checkStatusInterval);
+                    if (data.ready && data.cryptos_analyzed > 0) {
+                        // Actualizar contadores en la interfaz
+                        document.getElementById('cryptosAnalyzed').textContent = data.cryptos_analyzed;
+                        document.getElementById('longSignalsCount').textContent = data.long_signals_count;
+                        document.getElementById('shortSignalsCount').textContent = data.short_signals_count;
+                        document.getElementById('lastUpdate').textContent = data.last_update;
+                        
+                        // Ocultar loading y mostrar contenido
                         document.getElementById('loadingOverlay').style.display = 'none';
                         document.getElementById('contentContainer').style.display = 'block';
+                        
+                        // Inicializar gráficos
                         initializeCharts();
+                    } else {
+                        // Actualizar mensaje de progreso
+                        document.getElementById('loadingMessage').textContent = 
+                            `Analizando mercados, por favor espere... (${data.cryptos_analyzed} cryptos procesadas)`;
+                        document.getElementById('loadingProgress').textContent = 
+                            `Señales: LONG ${data.long_signals_count} / SHORT ${data.short_signals_count}`;
+                        
+                        // Reintentar en 5 segundos
+                        setTimeout(checkDataStatus, 5000);
                     }
                 })
                 .catch(error => {
                     console.error('Error checking status:', error);
-                    document.getElementById('loadingStatus').innerHTML = `
-                        Error obteniendo estado. Reintentando...
-                    `;
+                    document.getElementById('loadingMessage').textContent = 
+                        'Esperando datos... Última actualización: ' + document.getElementById('lastUpdate').textContent;
+                    setTimeout(checkDataStatus, 5000);
                 });
         }
 
-        // Iniciar verificación de estado
+        // Mostrar contenido cuando esté listo
         document.addEventListener('DOMContentLoaded', function() {
-            checkStatusInterval = setInterval(checkDataStatus, 3000);
             checkDataStatus();
         });
 
@@ -549,11 +576,11 @@
             
             // Mapeo de colores por volumen
             const volumeColors = {
-                'Muy Alto': '#4CAF50',
-                'Alto': '#2196F3',
-                'Medio': '#FFEB3B',
-                'Bajo': '#FF9800',
-                'Muy Bajo': '#F44336'
+                'Muy Alto': '#4CAF50',   // Verde
+                'Alto': '#2196F3',       // Azul
+                'Medio': '#FFEB3B',      // Amarillo
+                'Bajo': '#FF9800',       // Naranja
+                'Muy Bajo': '#F44336'    // Rojo
             };
             
             // Preparar datos para el gráfico
@@ -639,7 +666,13 @@
                     
                     {type: 'rect', x0: 0, x1: 33.3, y0: 66.6, y1: 100, fillcolor: 'rgba(46, 204, 113, 0.2)', line: {width: 0}},
                     {type: 'rect', x0: 33.3, x1: 66.6, y0: 66.6, y1: 100, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 66.6, y1: 100, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}}
+                    {type: 'rect', x0: 66.6, x1: 100, y0: 66.6, y1: 100, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
+                    
+                    // Líneas divisorias
+                    {type: 'line', x0: 33.3, x1: 33.3, y0: 0, y1: 100, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
+                    {type: 'line', x0: 66.6, x1: 66.6, y0: 0, y1: 100, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
+                    {type: 'line', x0: 0, x1: 100, y0: 33.3, y1: 33.3, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
+                    {type: 'line', x0: 0, x1: 100, y0: 66.6, y1: 66.6, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}}
                 ],
                 annotations: [
                     {x: 16.65, y: 16.65, text: 'Neutral', showarrow: false, font: {size: 14}},
@@ -665,7 +698,6 @@
             
             // Crear gráfico
             Plotly.newPlot('scatterPlot', traces, layout);
-            scatterPlotInitialized = true;
             
             // Filtro por volumen
             document.getElementById('volume-filter').addEventListener('change', function() {
