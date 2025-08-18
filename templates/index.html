@@ -253,7 +253,7 @@
         <!-- Tabla de Señales Históricas -->
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
-                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales de Vela Anterior ({{ params.timeframe }})</h2>
+                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
             </div>
             <div class="card-body">
                 {% if historical_signals %}
@@ -272,7 +272,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for signal in historical_signals|reverse %}
+                            {% for signal in historical_signals %}
                             <tr class="historical-row {{ 'long-bg' if signal.type == 'LONG' else 'short-bg' }}">
                                 <td>{{ loop.index }}</td>
                                 <td>{{ signal.symbol }}</td>
