@@ -53,7 +53,9 @@ analysis_state = {
     'long_signals': [],
     'short_signals': [],
     'scatter_data': [],
-    'historical_signals': deque(maxlen=1000),  # Almacena todas las señales históricas
+    'previous_signals': deque(maxlen=100),  # Señales del ciclo anterior
+    'current_signals': deque(maxlen=100),    # Señales actuales
+    'historical_signals': deque(maxlen=500),  # Nuevo: señales históricas con timestamp
     'last_update': datetime.now(),
     'cryptos_analyzed': 0,
     'is_updating': False,
@@ -382,7 +384,7 @@ def analyze_crypto(symbol, params):
                 'timestamp': datetime.now().isoformat(),
                 'type': 'LONG',
                 'timeframe': params['timeframe'],
-                'candle_close_time': last['timestamp'].isoformat()
+                'candle_timestamp': last['timestamp'].isoformat()  # Nuevo: timestamp de la vela
             }
         
         # Generar señal SHORT
@@ -410,7 +412,7 @@ def analyze_crypto(symbol, params):
                 'timestamp': datetime.now().isoformat(),
                 'type': 'SHORT',
                 'timeframe': params['timeframe'],
-                'candle_close_time': last['timestamp'].isoformat()
+                'candle_timestamp': last['timestamp'].isoformat()  # Nuevo: timestamp de la vela
             }
         
         return long_signal, short_signal, long_prob, short_prob, volume_class
@@ -418,11 +420,44 @@ def analyze_crypto(symbol, params):
         logger.error(f"Error analizando {symbol}: {str(e)}")
         return None, None, 0, 0, 'Muy Bajo'
 
+# Función para determinar si una señal es histórica
+def is_historical_signal(signal, current_time, timeframe):
+    if not signal or 'candle_timestamp' not in signal:
+        return False
+    
+    try:
+        # Obtener el timestamp de la vela de la señal
+        signal_time = datetime.fromisoformat(signal['candle_timestamp'].replace('Z', '+00:00'))
+        signal_time = signal_time.astimezone(NY_TZ)
+        
+        # Calcular la duración del timeframe en minutos
+        timeframe_minutes = {
+            '30m': 30,
+            '1h': 60,
+            '2h': 120,
+            '4h': 240,
+            '1d': 1440,
+            '1w': 10080
+        }.get(timeframe, 60)
+        
+        # Verificar si la vela de la señal es anterior a la vela actual
+        time_diff = (current_time - signal_time).total_seconds() / 60
+        return time_diff >= timeframe_minutes
+    except Exception as e:
+        logger.error(f"Error verificando señal histórica: {str(e)}")
+        return False
+
 # Tarea de actualización
 def update_task():
     while True:
         try:
             with analysis_state['lock']:
+                # Guardar señales actuales como históricas
+                current_time = datetime.now(NY_TZ)
+                for signal in analysis_state['current_signals']:
+                    if is_historical_signal(signal, current_time, analysis_state['params']['timeframe']):
+                        analysis_state['historical_signals'].append(signal)
+                
                 analysis_state['is_updating'] = True
                 analysis_state['update_progress'] = 0
                 
@@ -431,6 +466,7 @@ def update_task():
                 long_signals = []
                 short_signals = []
                 scatter_data = []
+                current_signals = deque(maxlen=100)
                 processed = 0
                 
                 logger.info(f"Iniciando análisis de {total} criptomonedas...")
@@ -447,13 +483,11 @@ def update_task():
                             
                             if long_sig:
                                 long_signals.append(long_sig)
-                                # Agregar a histórico
-                                analysis_state['historical_signals'].append(long_sig)
+                                current_signals.append(long_sig)
                             
                             if short_sig:
                                 short_signals.append(short_sig)
-                                # Agregar a histórico
-                                analysis_state['historical_signals'].append(short_sig)
+                                current_signals.append(short_sig)
                             
                             scatter_data.append({
                                 'symbol': crypto,
@@ -479,6 +513,7 @@ def update_task():
                 analysis_state['long_signals'] = long_signals
                 analysis_state['short_signals'] = short_signals
                 analysis_state['scatter_data'] = scatter_data
+                analysis_state['current_signals'] = current_signals
                 analysis_state['cryptos_analyzed'] = total
                 analysis_state['last_update'] = datetime.now()
                 analysis_state['is_updating'] = False
@@ -526,43 +561,16 @@ def index():
                 'volume': item['volume']
             })
         
-        # Filtrar señales históricas por timeframe actual y eliminar duplicados
-        # Mantener solo la última señal por símbolo y tipo
-        historical_by_symbol = {}
-        now = datetime.now(NY_TZ)
+        # Filtrar señales históricas por timeframe actual
+        current_time = datetime.now(NY_TZ)
+        historical_signals = [
+            s for s in analysis_state['historical_signals'] 
+            if s['timeframe'] == params['timeframe'] and
+            is_historical_signal(s, current_time, params['timeframe'])
+        ][-20:]
         
-        # Calcular el tiempo de expiración según el timeframe
-        timeframe_durations = {
-            '30m': timedelta(minutes=30),
-            '1h': timedelta(hours=1),
-            '2h': timedelta(hours=2),
-            '4h': timedelta(hours=4),
-            '1d': timedelta(days=1),
-            '1w': timedelta(weeks=1)
-        }
-        
-        expiration_time = timeframe_durations.get(params['timeframe'], timedelta(hours=1))
-        
-        for signal in analysis_state['historical_signals']:
-            if signal['timeframe'] != params['timeframe']:
-                continue
-                
-            # Verificar si la señal ha expirado
-            try:
-                candle_close_time = datetime.fromisoformat(signal['candle_close_time']).replace(tzinfo=NY_TZ)
-                if now - candle_close_time > expiration_time:
-                    continue
-            except:
-                continue
-                
-            key = (signal['symbol'], signal['type'])
-            if key not in historical_by_symbol:
-                historical_by_symbol[key] = signal
-        
-        historical_signals = list(historical_by_symbol.values())[-20:]
-        
-        # Ordenar por timestamp
-        historical_signals.sort(key=lambda x: x['timestamp'], reverse=True)
+        # Ordenar por timestamp descendente (más recientes primero)
+        historical_signals.sort(key=lambda x: x.get('candle_timestamp', ''), reverse=True)
         
         return render_template('index.html', 
                                long_signals=long_signals, 
@@ -678,10 +686,6 @@ def update_params():
         with analysis_state['lock']:
             analysis_state['params'] = new_params
         
-        # Iniciar actualización inmediata
-        update_thread = threading.Thread(target=update_task, daemon=True)
-        update_thread.start()
-        
         return jsonify({
             'status': 'success',
             'message': 'Parámetros actualizados correctamente',
@@ -703,6 +707,7 @@ def status():
             'progress': analysis_state['update_progress'],
             'long_signals': len(analysis_state['long_signals']),
             'short_signals': len(analysis_state['short_signals']),
+            'historical_signals': len(analysis_state['historical_signals']),
             'cryptos_analyzed': analysis_state['cryptos_analyzed'],
             'params': analysis_state['params']
         })
