@@ -62,6 +62,10 @@
         .historical-row {
             font-size: 0.9rem;
         }
+        .timeframe-badge {
+            font-size: 0.7rem;
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
@@ -114,6 +118,13 @@
                 </div>
                 <div class="col-md-4">
                     <p><strong>Señales SHORT detectadas:</strong> {{ short_signals|length }}</p>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-12">
+                    <p><strong>Temporalidad actual:</strong> {{ params.timeframe }} 
+                        <span class="badge bg-primary timeframe-badge">ACTIVA</span>
+                    </p>
                 </div>
             </div>
         </div>
@@ -181,7 +192,7 @@
                     
                     <div class="col-md-12 mt-4">
                         <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros
+                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros y Forzar Análisis
                         </button>
                     </div>
                 </div>
@@ -253,22 +264,24 @@
         <!-- Tabla de Señales Históricas -->
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
-                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
+                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior) - NY Time</h2>
             </div>
             <div class="card-body">
                 {% if historical_signals %}
-                <div class="table-responsive">
+                <div class="table-responsive signal-table-container">
                     <table class="table table-sm table-hover">
                         <thead>
                             <tr>
                                 <th>#</th>
                                 <th>Nomenclatura</th>
                                 <th>Acción</th>
+                                <th>Hora (NY)</th>
                                 <th>Volumen</th>
                                 <th>Entrada</th>
                                 <th>SL</th>
                                 <th>TP1</th>
                                 <th>TP2</th>
+                                <th>Timeframe</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -277,11 +290,13 @@
                                 <td>{{ loop.index }}</td>
                                 <td>{{ signal.symbol }}</td>
                                 <td><span class="badge {{ 'badge-long' if signal.type == 'LONG' else 'badge-short' }}">{{ signal.type }}</span></td>
+                                <td>{{ signal.timestamp | utc_to_ny }}</td>
                                 <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
                                 <td>{{ signal.entry }}</td>
                                 <td class="text-danger">{{ signal.sl }}</td>
                                 <td class="text-success">{{ signal.tp1 }}</td>
                                 <td class="text-success">{{ signal.tp2 }}</td>
+                                <td><span class="badge bg-secondary timeframe-badge">{{ signal.timeframe }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -289,7 +304,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-warning">
-                    No hay señales históricas disponibles
+                    No hay señales históricas disponibles para el timeframe {{ params.timeframe }}
                 </div>
                 {% endif %}
             </div>
@@ -346,7 +361,7 @@
                         </div>
                         {% else %}
                         <div class="alert alert-warning">
-                            No se encontraron señales LONG en este momento
+                            No se encontraron señales LONG en este momento para el timeframe {{ params.timeframe }}
                         </div>
                         {% endif %}
                     </div>
@@ -403,7 +418,7 @@
                         </div>
                         {% else %}
                         <div class="alert alert-warning">
-                            No se encontraron señales SHORT en este momento
+                            No se encontraron señales SHORT en este momento para el timeframe {{ params.timeframe }}
                         </div>
                         {% endif %}
                     </div>
@@ -693,10 +708,10 @@
                     const result = await response.json();
                     
                     if (result.status === 'success') {
-                        alert('Parámetros actualizados correctamente. La página se recargará en 5 segundos.');
+                        alert('Parámetros actualizados correctamente. El sistema se actualizará en breve.');
                         setTimeout(() => {
                             location.reload();
-                        }, 5000);
+                        }, 3000);
                     } else {
                         alert('Error al actualizar parámetros: ' + result.message);
                     }
