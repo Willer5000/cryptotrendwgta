@@ -11,49 +11,52 @@
         .chart-title { text-align: center; margin-bottom: 20px; }
         .chart-img { width: 100%; border: 1px solid #eee; }
         .back-btn { margin-top: 20px; }
-        .signal-info { margin-bottom: 20px; padding: 15px; border-radius: 8px; }
-        .signal-long { background-color: #e8f5e9; border-left: 4px solid #4CAF50; }
-        .signal-short { background-color: #ffebee; border-left: 4px solid #F44336; }
+        .signal-info { 
+            background-color: {{ '#e8f5e9' if signal_type == 'long' else '#ffebee' }}; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
     <div class="chart-container">
         <div class="chart-title">
             <h2>{{ symbol }}-USDT - Señal Histórica {{ signal_type|upper }}</h2>
-            <p class="text-muted">Cierre de vela: {{ signal.candle_close_time|datetimeformat }}</p>
+            <p class="text-muted">Timeframe: {{ timeframe }} - Vela: {{ candle_timestamp }}</p>
             <a href="/" class="btn btn-primary mt-3">
                 <i class="fas fa-arrow-left"></i> Volver al panel
             </a>
         </div>
         
-        <div class="signal-info {{ 'signal-long' if signal_type == 'long' else 'signal-short' }}">
-            <h4>Detalles de la Señal</h4>
+        <div class="signal-info">
+            <h4>Información de la Señal</h4>
             <div class="row">
                 <div class="col-md-3">
-                    <p><strong>Precio:</strong> {{ signal.price }}</p>
+                    <p><strong>Precio:</strong> {{ price }}</p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong>Entrada:</strong> {{ signal.entry }}</p>
+                    <p><strong>Entrada:</strong> {{ entry }}</p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong>Stop Loss:</strong> {{ signal.sl }}</p>
+                    <p><strong>Stop Loss:</strong> <span class="text-danger">{{ sl }}</span></p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong>Take Profit 1:</strong> {{ signal.tp1 }}</p>
+                    <p><strong>Take Profit 1:</strong> <span class="text-success">{{ tp1 }}</span></p>
                 </div>
             </div>
             <div class="row">
                 <div class="col-md-3">
-                    <p><strong>Take Profit 2:</strong> {{ signal.tp2 }}</p>
+                    <p><strong>Take Profit 2:</strong> <span class="text-success">{{ tp2 }}</span></p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong>Volumen:</strong> <span class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</span></p>
+                    <p><strong>Volumen:</strong> <span class="volume-{{ volume|lower|replace(' ', '-') }}">{{ volume }}</span></p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong>ADX:</strong> {{ signal.adx }}</p>
+                    <p><strong>ADX:</strong> {{ adx }}</p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong>Distancia:</strong> {{ signal.distance }}%</p>
+                    <p><strong>Distancia:</strong> {{ distance }}%</p>
                 </div>
             </div>
         </div>
