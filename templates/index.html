@@ -62,6 +62,10 @@
         .historical-row {
             font-size: 0.9rem;
         }
+        .expired-signal {
+            opacity: 0.6;
+            text-decoration: line-through;
+        }
     </style>
 </head>
 <body>
@@ -71,7 +75,7 @@
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
                 <p class="text-muted">
-                    <i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}
+                    <i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }} (NY)
                     <span class="status-badge {{ 'status-updating' if is_updating else 'status-ready' }}">
                         {{ 'Actualizando...' if is_updating else 'Datos listos' }}
                     </span>
@@ -254,6 +258,7 @@
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
                 <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
+                <p class="mb-0"><small>Horario de Nueva York (UTC-4), expiran al cerrar la vela actual</small></p>
             </div>
             <div class="card-body">
                 {% if historical_signals %}
@@ -269,6 +274,7 @@
                                 <th>SL</th>
                                 <th>TP1</th>
                                 <th>TP2</th>
+                                <th>Temporalidad</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -282,6 +288,7 @@
                                 <td class="text-danger">{{ signal.sl }}</td>
                                 <td class="text-success">{{ signal.tp1 }}</td>
                                 <td class="text-success">{{ signal.tp2 }}</td>
+                                <td>{{ signal.timeframe }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -595,7 +602,7 @@
                 });
             }
             
-            // Diseño del gráfico
+            // Diseño del gráfico con zonas corregidas
             const layout = {
                 title: 'Probabilidades de Trading por Criptomoneda',
                 xaxis: {
@@ -611,36 +618,31 @@
                     zerolinecolor: 'rgba(0,0,0,0.3)'
                 },
                 shapes: [
-                    // Zonas de probabilidad
+                    // Zonas de probabilidad (corregidas)
                     {type: 'rect', x0: 0, x1: 33.3, y0: 0, y1: 33.3, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 33.3, x1: 66.6, y0: 0, y1: 33.3, fillcolor: 'rgba(231, 76, 60, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 0, y1: 33.3, fillcolor: 'rgba(231, 76, 60, 0.2)', line: {width: 0}},
+                    {type: 'rect', x0: 33.3, x1: 66.6, y0: 0, y1: 33.3, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
+                    {type: 'rect', x0: 66.6, x1: 100, y0: 0, y1: 33.3, fillcolor: 'rgba(46, 204, 113, 0.2)', line: {width: 0}},
                     
-                    {type: 'rect', x0: 0, x1: 33.3, y0: 33.3, y1: 66.6, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
+                    {type: 'rect', x0: 0, x1: 33.3, y0: 33.3, y1: 66.6, fillcolor: 'rgba(231, 76, 60, 0.1)', line: {width: 0}},
                     {type: 'rect', x0: 33.3, x1: 66.6, y0: 33.3, y1: 66.6, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 33.3, y1: 66.6, fillcolor: 'rgba(231, 76, 60, 0.1)', line: {width: 0}},
+                    {type: 'rect', x0: 66.6, x1: 100, y0: 33.3, y1: 66.6, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
                     
-                    {type: 'rect', x0: 0, x1: 33.3, y0: 66.6, y1: 100, fillcolor: 'rgba(46, 204, 113, 0.2)', line: {width: 0}},
-                    {type: 'rect', x0: 33.3, x1: 66.6, y0: 66.6, y1: 100, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 66.6, y1: 100, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
-                    
-                    // Líneas divisorias
-                    {type: 'line', x0: 33.3, x1: 33.3, y0: 0, y1: 100, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
-                    {type: 'line', x0: 66.6, x1: 66.6, y0: 0, y1: 100, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
-                    {type: 'line', x0: 0, x1: 100, y0: 33.3, y1: 33.3, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}},
-                    {type: 'line', x0: 0, x1: 100, y0: 66.6, y1: 66.6, line: {dash: 'dot', width: 1, color: 'rgba(0,0,0,0.3)'}}
+                    {type: 'rect', x0: 0, x1: 33.3, y0: 66.6, y1: 100, fillcolor: 'rgba(231, 76, 60, 0.2)', line: {width: 0}},
+                    {type: 'rect', x0: 33.3, x1: 66.6, y0: 66.6, y1: 100, fillcolor: 'rgba(231, 76, 60, 0.1)', line: {width: 0}},
+                    {type: 'rect', x0: 66.6, x1: 100, y0: 66.6, y1: 100, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}}
                 ],
                 annotations: [
+                    // Anotaciones corregidas
                     {x: 16.65, y: 16.65, text: 'Neutral', showarrow: false, font: {size: 14}},
-                    {x: 50, y: 16.65, text: 'Short Medio', showarrow: false, font: {size: 14}},
-                    {x: 83.3, y: 16.65, text: 'Alto Short', showarrow: false, font: {size: 14}},
+                    {x: 50, y: 16.65, text: 'Medio Long', showarrow: false, font: {size: 14}},
+                    {x: 83.3, y: 16.65, text: 'Alto Long', showarrow: false, font: {size: 14}},
                     
-                    {x: 16.65, y: 50, text: 'Long Medio', showarrow: false, font: {size: 14}},
+                    {x: 16.65, y: 50, text: 'Medio Short', showarrow: false, font: {size: 14}},
                     {x: 50, y: 50, text: 'Neutral', showarrow: false, font: {size: 14}},
-                    {x: 83.3, y: 50, text: 'Short Medio', showarrow: false, font: {size: 14}},
+                    {x: 83.3, y: 50, text: 'Medio Long', showarrow: false, font: {size: 14}},
                     
-                    {x: 16.65, y: 83.3, text: 'Alto Long', showarrow: false, font: {size: 14}},
-                    {x: 50, y: 83.3, text: 'Long Medio', showarrow: false, font: {size: 14}},
+                    {x: 16.65, y: 83.3, text: 'Alto Short', showarrow: false, font: {size: 14}},
+                    {x: 50, y: 83.3, text: 'Medio Short', showarrow: false, font: {size: 14}},
                     {x: 83.3, y: 83.3, text: 'Neutral', showarrow: false, font: {size: 14}}
                 ],
                 hovermode: 'closest',
