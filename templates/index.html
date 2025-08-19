@@ -62,6 +62,13 @@
         .historical-row {
             font-size: 0.9rem;
         }
+        .timeframe-badge {
+            background-color: #6c757d;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+        }
     </style>
 </head>
 <body>
@@ -181,7 +188,7 @@
                     
                     <div class="col-md-12 mt-4">
                         <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros y Reiniciar Análisis
+                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros y Recalcular
                         </button>
                     </div>
                 </div>
@@ -253,7 +260,7 @@
         <!-- Tabla de Señales Históricas -->
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
-                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
+                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior) - Timeframe: {{ params.timeframe }}</h2>
             </div>
             <div class="card-body">
                 {% if historical_signals %}
@@ -269,7 +276,7 @@
                                 <th>SL</th>
                                 <th>TP1</th>
                                 <th>TP2</th>
-                                <th>Temporalidad</th>
+                                <th>Timeframe</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -283,7 +290,7 @@
                                 <td class="text-danger">{{ signal.sl }}</td>
                                 <td class="text-success">{{ signal.tp1 }}</td>
                                 <td class="text-success">{{ signal.tp2 }}</td>
-                                <td>{{ signal.timeframe }}</td>
+                                <td><span class="timeframe-badge">{{ signal.timeframe }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -291,7 +298,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-warning">
-                    No hay señales históricas disponibles
+                    No hay señales históricas disponibles para el timeframe {{ params.timeframe }}
                 </div>
                 {% endif %}
             </div>
@@ -301,7 +308,7 @@
             <div class="col-md-6">
                 <div class="card mb-4">
                     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }})</h2>
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }}) - {{ params.timeframe }}</h2>
                         <span class="badge badge-long">ADX Prom: {{ avg_adx_long }}</span>
                     </div>
                     <div class="card-body">
@@ -348,7 +355,7 @@
                         </div>
                         {% else %}
                         <div class="alert alert-warning">
-                            No se encontraron señales LONG en este momento
+                            No se encontraron señales LONG en este momento para el timeframe {{ params.timeframe }}
                         </div>
                         {% endif %}
                     </div>
@@ -358,7 +365,7 @@
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }}) - {{ params.timeframe }}</h2>
                         <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
                     </div>
                     <div class="card-body">
@@ -405,7 +412,7 @@
                         </div>
                         {% else %}
                         <div class="alert alert-warning">
-                            No se encontraron señales SHORT en este momento
+                            No se encontraron señales SHORT en este momento para el timeframe {{ params.timeframe }}
                         </div>
                         {% endif %}
                     </div>
