@@ -7,46 +7,57 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { padding: 20px; background-color: #f8f9fa; }
-        .chart-container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .chart-container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .chart-title { text-align: center; margin-bottom: 20px; }
         .chart-img { width: 100%; border: 1px solid #eee; }
         .back-btn { margin-top: 20px; }
         .signal-info { margin-bottom: 20px; padding: 15px; border-radius: 8px; }
-        .signal-info.long { background-color: #e8f5e9; border-left: 4px solid #4CAF50; }
-        .signal-info.short { background-color: #ffebee; border-left: 4px solid #F44336; }
+        .signal-long { background-color: #e8f5e9; border-left: 4px solid #4CAF50; }
+        .signal-short { background-color: #ffebee; border-left: 4px solid #F44336; }
     </style>
 </head>
 <body>
     <div class="chart-container">
         <div class="chart-title">
             <h2>{{ symbol }}-USDT - Señal Histórica {{ signal_type|upper }}</h2>
-            <p class="text-muted">Timeframe: {{ timeframe }} - Hora NY: {{ timestamp | utc_to_ny }}</p>
-            
-            <div class="signal-info {{ 'long' if signal_type == 'LONG' else 'short' }}">
-                <div class="row">
-                    <div class="col-md-3">
-                        <strong>Entrada:</strong> {{ signal.entry }}<br>
-                        <strong>Precio Actual:</strong> {{ signal.price }}
-                    </div>
-                    <div class="col-md-3">
-                        <strong>Stop Loss:</strong> <span class="text-danger">{{ signal.sl }}</span><br>
-                        <strong>Distancia:</strong> {{ signal.distance }}%
-                    </div>
-                    <div class="col-md-3">
-                        <strong>TP1:</strong> <span class="text-success">{{ signal.tp1 }}</span><br>
-                        <strong>TP2:</strong> <span class="text-success">{{ signal.tp2 }}</span>
-                    </div>
-                    <div class="col-md-3">
-                        <strong>ADX:</strong> {{ signal.adx }}<br>
-                        <strong>Volumen:</strong> <span class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</span>
-                    </div>
-                </div>
-            </div>
-            
+            <p class="text-muted">Cierre de vela: {{ signal.candle_close_time|datetimeformat }}</p>
             <a href="/" class="btn btn-primary mt-3">
                 <i class="fas fa-arrow-left"></i> Volver al panel
             </a>
         </div>
+        
+        <div class="signal-info {{ 'signal-long' if signal_type == 'long' else 'signal-short' }}">
+            <h4>Detalles de la Señal</h4>
+            <div class="row">
+                <div class="col-md-3">
+                    <p><strong>Precio:</strong> {{ signal.price }}</p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>Entrada:</strong> {{ signal.entry }}</p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>Stop Loss:</strong> {{ signal.sl }}</p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>Take Profit 1:</strong> {{ signal.tp1 }}</p>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-3">
+                    <p><strong>Take Profit 2:</strong> {{ signal.tp2 }}</p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>Volumen:</strong> <span class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</span></p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>ADX:</strong> {{ signal.adx }}</p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>Distancia:</strong> {{ signal.distance }}%</p>
+                </div>
+            </div>
+        </div>
+        
         <img src="data:image/png;base64,{{ plot_url }}" alt="Gráfico Histórico de {{ symbol }}" class="chart-img">
     </div>
 </body>
