@@ -7,14 +7,15 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { padding: 20px; background-color: #f8f9fa; }
-        .chart-container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .chart-container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .chart-title { text-align: center; margin-bottom: 20px; }
         .chart-img { width: 100%; border: 1px solid #eee; }
         .back-btn { margin-top: 20px; }
-        .signal-info { 
-            background-color: {{ '#e8f5e9' if signal_type == 'long' else '#ffebee' }}; 
-            padding: 15px; 
-            border-radius: 8px; 
+        .info-box {
+            background-color: #e9f7fe;
+            border-left: 4px solid #1e88e5;
+            padding: 15px;
+            border-radius: 4px;
             margin-bottom: 20px;
         }
     </style>
@@ -22,45 +23,19 @@
 <body>
     <div class="chart-container">
         <div class="chart-title">
-            <h2>{{ symbol }}-USDT - Señal Histórica {{ signal_type|upper }}</h2>
-            <p class="text-muted">Timeframe: {{ timeframe }} - Vela: {{ candle_timestamp }}</p>
+            <h2>{{ symbol }}-USDT - Señal HISTÓRICA {{ signal_type|upper }}</h2>
+            <p class="text-muted">Señal de la vela anterior (cerrada) - Timeframe: {{ params.timeframe }}</p>
+            
+            <div class="info-box">
+                <h5><i class="fas fa-info-circle"></i> Información de la Señal Histórica</h5>
+                <p>Esta señal se generó en la vela anterior (ya cerrada) y se mantiene durante el tiempo del timeframe actual.</p>
+                <p>Las señales históricas son útiles para verificar la efectividad del sistema en velas ya completadas.</p>
+            </div>
+            
             <a href="/" class="btn btn-primary mt-3">
                 <i class="fas fa-arrow-left"></i> Volver al panel
             </a>
         </div>
-        
-        <div class="signal-info">
-            <h4>Información de la Señal</h4>
-            <div class="row">
-                <div class="col-md-3">
-                    <p><strong>Precio:</strong> {{ price }}</p>
-                </div>
-                <div class="col-md-3">
-                    <p><strong>Entrada:</strong> {{ entry }}</p>
-                </div>
-                <div class="col-md-3">
-                    <p><strong>Stop Loss:</strong> <span class="text-danger">{{ sl }}</span></p>
-                </div>
-                <div class="col-md-3">
-                    <p><strong>Take Profit 1:</strong> <span class="text-success">{{ tp1 }}</span></p>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-md-3">
-                    <p><strong>Take Profit 2:</strong> <span class="text-success">{{ tp2 }}</span></p>
-                </div>
-                <div class="col-md-3">
-                    <p><strong>Volumen:</strong> <span class="volume-{{ volume|lower|replace(' ', '-') }}">{{ volume }}</span></p>
-                </div>
-                <div class="col-md-3">
-                    <p><strong>ADX:</strong> {{ adx }}</p>
-                </div>
-                <div class="col-md-3">
-                    <p><strong>Distancia:</strong> {{ distance }}%</p>
-                </div>
-            </div>
-        </div>
-        
         <img src="data:image/png;base64,{{ plot_url }}" alt="Gráfico Histórico de {{ symbol }}" class="chart-img">
     </div>
 </body>
