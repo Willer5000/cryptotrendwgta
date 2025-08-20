@@ -17,7 +17,6 @@ import traceback
 from threading import Lock
 from collections import deque
 import pytz
-from dateutil.relativedelta import relativedelta
 
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Deshabilitar caché
@@ -33,18 +32,8 @@ MAX_RETRIES = 3
 RETRY_DELAY = 2
 BATCH_SIZE = 15
 
-# Zona horaria de Nueva York (UTC-4/-5 según DST)
+# Zona horaria de Nueva York (UTC-4/5)
 NY_TZ = pytz.timezone('America/New_York')
-
-# Mapeo de timeframe a minutos
-TIMEFRAME_MINUTES = {
-    '30m': 30,
-    '1h': 60,
-    '2h': 120,
-    '4h': 240,
-    '1d': 1440,
-    '1w': 10080
-}
 
 DEFAULTS = {
     'timeframe': '1h',
@@ -64,14 +53,14 @@ analysis_state = {
     'long_signals': [],
     'short_signals': [],
     'scatter_data': [],
-    'historical_signals': deque(maxlen=100),  # Señales históricas de vela anterior
-    'current_signals': deque(maxlen=100),     # Señales actuales
+    'historical_signals': deque(maxlen=100),  # Señales históricas por timeframe
     'last_update': datetime.now(),
     'cryptos_analyzed': 0,
     'is_updating': False,
     'update_progress': 0,
     'params': DEFAULTS.copy(),
-    'lock': Lock()
+    'lock': Lock(),
+    'timeframe_data': {}  # Almacenar datos por timeframe
 }
 
 # Leer lista de criptomonedas
@@ -107,7 +96,7 @@ def get_kucoin_data(symbol, timeframe):
                     candles = data['data']
                     candles.reverse()
                     
-                    if len(candles) < 50:
+                    if len(candles) < 100:  # Necesitamos más datos para análisis histórico
                         logger.warning(f"Datos insuficientes para {symbol}: {len(candles)} velas")
                         return None
                     
@@ -120,7 +109,7 @@ def get_kucoin_data(symbol, timeframe):
                     # Eliminar filas con valores NaN
                     df = df.dropna()
                     
-                    if len(df) < 50:
+                    if len(df) < 100:
                         logger.warning(f"Datos insuficientes después de limpieza para {symbol}: {len(df)} velas")
                         return None
                     
@@ -316,35 +305,10 @@ def near_level(price, levels, threshold_percent=1.0):
     threshold = price * threshold_percent / 100
     return min_distance <= threshold
 
-# Calcular timestamp de expiración para señales históricas
-def calculate_expiration_time(timeframe):
-    now = datetime.now(NY_TZ)
-    minutes = TIMEFRAME_MINUTES.get(timeframe, 60)
-    
-    if timeframe == '1w':
-        # Para semanas, calcular el próximo domingo a las 00:00
-        days_until_sunday = (6 - now.weekday()) % 7
-        if days_until_sunday == 0 and now.hour == 0 and now.minute < minutes:
-            days_until_sunday = 7
-        expiration = now + timedelta(days=days_until_sunday)
-        expiration = expiration.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif timeframe == '1d':
-        # Para días, próximo día a las 00:00
-        expiration = now + timedelta(days=1)
-        expiration = expiration.replace(hour=0, minute=0, second=0, microsecond=0)
-    else:
-        # Para timeframes intraday, calcular el próximo período
-        total_minutes = now.hour * 60 + now.minute
-        periods_passed = total_minutes // minutes
-        next_period_minutes = (periods_passed + 1) * minutes
-        expiration = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_period_minutes)
-    
-    return expiration
-
 # Analizar una criptomoneda
 def analyze_crypto(symbol, params):
     df = get_kucoin_data(symbol, params['timeframe'])
-    if df is None or len(df) < 50:
+    if df is None or len(df) < 100:
         return None, None, 0, 0, 'Muy Bajo'
     
     try:
@@ -352,8 +316,9 @@ def analyze_crypto(symbol, params):
         if df is None or len(df) < 20:
             return None, None, 0, 0, 'Muy Bajo'
         
-        last = df.iloc[-1]
-        prev = df.iloc[-2] if len(df) > 1 else last
+        # Obtener datos de la vela anterior (penúltima vela)
+        last = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
+        current = df.iloc[-1]
         
         supports, resistances = find_support_resistance(df, params['sr_window'])
         
@@ -419,7 +384,7 @@ def analyze_crypto(symbol, params):
                 'timestamp': datetime.now().isoformat(),
                 'type': 'LONG',
                 'timeframe': params['timeframe'],
-                'expiration': calculate_expiration_time(params['timeframe']).isoformat()
+                'current_price': round(current['close'], 4)  # Precio actual para referencia
             }
         
         # Generar señal SHORT
@@ -447,29 +412,13 @@ def analyze_crypto(symbol, params):
                 'timestamp': datetime.now().isoformat(),
                 'type': 'SHORT',
                 'timeframe': params['timeframe'],
-                'expiration': calculate_expiration_time(params['timeframe']).isoformat()
+                'current_price': round(current['close'], 4)  # Precio actual para referencia
             }
         
         return long_signal, short_signal, long_prob, short_prob, volume_class
     except Exception as e:
         logger.error(f"Error analizando {symbol}: {str(e)}")
         return None, None, 0, 0, 'Muy Bajo'
-
-# Filtrar señales expiradas
-def filter_expired_signals(signals):
-    now = datetime.now(NY_TZ)
-    active_signals = []
-    
-    for signal in signals:
-        try:
-            expiration = datetime.fromisoformat(signal['expiration']).astimezone(NY_TZ)
-            if expiration > now:
-                active_signals.append(signal)
-        except (ValueError, KeyError):
-            # Si no hay expiración válida, mantener la señal
-            active_signals.append(signal)
-    
-    return active_signals
 
 # Tarea de actualización
 def update_task():
@@ -484,7 +433,6 @@ def update_task():
                 long_signals = []
                 short_signals = []
                 scatter_data = []
-                current_signals = []
                 processed = 0
                 
                 logger.info(f"Iniciando análisis de {total} criptomonedas...")
@@ -501,11 +449,9 @@ def update_task():
                             
                             if long_sig:
                                 long_signals.append(long_sig)
-                                current_signals.append(long_sig)
                             
                             if short_sig:
                                 short_signals.append(short_sig)
-                                current_signals.append(short_sig)
                             
                             scatter_data.append({
                                 'symbol': crypto,
@@ -527,17 +473,28 @@ def update_task():
                 long_signals.sort(key=lambda x: x['adx'], reverse=True)
                 short_signals.sort(key=lambda x: x['adx'], reverse=True)
                 
-                # Filtrar señales expiradas
-                current_signals = filter_expired_signals(current_signals)
+                # Almacenar datos por timeframe
+                timeframe = params['timeframe']
+                analysis_state['timeframe_data'][timeframe] = {
+                    'long_signals': long_signals,
+                    'short_signals': short_signals,
+                    'scatter_data': scatter_data,
+                    'last_update': datetime.now()
+                }
                 
-                # Actualizar estado global
+                # Actualizar estado global con datos del timeframe actual
                 analysis_state['long_signals'] = long_signals
                 analysis_state['short_signals'] = short_signals
                 analysis_state['scatter_data'] = scatter_data
-                analysis_state['current_signals'] = deque(current_signals, maxlen=100)
                 analysis_state['cryptos_analyzed'] = total
                 analysis_state['last_update'] = datetime.now()
                 analysis_state['is_updating'] = False
+                
+                # Actualizar señales históricas
+                now = datetime.now()
+                for signal in long_signals + short_signals:
+                    signal['historical_timestamp'] = now
+                    analysis_state['historical_signals'].append(signal)
                 
                 logger.info(f"Análisis completado: {len(long_signals)} LONG, {len(short_signals)} SHORT")
         except Exception as e:
@@ -558,31 +515,42 @@ logger.info("Hilo de actualización iniciado")
 def index():
     with analysis_state['lock']:
         params = analysis_state['params']
+        timeframe = params['timeframe']
         
-        # Filtrar señales por timeframe actual
-        long_signals = [s for s in analysis_state['long_signals'] if s['timeframe'] == params['timeframe']][:50]
-        short_signals = [s for s in analysis_state['short_signals'] if s['timeframe'] == params['timeframe']][:50]
+        # Obtener datos del timeframe actual
+        if timeframe in analysis_state['timeframe_data']:
+            data = analysis_state['timeframe_data'][timeframe]
+            long_signals = data['long_signals'][:50]
+            short_signals = data['short_signals'][:50]
+            scatter_data = data['scatter_data']
+            last_update = data['last_update']
+        else:
+            long_signals = []
+            short_signals = []
+            scatter_data = []
+            last_update = datetime.now()
         
-        # Obtener señales históricas (vela anterior)
+        # Filtrar señales históricas por timeframe actual y eliminar expiradas
+        current_time = datetime.now()
+        timeframe_durations = {
+            '30m': timedelta(minutes=30),
+            '1h': timedelta(hours=1),
+            '2h': timedelta(hours=2),
+            '4h': timedelta(hours=4),
+            '1d': timedelta(days=1),
+            '1w': timedelta(weeks=1)
+        }
+        
+        duration = timeframe_durations.get(timeframe, timedelta(hours=1))
         historical_signals = []
-        now = datetime.now(NY_TZ)
         
-        for signal in analysis_state['current_signals']:
-            try:
-                if signal['timeframe'] == params['timeframe']:
-                    # Verificar si la señal es de la vela anterior (ya expiró)
-                    expiration = datetime.fromisoformat(signal['expiration']).astimezone(NY_TZ)
-                    if expiration <= now:
-                        historical_signals.append(signal)
-            except (ValueError, KeyError):
-                continue
+        for signal in analysis_state['historical_signals']:
+            if (signal['timeframe'] == timeframe and 
+                current_time - signal['historical_timestamp'] <= duration):
+                historical_signals.append(signal)
         
-        # Limitar a 20 señales históricas
-        historical_signals = historical_signals[-20:]
-        
-        scatter_data = analysis_state['scatter_data']
-        last_update = analysis_state['last_update']
-        cryptos_analyzed = analysis_state['cryptos_analyzed']
+        # Ordenar por timestamp
+        historical_signals.sort(key=lambda x: x['timestamp'], reverse=True)
         
         # Estadísticas
         avg_adx_long = np.mean([s['adx'] for s in long_signals]) if long_signals else 0
@@ -604,13 +572,13 @@ def index():
         return render_template('index.html', 
                                long_signals=long_signals, 
                                short_signals=short_signals,
-                               historical_signals=historical_signals,
+                               historical_signals=historical_signals[-20:],  # Mostrar solo las últimas 20
                                last_update=last_update,
                                params=params,
                                avg_adx_long=round(avg_adx_long, 1),
                                avg_adx_short=round(avg_adx_short, 1),
                                scatter_data=scatter_ready,
-                               cryptos_analyzed=cryptos_analyzed,
+                               cryptos_analyzed=analysis_state['cryptos_analyzed'],
                                is_updating=analysis_state['is_updating'],
                                update_progress=analysis_state['update_progress'])
 
@@ -619,7 +587,7 @@ def get_chart(symbol, signal_type):
     try:
         params = analysis_state['params']
         df = get_kucoin_data(symbol, params['timeframe'])
-        if df is None or len(df) < 50:
+        if df is None or len(df) < 100:
             return "Datos no disponibles", 404
         
         df = calculate_indicators(df, params)
@@ -699,18 +667,12 @@ def manual():
 @app.route('/update_params', methods=['POST'])
 def update_params():
     try:
-        # Obtener datos del formulario
-        if request.is_json:
-            data = request.get_json()
-        else:
-            data = request.form
-        
         # Actualizar parámetros
         new_params = analysis_state['params'].copy()
         
         for param in new_params:
-            if param in data:
-                value = data[param]
+            if param in request.form:
+                value = request.form[param]
                 if param in ['ema_fast', 'ema_slow', 'adx_period', 'adx_level', 'rsi_period', 'sr_window', 'divergence_lookback']:
                     new_params[param] = int(value)
                 elif param in ['max_risk_percent', 'price_distance_threshold']:
