@@ -24,42 +24,17 @@
     <div class="chart-container">
         <div class="chart-title">
             <h2>{{ symbol }}-USDT - Señal Histórica {{ signal_type|upper }}</h2>
-            <p class="text-muted">Señal de la vela anterior - Timeframe: {{ timeframe }}</p>
+            <p class="text-muted">Análisis de la vela anterior con indicadores técnicos</p>
+            
+            <div class="info-box">
+                <p><strong>Nota:</strong> Este gráfico muestra la señal que se generó en la vela anterior según el timeframe seleccionado.</p>
+                <p>La línea vertical gris indica el inicio de la vela anterior analizada.</p>
+            </div>
+            
             <a href="/" class="btn btn-primary mt-3">
                 <i class="fas fa-arrow-left"></i> Volver al panel
             </a>
         </div>
-
-        <div class="info-box">
-            <h5><i class="fas fa-info-circle"></i> Información de la Señal</h5>
-            <div class="row">
-                <div class="col-md-4">
-                    <p><strong>Precio de la vela anterior:</strong> {{ signal.price }}</p>
-                </div>
-                <div class="col-md-4">
-                    <p><strong>Precio actual:</strong> {{ signal.current_price }}</p>
-                </div>
-                <div class="col-md-4">
-                    <p><strong>Volumen:</strong> <span class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</span></p>
-                </div>
-                <div class="col-md-4">
-                    <p><strong>Entrada:</strong> {{ signal.entry }}</p>
-                </div>
-                <div class="col-md-4">
-                    <p><strong>Stop Loss:</strong> {{ signal.sl }}</p>
-                </div>
-                <div class="col-md-4">
-                    <p><strong>Take Profit 1:</strong> {{ signal.tp1 }}</p>
-                </div>
-                <div class="col-md-4">
-                    <p><strong>Take Profit 2:</strong> {{ signal.tp2 }}</p>
-                </div>
-                <div class="col-md-4">
-                    <p><strong>ADX:</strong> {{ signal.adx }}</p>
-                </div>
-            </div>
-        </div>
-
         <img src="data:image/png;base64,{{ plot_url }}" alt="Gráfico Histórico de {{ symbol }}" class="chart-img">
     </div>
 </body>
