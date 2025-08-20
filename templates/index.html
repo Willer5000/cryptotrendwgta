@@ -62,9 +62,9 @@
         .historical-row {
             font-size: 0.9rem;
         }
-        .historical-expired {
-            opacity: 0.6;
-            background-color: #f8f9fa !important;
+        .timeframe-badge {
+            font-size: 0.7rem;
+            margin-left: 5px;
         }
     </style>
 </head>
@@ -120,6 +120,13 @@
                     <p><strong>Señales SHORT detectadas:</strong> {{ short_signals|length }}</p>
                 </div>
             </div>
+            <div class="row mt-2">
+                <div class="col-md-12">
+                    <p><strong>Temporalidad actual:</strong> {{ params.timeframe }} 
+                        <span class="badge bg-primary timeframe-badge">{{ '30 minutos' if params.timeframe == '30m' else '1 hora' if params.timeframe == '1h' else '2 horas' if params.timeframe == '2h' else '4 horas' if params.timeframe == '4h' else '1 día' if params.timeframe == '1d' else '1 semana' }}</span>
+                    </p>
+                </div>
+            </div>
         </div>
 
         <!-- Sección de Filtros -->
@@ -129,10 +136,10 @@
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
-                        <select name="timeframe" class="form-select" id="timeframe-select">
+                        <select name="timeframe" class="form-select">
                             {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
                             <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
-                                {{ tf }}
+                                {{ tf }} ({{ '30 min' if tf == '30m' else '1 hora' if tf == '1h' else '2 horas' if tf == '2h' else '4 horas' if tf == '4h' else '1 día' if tf == '1d' else '1 semana' }})
                             </option>
                             {% endfor %}
                         </select>
@@ -185,7 +192,7 @@
                     
                     <div class="col-md-12 mt-4">
                         <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros
+                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros y Recargar Datos
                         </button>
                     </div>
                 </div>
@@ -257,8 +264,8 @@
         <!-- Tabla de Señales Históricas -->
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
-                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
-                <small class="text-muted">Las señales históricas duran el mismo tiempo que la vela del timeframe seleccionado</small>
+                <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior - {{ params.timeframe }})</h2>
+                <small class="text-muted">Señales de la vela anterior que cumplieron con los criterios</small>
             </div>
             <div class="card-body">
                 {% if historical_signals %}
@@ -270,12 +277,11 @@
                                 <th>Nomenclatura</th>
                                 <th>Acción</th>
                                 <th>Volumen</th>
-                                <th>Precio Anterior</th>
-                                <th>Precio Actual</th>
                                 <th>Entrada</th>
                                 <th>SL</th>
                                 <th>TP1</th>
                                 <th>TP2</th>
+                                <th>Gráfico</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -285,12 +291,15 @@
                                 <td>{{ signal.symbol }}</td>
                                 <td><span class="badge {{ 'badge-long' if signal.type == 'LONG' else 'badge-short' }}">{{ signal.type }}</span></td>
                                 <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
-                                <td>{{ signal.price }}</td>
-                                <td class="{{ 'text-success' if signal.current_price > signal.price else 'text-danger' }}">{{ signal.current_price }}</td>
                                 <td>{{ signal.entry }}</td>
                                 <td class="text-danger">{{ signal.sl }}</td>
                                 <td class="text-success">{{ signal.tp1 }}</td>
                                 <td class="text-success">{{ signal.tp2 }}</td>
+                                <td>
+                                    <a href="/historical_chart/{{ signal.symbol }}/{{ signal.type|lower }}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-chart-line"></i>
+                                    </a>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -298,7 +307,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-warning">
-                    No hay señales históricas disponibles
+                    No hay señales históricas disponibles para la vela anterior en timeframe {{ params.timeframe }}
                 </div>
                 {% endif %}
             </div>
@@ -694,29 +703,24 @@
                     const response = await fetch('/update_params', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/x-www-form-urlencoded',
                         },
-                        body: JSON.stringify(params)
+                        body: new URLSearchParams(params)
                     });
                     
                     const result = await response.json();
                     
                     if (result.status === 'success') {
-                        alert('Parámetros actualizados correctamente. La página se recargará en 5 segundos.');
+                        alert('Parámetros actualizados correctamente. La página se recargará en 3 segundos.');
                         setTimeout(() => {
                             location.reload();
-                        }, 5000);
+                        }, 3000);
                     } else {
                         alert('Error al actualizar parámetros: ' + result.message);
                     }
                 } catch (error) {
                     alert('Error de conexión: ' + error.message);
                 }
-            });
-
-            // Cambio de timeframe - recargar la página
-            document.getElementById('timeframe-select').addEventListener('change', function() {
-                this.form.submit();
             });
         });
     </script>
