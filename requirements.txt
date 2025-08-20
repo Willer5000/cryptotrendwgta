@@ -6,3 +6,4 @@ matplotlib
 gunicorn
 plotly
 pytz
+python-dateutil
