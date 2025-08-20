@@ -62,6 +62,10 @@
         .historical-row {
             font-size: 0.9rem;
         }
+        .historical-expired {
+            opacity: 0.6;
+            background-color: #f8f9fa !important;
+        }
     </style>
 </head>
 <body>
@@ -125,7 +129,7 @@
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
-                        <select name="timeframe" class="form-select">
+                        <select name="timeframe" class="form-select" id="timeframe-select">
                             {% for tf in ['30m','1h','2h','4h','1d','1w'] %}
                             <option value="{{ tf }}" {% if params.timeframe==tf %}selected{% endif %}>
                                 {{ tf }}
@@ -181,7 +185,7 @@
                     
                     <div class="col-md-12 mt-4">
                         <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros y Reiniciar Análisis
+                            <i class="fas fa-sync-alt"></i> Actualizar Parámetros
                         </button>
                     </div>
                 </div>
@@ -254,6 +258,7 @@
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
                 <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior)</h2>
+                <small class="text-muted">Las señales históricas duran el mismo tiempo que la vela del timeframe seleccionado</small>
             </div>
             <div class="card-body">
                 {% if historical_signals %}
@@ -265,11 +270,12 @@
                                 <th>Nomenclatura</th>
                                 <th>Acción</th>
                                 <th>Volumen</th>
+                                <th>Precio Anterior</th>
+                                <th>Precio Actual</th>
                                 <th>Entrada</th>
                                 <th>SL</th>
                                 <th>TP1</th>
                                 <th>TP2</th>
-                                <th>Timeframe</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -279,11 +285,12 @@
                                 <td>{{ signal.symbol }}</td>
                                 <td><span class="badge {{ 'badge-long' if signal.type == 'LONG' else 'badge-short' }}">{{ signal.type }}</span></td>
                                 <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</td>
+                                <td>{{ signal.price }}</td>
+                                <td class="{{ 'text-success' if signal.current_price > signal.price else 'text-danger' }}">{{ signal.current_price }}</td>
                                 <td>{{ signal.entry }}</td>
                                 <td class="text-danger">{{ signal.sl }}</td>
                                 <td class="text-success">{{ signal.tp1 }}</td>
                                 <td class="text-success">{{ signal.tp2 }}</td>
-                                <td>{{ signal.timeframe }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -705,6 +712,11 @@
                 } catch (error) {
                     alert('Error de conexión: ' + error.message);
                 }
+            });
+
+            // Cambio de timeframe - recargar la página
+            document.getElementById('timeframe-select').addEventListener('change', function() {
+                this.form.submit();
             });
         });
     </script>
