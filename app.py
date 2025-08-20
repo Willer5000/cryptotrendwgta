@@ -32,9 +32,9 @@ CRYPTOS_FILE = 'cryptos.txt'
 CACHE_TIME = 300  # 5 minutos
 MAX_RETRIES = 3
 RETRY_DELAY = 2
-BATCH_SIZE = 15
+BATCH_SIZE = 10  # Reducido para mejorar estabilidad
 
-# Zona horaria de Nueva York (UTC-4)
+# Zona horaria de Nueva York (UTC-4/5 según DST)
 NY_TZ = pytz.timezone('America/New_York')
 
 DEFAULTS = {
@@ -52,27 +52,19 @@ DEFAULTS = {
 
 # Estado global con bloqueo
 analysis_state = {
-    'signals_by_timeframe': {},  # Almacena señales por timeframe
-    'scatter_by_timeframe': {},  # Almacena datos de dispersión por timeframe
-    'historical_by_timeframe': {},  # Almacena señales históricas por timeframe
+    'long_signals': [],
+    'short_signals': [],
+    'scatter_data': [],
+    'historical_signals': deque(maxlen=100),  # Señales históricas (vela anterior)
+    'current_signals': deque(maxlen=100),     # Señales actuales
     'last_update': datetime.now(),
     'cryptos_analyzed': 0,
     'is_updating': False,
     'update_progress': 0,
     'params': DEFAULTS.copy(),
-    'lock': Lock()
+    'lock': Lock(),
+    'timeframe_data': {}  # Datos por timeframe
 }
-
-# Inicializar estructura de datos por timeframe
-def init_timeframe_data():
-    timeframes = ['15m', '30m', '1h', '2h', '4h', '1d', '1w']
-    for tf in timeframes:
-        if tf not in analysis_state['signals_by_timeframe']:
-            analysis_state['signals_by_timeframe'][tf] = {'long': [], 'short': []}
-        if tf not in analysis_state['scatter_by_timeframe']:
-            analysis_state['scatter_by_timeframe'][tf] = []
-        if tf not in analysis_state['historical_by_timeframe']:
-            analysis_state['historical_by_timeframe'][tf] = deque(maxlen=100)
 
 # Leer lista de criptomonedas
 def load_cryptos():
@@ -101,14 +93,14 @@ def get_kucoin_data(symbol, timeframe):
     
     for attempt in range(MAX_RETRIES):
         try:
-            response = requests.get(url, timeout=15)
+            response = requests.get(url, timeout=20)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('code') == '200000' and data.get('data'):
                     candles = data['data']
                     candles.reverse()
                     
-                    if len(candles) < 100:  # Aumentar para más datos históricos
+                    if len(candles) < 100:  # Necesitamos suficientes datos
                         logger.warning(f"Datos insuficientes para {symbol}: {len(candles)} velas")
                         return None
                     
@@ -373,12 +365,13 @@ def analyze_crypto(symbol, params, analyze_previous=False):
         # Determinar qué vela analizar
         if analyze_previous:
             # Analizar la vela anterior (penúltima)
-            last = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
-            prev = df.iloc[-3] if len(df) > 2 else last
+            if len(df) >= 2:
+                last = df.iloc[-2]
+            else:
+                last = df.iloc[-1]
         else:
             # Analizar la vela actual (última)
             last = df.iloc[-1]
-            prev = df.iloc[-2] if len(df) > 1 else last
         
         supports, resistances = find_support_resistance(df, params['sr_window'])
         
@@ -444,7 +437,7 @@ def analyze_crypto(symbol, params, analyze_previous=False):
                 'timestamp': datetime.now().isoformat(),
                 'type': 'LONG',
                 'timeframe': params['timeframe'],
-                'candle_timestamp': last['timestamp'].isoformat() if hasattr(last['timestamp'], 'isoformat') else last['timestamp']
+                'candle_timestamp': last['timestamp'].isoformat() if hasattr(last['timestamp'], 'isoformat') else str(last['timestamp'])
             }
         
         # Generar señal SHORT
@@ -472,7 +465,7 @@ def analyze_crypto(symbol, params, analyze_previous=False):
                 'timestamp': datetime.now().isoformat(),
                 'type': 'SHORT',
                 'timeframe': params['timeframe'],
-                'candle_timestamp': last['timestamp'].isoformat() if hasattr(last['timestamp'], 'isoformat') else last['timestamp']
+                'candle_timestamp': last['timestamp'].isoformat() if hasattr(last['timestamp'], 'isoformat') else str(last['timestamp'])
             }
         
         return long_signal, short_signal, long_prob, short_prob, volume_class
@@ -492,32 +485,36 @@ def update_task():
                 total = len(cryptos)
                 processed = 0
                 
-                logger.info(f"Iniciando análisis de {total} criptomonedas...")
-                
                 # Obtener parámetros actuales
                 params = analysis_state['params']
+                current_timeframe = params['timeframe']
                 
-                # Inicializar datos por timeframe
-                init_timeframe_data()
+                logger.info(f"Iniciando análisis de {total} criptomonedas en timeframe {current_timeframe}...")
                 
-                # Analizar para todos los timeframes
-                timeframes = ['15m', '30m', '1h', '2h', '4h', '1d', '1w']
+                # Inicializar estructuras para este timeframe
+                if current_timeframe not in analysis_state['timeframe_data']:
+                    analysis_state['timeframe_data'][current_timeframe] = {
+                        'long_signals': [],
+                        'short_signals': [],
+                        'scatter_data': [],
+                        'historical_signals': deque(maxlen=100)
+                    }
                 
-                for timeframe in timeframes:
-                    logger.info(f"Analizando timeframe {timeframe}...")
+                timeframe_data = analysis_state['timeframe_data'][current_timeframe]
+                long_signals = []
+                short_signals = []
+                scatter_data = []
+                
+                # Obtener timestamp de inicio de vela anterior
+                previous_candle_start = get_previous_candle_start(current_timeframe)
+                
+                for i in range(0, total, BATCH_SIZE):
+                    batch = cryptos[i:i+BATCH_SIZE]
                     
-                    # Actualizar parámetros con el timeframe actual
-                    current_params = params.copy()
-                    current_params['timeframe'] = timeframe
-                    
-                    long_signals = []
-                    short_signals = []
-                    scatter_data = []
-                    
-                    for crypto in cryptos:
+                    for crypto in batch:
                         try:
                             # Analizar vela actual
-                            long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(crypto, current_params, analyze_previous=False)
+                            long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(crypto, params, analyze_previous=False)
                             
                             if long_sig:
                                 long_signals.append(long_sig)
@@ -533,38 +530,68 @@ def update_task():
                             })
                             
                             # Analizar vela anterior para señales históricas
-                            long_sig_prev, short_sig_prev, _, _, _ = analyze_crypto(crypto, current_params, analyze_previous=True)
+                            long_sig_prev, short_sig_prev, _, _, _ = analyze_crypto(crypto, params, analyze_previous=True)
                             
                             if long_sig_prev:
-                                # Añadir a señales históricas
-                                analysis_state['historical_by_timeframe'][timeframe].append(long_sig_prev)
+                                # Añadir a señales históricas solo si es de la vela anterior
+                                candle_time_str = long_sig_prev.get('candle_timestamp', '')
+                                try:
+                                    if 'Z' in candle_time_str:
+                                        candle_time = datetime.fromisoformat(candle_time_str.replace('Z', '+00:00')).astimezone(NY_TZ)
+                                    else:
+                                        candle_time = datetime.fromisoformat(candle_time_str).astimezone(NY_TZ)
+                                    
+                                    # Comparar solo fecha y hora (sin segundos/microsegundos)
+                                    candle_time_rounded = candle_time.replace(second=0, microsecond=0)
+                                    previous_candle_rounded = previous_candle_start.replace(second=0, microsecond=0)
+                                    
+                                    if candle_time_rounded == previous_candle_rounded:
+                                        timeframe_data['historical_signals'].append(long_sig_prev)
+                                except Exception as e:
+                                    logger.error(f"Error procesando timestamp histórico: {e}")
                             
                             if short_sig_prev:
-                                # Añadir a señales históricas
-                                analysis_state['historical_by_timeframe'][timeframe].append(short_sig_prev)
+                                # Añadir a señales históricas solo si es de la vela anterior
+                                candle_time_str = short_sig_prev.get('candle_timestamp', '')
+                                try:
+                                    if 'Z' in candle_time_str:
+                                        candle_time = datetime.fromisoformat(candle_time_str.replace('Z', '+00:00')).astimezone(NY_TZ)
+                                    else:
+                                        candle_time = datetime.fromisoformat(candle_time_str).astimezone(NY_TZ)
+                                    
+                                    # Comparar solo fecha y hora (sin segundos/microsegundos)
+                                    candle_time_rounded = candle_time.replace(second=0, microsecond=0)
+                                    previous_candle_rounded = previous_candle_start.replace(second=0, microsecond=0)
+                                    
+                                    if candle_time_rounded == previous_candle_rounded:
+                                        timeframe_data['historical_signals'].append(short_sig_prev)
+                                except Exception as e:
+                                    logger.error(f"Error procesando timestamp histórico: {e}")
                             
                             processed += 1
-                            progress = int((processed / (total * len(timeframes))) * 100)
+                            progress = int((processed / total) * 100)
                             analysis_state['update_progress'] = progress
                         except Exception as e:
-                            logger.error(f"Error procesando {crypto} en {timeframe}: {str(e)}")
+                            logger.error(f"Error procesando {crypto}: {str(e)}")
                     
-                    # Almacenar resultados por timeframe
-                    analysis_state['signals_by_timeframe'][timeframe] = {
-                        'long': long_signals,
-                        'short': short_signals
-                    }
-                    analysis_state['scatter_by_timeframe'][timeframe] = scatter_data
-                    
-                    # Pequeña pausa entre timeframes
+                    # Pausa entre lotes
                     time.sleep(1)
+                
+                # Ordenar por fuerza de tendencia
+                long_signals.sort(key=lambda x: x['adx'], reverse=True)
+                short_signals.sort(key=lambda x: x['adx'], reverse=True)
+                
+                # Actualizar datos del timeframe
+                timeframe_data['long_signals'] = long_signals
+                timeframe_data['short_signals'] = short_signals
+                timeframe_data['scatter_data'] = scatter_data
                 
                 # Actualizar estado global
                 analysis_state['cryptos_analyzed'] = total
                 analysis_state['last_update'] = datetime.now()
                 analysis_state['is_updating'] = False
                 
-                logger.info(f"Análisis completado para todos los timeframes")
+                logger.info(f"Análisis completado para {current_timeframe}: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas")
         except Exception as e:
             logger.error(f"Error crítico en actualización: {str(e)}")
             traceback.print_exc()
@@ -586,28 +613,22 @@ def index():
         params = analysis_state['params']
         current_timeframe = params['timeframe']
         
-        # Obtener señales para el timeframe actual
-        long_signals = analysis_state['signals_by_timeframe'].get(current_timeframe, {}).get('long', [])[:50]
-        short_signals = analysis_state['signals_by_timeframe'].get(current_timeframe, {}).get('short', [])[:50]
-        scatter_data = analysis_state['scatter_by_timeframe'].get(current_timeframe, [])
+        # Obtener datos del timeframe actual
+        if current_timeframe in analysis_state['timeframe_data']:
+            timeframe_data = analysis_state['timeframe_data'][current_timeframe]
+            long_signals = timeframe_data['long_signals'][:50]
+            short_signals = timeframe_data['short_signals'][:50]
+            scatter_data = timeframe_data['scatter_data']
+            historical_signals = list(timeframe_data['historical_signals'])[-20:]  # Últimas 20 señales
+        else:
+            # Inicializar estructuras vacías si no hay datos para este timeframe
+            long_signals = []
+            short_signals = []
+            scatter_data = []
+            historical_signals = []
         
         last_update = analysis_state['last_update']
         cryptos_analyzed = analysis_state['cryptos_analyzed']
-        
-        # Filtrar señales históricas por timeframe actual y timestamp de vela anterior
-        previous_candle_start = get_previous_candle_start(current_timeframe)
-        historical_signals = []
-        
-        for signal in analysis_state['historical_by_timeframe'].get(current_timeframe, deque()):
-            candle_time = signal.get('candle_timestamp')
-            if candle_time and isinstance(candle_time, str):
-                candle_time = datetime.fromisoformat(candle_time.replace('Z', '+00:00')).astimezone(NY_TZ)
-            
-            if candle_time and candle_time == previous_candle_start:
-                historical_signals.append(signal)
-        
-        # Limitar a las últimas 20 señales históricas
-        historical_signals = historical_signals[-20:]
         
         # Estadísticas
         avg_adx_long = np.mean([s['adx'] for s in long_signals]) if long_signals else 0
@@ -655,8 +676,12 @@ def get_chart(symbol, signal_type):
             return "Datos insuficientes", 404
         
         # Buscar señal
-        signals = analysis_state['signals_by_timeframe'].get(params['timeframe'], {}).get('long' if signal_type == 'long' else 'short', [])
-        signal = next((s for s in signals if s['symbol'] == symbol), None)
+        current_timeframe = params['timeframe']
+        if current_timeframe in analysis_state['timeframe_data']:
+            signals = analysis_state['timeframe_data'][current_timeframe]['long_signals'] if signal_type == 'long' else analysis_state['timeframe_data'][current_timeframe]['short_signals']
+            signal = next((s for s in signals if s['symbol'] == symbol), None)
+        else:
+            signal = None
         
         if not signal:
             return "Señal no encontrada", 404
@@ -724,7 +749,8 @@ def get_chart(symbol, signal_type):
 def get_historical_chart(symbol, signal_type):
     try:
         params = analysis_state['params']
-        df = get_kucoin_data(symbol, params['timeframe'])
+        current_timeframe = params['timeframe']
+        df = get_kucoin_data(symbol, current_timeframe)
         if df is None or len(df) < 100:  # Necesitamos más datos para histórico
             return "Datos no disponibles", 404
         
@@ -733,22 +759,20 @@ def get_historical_chart(symbol, signal_type):
             return "Datos insuficientes", 404
         
         # Buscar señal histórica
-        previous_candle_start = get_previous_candle_start(params['timeframe'])
-        historical_signals = []
-        
-        for signal in analysis_state['historical_by_timeframe'].get(params['timeframe'], deque()):
-            if signal['symbol'] == symbol and signal['type'].lower() == signal_type:
-                candle_time = signal.get('candle_timestamp')
-                if candle_time and isinstance(candle_time, str):
-                    candle_time = datetime.fromisoformat(candle_time.replace('Z', '+00:00')).astimezone(NY_TZ)
-                
-                if candle_time and candle_time == previous_candle_start:
-                    historical_signals.append(signal)
-        
-        if not historical_signals:
+        if current_timeframe in analysis_state['timeframe_data']:
+            historical_signals = analysis_state['timeframe_data'][current_timeframe]['historical_signals']
+            # Filtrar por símbolo y tipo
+            filtered_signals = [s for s in historical_signals if s['symbol'] == symbol and s['type'].lower() == signal_type.lower()]
+            
+            if not filtered_signals:
+                return "Señal histórica no encontrada", 404
+            
+            signal = filtered_signals[-1]  # La más reciente
+        else:
             return "Señal histórica no encontrada", 404
         
-        signal = historical_signals[-1]  # La más reciente
+        # Obtener timestamp de la vela anterior
+        previous_candle_start = get_previous_candle_start(current_timeframe)
         
         # Crear gráfico histórico
         plt.figure(figsize=(12, 8))
@@ -772,13 +796,10 @@ def get_historical_chart(symbol, signal_type):
             plt.axhline(y=signal['tp2'], color='purple', linestyle=':', alpha=0.7, label='TP2')
         
         # Marcar la vela anterior
-        prev_candle_idx = df[df['timestamp'] == previous_candle_start].index
-        if len(prev_candle_idx) > 0:
-            idx = prev_candle_idx[0]
-            if idx < len(df):
-                plt.axvline(x=df.iloc[idx]['timestamp'], color='gray', linestyle='-', alpha=0.5, label='Vela Anterior')
+        prev_candle_time = previous_candle_start
+        plt.axvline(x=prev_candle_time, color='gray', linestyle='-', alpha=0.5, label='Vela Anterior')
         
-        plt.title(f'{signal["symbol"]} - Señal Histórica {signal_type.upper()} ({params["timeframe"]})')
+        plt.title(f'{signal["symbol"]} - Señal Histórica {signal_type.upper()} ({current_timeframe})')
         plt.legend()
         plt.grid(True, alpha=0.3)
         
@@ -788,10 +809,7 @@ def get_historical_chart(symbol, signal_type):
         plt.bar(df['timestamp'], df['volume'], color=colors)
         
         # Marcar volumen de la vela anterior
-        if len(prev_candle_idx) > 0:
-            idx = prev_candle_idx[0]
-            if idx < len(df):
-                plt.axvline(x=df.iloc[idx]['timestamp'], color='gray', linestyle='-', alpha=0.5)
+        plt.axvline(x=prev_candle_time, color='gray', linestyle='-', alpha=0.5)
         
         plt.title('Volumen')
         plt.grid(True, alpha=0.3)
@@ -806,10 +824,7 @@ def get_historical_chart(symbol, signal_type):
         plt.axhline(y=params['adx_level'], color='blue', linestyle='--', alpha=0.5)
         
         # Marcar la vela anterior
-        if len(prev_candle_idx) > 0:
-            idx = prev_candle_idx[0]
-            if idx < len(df):
-                plt.axvline(x=df.iloc[idx]['timestamp'], color='gray', linestyle='-', alpha=0.5)
+        plt.axvline(x=prev_candle_time, color='gray', linestyle='-', alpha=0.5)
         
         plt.title('Indicadores')
         plt.legend()
@@ -871,13 +886,16 @@ def update_params():
 @app.route('/status')
 def status():
     with analysis_state['lock']:
+        current_timeframe = analysis_state['params']['timeframe']
+        timeframe_data = analysis_state['timeframe_data'].get(current_timeframe, {})
+        
         return jsonify({
             'last_update': analysis_state['last_update'].isoformat(),
             'is_updating': analysis_state['is_updating'],
             'progress': analysis_state['update_progress'],
-            'long_signals': sum(len(data.get('long', [])) for data in analysis_state['signals_by_timeframe'].values()),
-            'short_signals': sum(len(data.get('short', [])) for data in analysis_state['signals_by_timeframe'].values()),
-            'historical_signals': sum(len(data) for data in analysis_state['historical_by_timeframe'].values()),
+            'long_signals': len(timeframe_data.get('long_signals', [])),
+            'short_signals': len(timeframe_data.get('short_signals', [])),
+            'historical_signals': len(timeframe_data.get('historical_signals', [])),
             'cryptos_analyzed': analysis_state['cryptos_analyzed'],
             'params': analysis_state['params']
         })
