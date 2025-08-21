@@ -67,9 +67,10 @@
             margin-left: 5px;
         }
         .timeframe-info {
-            background-color: #e9f5ff;
+            background-color: #e9f7fe;
+            border-left: 4px solid #1e88e5;
             padding: 10px;
-            border-radius: 5px;
+            border-radius: 4px;
             margin-bottom: 15px;
         }
     </style>
@@ -81,7 +82,7 @@
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
                 <p class="text-muted">
-                    <i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }} NY
+                    <i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}
                     <span class="status-badge {{ 'status-updating' if is_updating else 'status-ready' }}">
                         {{ 'Actualizando...' if is_updating else 'Datos listos' }}
                     </span>
@@ -207,7 +208,7 @@
 
         <div class="timeframe-info">
             <h6><i class="fas fa-info-circle"></i> Información de Temporalidad</h6>
-            <p class="mb-0">Sistema configurado en temporalidad <strong>{{ params.timeframe }}</strong>. Las señales se actualizan cada 5 minutos. Las señales históricas corresponden a la vela anterior.</p>
+            <p class="mb-0">Las señales se actualizan automáticamente cada 5 minutos. Las señales históricas corresponden a la vela anterior del timeframe seleccionado.</p>
         </div>
 
         <div class="row mb-4">
@@ -254,7 +255,7 @@
         <!-- Gráfico de Dispersión con Plotly -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                <h2 class="h5 mb-0"><i class="fas fa-chart-scatter"></i> Probabilidades de Trading ({{ params.timeframe }})</h2>
+                <h2 class="h5 mb-0"><i class="fas fa-chart-scatter"></i> Probabilidades de Trading - {{ params.timeframe }}</h2>
                 <div>
                     <label class="me-2 text-white">Filtrar por Volumen:</label>
                     <select id="volume-filter" class="form-select form-select-sm">
@@ -732,13 +733,6 @@
                 } catch (error) {
                     alert('Error de conexión: ' + error.message);
                 }
-            });
-
-            // Mostrar información del timeframe seleccionado
-            const timeframeSelect = document.getElementById('timeframe-select');
-            timeframeSelect.addEventListener('change', function() {
-                const selectedOption = this.options[this.selectedIndex];
-                alert(`Has seleccionado el timeframe: ${selectedOption.text}. Recuerda hacer clic en "Actualizar Parámetros" para aplicar los cambios.`);
             });
         });
     </script>
