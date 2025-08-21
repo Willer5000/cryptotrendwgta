@@ -66,12 +66,13 @@
             font-size: 0.7rem;
             margin-left: 5px;
         }
-        .timeframe-info {
-            background-color: #e9f7fe;
-            border-left: 4px solid #1e88e5;
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 15px;
+        .timeframe-description {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        .last-update-info {
+            font-size: 0.85rem;
         }
     </style>
 </head>
@@ -81,8 +82,8 @@
             <div>
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
-                <p class="text-muted">
-                    <i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}
+                <p class="text-muted last-update-info">
+                    <i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }} (NY Time)
                     <span class="status-badge {{ 'status-updating' if is_updating else 'status-ready' }}">
                         {{ 'Actualizando...' if is_updating else 'Datos listos' }}
                     </span>
@@ -131,6 +132,9 @@
                 <div class="col-md-12">
                     <p><strong>Temporalidad actual:</strong> {{ params.timeframe }} 
                         <span class="badge bg-primary timeframe-badge">{{ '15 minutos' if params.timeframe == '15m' else '30 minutos' if params.timeframe == '30m' else '1 hora' if params.timeframe == '1h' else '2 horas' if params.timeframe == '2h' else '4 horas' if params.timeframe == '4h' else '1 día' if params.timeframe == '1d' else '1 semana' }}</span>
+                    </p>
+                    <p class="timeframe-description">
+                        Las señales se actualizan automáticamente cada 5 minutos. Las señales históricas corresponden a la vela anterior.
                     </p>
                 </div>
             </div>
@@ -198,17 +202,12 @@
                     </div>
                     
                     <div class="col-md-12 mt-4">
-                        <button type="submit" class="btn btn-primary w-100">
+                        <button type="submit" class="btn btn-primary w-100" id="update-btn">
                             <i class="fas fa-sync-alt"></i> Actualizar Parámetros y Recargar Datos
                         </button>
                     </div>
                 </div>
             </form>
-        </div>
-
-        <div class="timeframe-info">
-            <h6><i class="fas fa-info-circle"></i> Información de Temporalidad</h6>
-            <p class="mb-0">Las señales se actualizan automáticamente cada 5 minutos. Las señales históricas corresponden a la vela anterior del timeframe seleccionado.</p>
         </div>
 
         <div class="row mb-4">
@@ -711,6 +710,12 @@
                 const formData = new FormData(this);
                 const params = Object.fromEntries(formData.entries());
                 
+                // Mostrar indicador de carga
+                const updateBtn = document.getElementById('update-btn');
+                const originalText = updateBtn.innerHTML;
+                updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualizando...';
+                updateBtn.disabled = true;
+                
                 try {
                     const response = await fetch('/update_params', {
                         method: 'POST',
@@ -729,10 +734,19 @@
                         }, 3000);
                     } else {
                         alert('Error al actualizar parámetros: ' + result.message);
+                        updateBtn.innerHTML = originalText;
+                        updateBtn.disabled = false;
                     }
                 } catch (error) {
                     alert('Error de conexión: ' + error.message);
+                    updateBtn.innerHTML = originalText;
+                    updateBtn.disabled = false;
                 }
+            });
+            
+            // Cambio de timeframe - recargar automáticamente
+            document.getElementById('timeframe-select').addEventListener('change', function() {
+                document.getElementById('filters-form').submit();
             });
         });
     </script>
