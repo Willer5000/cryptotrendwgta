@@ -69,10 +69,6 @@
         .timeframe-option {
             font-weight: bold;
         }
-        .timeframe-description {
-            font-size: 0.8rem;
-            color: #6c757d;
-        }
     </style>
 </head>
 <body>
@@ -82,7 +78,7 @@
                 <h1><i class="fas fa-chart-line"></i> wgta Crypto Trading Signals</h1>
                 <p class="text-muted">Sistema automatizado de detección de oportunidades de trading</p>
                 <p class="text-muted">
-                    <i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }} NY
+                    <i class="fas fa-sync-alt"></i> Última actualización: {{ last_update.strftime('%Y-%m-%d %H:%M:%S') }}
                     <span class="status-badge {{ 'status-updating' if is_updating else 'status-ready' }}">
                         {{ 'Actualizando...' if is_updating else 'Datos listos' }}
                     </span>
@@ -104,7 +100,6 @@
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
-                <p class="mb-0"><small>Zona horaria: Nueva York (UTC-4)</small></p>
                 <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary">
                     <i class="fab fa-github"></i> GitHub
                 </a>
@@ -118,67 +113,45 @@
         <div class="info-box">
             <h5><i class="fas fa-info-circle"></i> Información del Sistema</h5>
             <div class="row">
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <p><strong>Criptomonedas analizadas:</strong> {{ cryptos_analyzed }}</p>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <p><strong>Señales LONG detectadas:</strong> {{ long_signals|length }}</p>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <p><strong>Señales SHORT detectadas:</strong> {{ short_signals|length }}</p>
-                </div>
-                <div class="col-md-3">
-                    <p><strong>Señales históricas:</strong> {{ historical_signals|length }}</p>
                 </div>
             </div>
             <div class="row mt-2">
                 <div class="col-md-12">
                     <p><strong>Temporalidad actual:</strong> 
-                        <span class="badge bg-primary">{{ params.timeframe }}</span>
-                        <span class="timeframe-description">
-                            {{ '15 minutos' if params.timeframe == '15m' else 
-                               '30 minutos' if params.timeframe == '30m' else 
-                               '1 hora' if params.timeframe == '1h' else 
-                               '2 horas' if params.timeframe == '2h' else 
-                               '4 horas' if params.timeframe == '4h' else 
-                               '1 día' if params.timeframe == '1d' else 
-                               '1 semana' if params.timeframe == '1w' else 'Desconocido' }}
+                        <span class="badge bg-primary timeframe-badge">
+                            {{ params.timeframe }} 
+                            ({{ '15 minutos' if params.timeframe == '15m' else '30 minutos' if params.timeframe == '30m' else '1 hora' if params.timeframe == '1h' else '2 horas' if params.timeframe == '2h' else '4 horas' if params.timeframe == '4h' else '1 día' if params.timeframe == '1d' else '1 semana' }})
                         </span>
                     </p>
-                    <p><small class="text-muted">Actualización automática cada 5 minutos</small></p>
+                    <p><strong>Zona horaria:</strong> Nueva York (UTC-4/5)</p>
+                    <p><strong>Actualización automática:</strong> Cada 5 minutos</p>
                 </div>
             </div>
         </div>
 
         <!-- Sección de Filtros -->
         <div class="filter-section">
-            <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros y Parámetros</h2>
+            <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
             <form id="filters-form" method="POST" action="/update_params">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
-                        <select name="timeframe" class="form-select" id="timeframe-select">
-                            <option value="15m" {% if params.timeframe=='15m' %}selected{% endif %}>
-                                15m <span class="timeframe-description">(15 minutos)</span>
-                            </option>
-                            <option value="30m" {% if params.timeframe=='30m' %}selected{% endif %}>
-                                30m <span class="timeframe-description">(30 minutos)</span>
-                            </option>
-                            <option value="1h" {% if params.timeframe=='1h' %}selected{% endif %}>
-                                1h <span class="timeframe-description">(1 hora)</span>
-                            </option>
-                            <option value="2h" {% if params.timeframe=='2h' %}selected{% endif %}>
-                                2h <span class="timeframe-description">(2 horas)</span>
-                            </option>
-                            <option value="4h" {% if params.timeframe=='4h' %}selected{% endif %}>
-                                4h <span class="timeframe-description">(4 horas)</span>
-                            </option>
-                            <option value="1d" {% if params.timeframe=='1d' %}selected{% endif %}>
-                                1d <span class="timeframe-description">(1 día)</span>
-                            </option>
-                            <option value="1w" {% if params.timeframe=='1w' %}selected{% endif %}>
-                                1w <span class="timeframe-description">(1 semana)</span>
-                            </option>
+                        <select name="timeframe" class="form-select">
+                            <option value="15m" {% if params.timeframe=='15m' %}selected{% endif %} class="timeframe-option">15m (15 minutos)</option>
+                            <option value="30m" {% if params.timeframe=='30m' %}selected{% endif %} class="timeframe-option">30m (30 minutos)</option>
+                            <option value="1h" {% if params.timeframe=='1h' %}selected{% endif %} class="timeframe-option">1h (1 hora)</option>
+                            <option value="2h" {% if params.timeframe=='2h' %}selected{% endif %} class="timeframe-option">2h (2 horas)</option>
+                            <option value="4h" {% if params.timeframe=='4h' %}selected{% endif %} class="timeframe-option">4h (4 horas)</option>
+                            <option value="1d" {% if params.timeframe=='1d' %}selected{% endif %} class="timeframe-option">1d (1 día)</option>
+                            <option value="1w" {% if params.timeframe=='1w' %}selected{% endif %} class="timeframe-option">1w (1 semana)</option>
                         </select>
                     </div>
                     
@@ -231,7 +204,7 @@
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="fas fa-sync-alt"></i> Actualizar Parámetros y Recargar Datos
                         </button>
-                        <div class="form-text">Al cambiar de temporalidad, el sistema recargará todos los datos automáticamente.</div>
+                        <div class="form-text">Al cambiar la temporalidad, el sistema analizará todas las criptomonedas con el nuevo timeframe.</div>
                     </div>
                 </div>
             </form>
@@ -296,9 +269,6 @@
             </div>
             <div class="card-body">
                 <div id="scatterPlot" style="height: 600px;"></div>
-                <div class="text-center mt-2">
-                    <small class="text-muted">Cada punto representa una criptomoneda. Los puntos se actualizan cada 5 minutos.</small>
-                </div>
             </div>
         </div>
 
@@ -306,7 +276,7 @@
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
                 <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior - {{ params.timeframe }})</h2>
-                <small class="text-muted">Señales que cumplieron con los criterios en la vela anterior. Se mantienen durante el período completo de la vela actual.</small>
+                <small class="text-muted">Señales de la vela anterior que cumplieron con los criterios</small>
             </div>
             <div class="card-body">
                 {% if historical_signals %}
@@ -348,15 +318,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle"></i> No hay señales históricas disponibles para la vela anterior en timeframe {{ params.timeframe }}.
-                    <div class="mt-2">
-                        <small>Esto puede deberse a que:</small>
-                        <ul class="small">
-                            <li>No hubo señales que cumplieran los criterios en la vela anterior</li>
-                            <li>El sistema aún está procesando los datos</li>
-                            <li>No hay suficientes datos históricos disponibles</li>
-                        </ul>
-                    </div>
+                    No hay señales históricas disponibles para la vela anterior en timeframe {{ params.timeframe }}
                 </div>
                 {% endif %}
             </div>
@@ -366,7 +328,7 @@
             <div class="col-md-6">
                 <div class="card mb-4">
                     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }}) - {{ params.timeframe }}</h2>
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }})</h2>
                         <span class="badge badge-long">ADX Prom: {{ avg_adx_long }}</span>
                     </div>
                     <div class="card-body">
@@ -413,16 +375,7 @@
                         </div>
                         {% else %}
                         <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle"></i> No se encontraron señales LONG en timeframe {{ params.timeframe }}.
-                            <div class="mt-2">
-                                <small>Esto puede deberse a que:</small>
-                                <ul class="small">
-                                    <li>No hay tendencias alcistas fuertes en este momento</li>
-                                    <li>El ADX está por debajo del nivel configurado</li>
-                                    <li>El volumen no es suficiente para confirmar las señales</li>
-                                    <li>El sistema aún está procesando los datos</li>
-                                </ul>
-                            </div>
+                            No se encontraron señales LONG en este momento para {{ params.timeframe }}
                         </div>
                         {% endif %}
                     </div>
@@ -432,7 +385,7 @@
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }}) - {{ params.timeframe }}</h2>
+                        <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
                         <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
                     </div>
                     <div class="card-body">
@@ -479,16 +432,7 @@
                         </div>
                         {% else %}
                         <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle"></i> No se encontraron señales SHORT en timeframe {{ params.timeframe }}.
-                            <div class="mt-2">
-                                <small>Esto puede deberse a que:</small>
-                                <ul class="small">
-                                    <li>No hay tendencias bajistas fuertes en este momento</li>
-                                    <li>El ADX está por debajo del nivel configurado</li>
-                                    <li>El volumen no es suficiente para confirmar las señales</li>
-                                    <li>El sistema aún está procesando los datos</li>
-                                </ul>
-                            </div>
+                            No se encontraron señales SHORT en este momento para {{ params.timeframe }}
                         </div>
                         {% endif %}
                     </div>
@@ -528,7 +472,7 @@
                         legend: { position: 'bottom' },
                         title: {
                             display: true,
-                            text: 'Distribución de Señales - {{ params.timeframe }}'
+                            text: 'Distribución de Señales'
                         }
                     }
                 }
@@ -567,7 +511,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Estadísticas Señales LONG - {{ params.timeframe }}'
+                            text: 'Estadísticas Señales LONG'
                         }
                     }
                 }
@@ -606,7 +550,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Estadísticas Señales SHORT - {{ params.timeframe }}'
+                            text: 'Estadísticas Señales SHORT'
                         }
                     }
                 }
@@ -682,7 +626,7 @@
             
             // Diseño del gráfico CORREGIDO
             const layout = {
-                title: `Probabilidades de Trading por Criptomoneda - ${document.getElementById('timeframe-select').selectedOptions[0].text}`,
+                title: 'Probabilidades de Trading por Criptomoneda - {{ params.timeframe }}',
                 xaxis: {
                     title: 'Probabilidad LONG (%)',
                     range: [0, 100],
