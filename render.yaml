@@ -3,8 +3,8 @@ services:
     name: wgta-crypto-signals
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2 --threads 4
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2 --threads 4"
     envVars:
       - key: PYTHON_VERSION
-        value: 3.10.6
+        value: 3.10.12
