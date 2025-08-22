@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gráfico Histórico de {{ symbol }} - {{ signal_type|upper }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { padding: 20px; background-color: #f8f9fa; }
-        .chart-container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .chart-container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .chart-title { text-align: center; margin-bottom: 20px; }
         .chart-img { width: 100%; border: 1px solid #eee; }
         .back-btn { margin-top: 20px; }
@@ -18,13 +19,21 @@
             border-radius: 4px;
             margin-bottom: 20px;
         }
+        .signal-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .long-info { border-left: 4px solid #4CAF50; }
+        .short-info { border-left: 4px solid #F44336; }
     </style>
 </head>
 <body>
     <div class="chart-container">
         <div class="chart-title">
             <h2>{{ symbol }}-USDT - Señal Histórica {{ signal_type|upper }}</h2>
-            <p class="text-muted">Análisis de la vela anterior con indicadores técnicos</p>
+            <p class="text-muted">Análisis de la vela anterior con indicadores técnicos - Zona horaria: Nueva York (UTC-4)</p>
             
             <div class="info-box">
                 <p><strong>Nota:</strong> Este gráfico muestra la señal que se generó en la vela anterior según el timeframe seleccionado.</p>
