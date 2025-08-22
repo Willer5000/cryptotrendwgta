@@ -66,7 +66,10 @@
             font-size: 0.7rem;
             margin-left: 5px;
         }
-        .refresh-info {
+        .timeframe-option {
+            font-weight: bold;
+        }
+        .timeframe-description {
             font-size: 0.8rem;
             color: #6c757d;
         }
@@ -83,9 +86,6 @@
                     <span class="status-badge {{ 'status-updating' if is_updating else 'status-ready' }}">
                         {{ 'Actualizando...' if is_updating else 'Datos listos' }}
                     </span>
-                </p>
-                <p class="refresh-info">
-                    <i class="fas fa-info-circle"></i> El sistema se actualiza automáticamente cada 5 minutos
                 </p>
                 {% if is_updating %}
                 <div class="progress-container">
@@ -104,6 +104,7 @@
             </div>
             <div class="text-end">
                 <p class="mb-0">Autor: wgta</p>
+                <p class="mb-0"><small>Zona horaria: Nueva York (UTC-4)</small></p>
                 <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary">
                     <i class="fab fa-github"></i> GitHub
                 </a>
@@ -132,80 +133,105 @@
             </div>
             <div class="row mt-2">
                 <div class="col-md-12">
-                    <p><strong>Temporalidad actual:</strong> {{ params.timeframe }} 
-                        <span class="badge bg-primary timeframe-badge">{{ '15 minutos' if params.timeframe == '15m' else '30 minutos' if params.timeframe == '30m' else '1 hora' if params.timeframe == '1h' else '2 horas' if params.timeframe == '2h' else '4 horas' if params.timeframe == '4h' else '1 día' if params.timeframe == '1d' else '1 semana' }}</span>
+                    <p><strong>Temporalidad actual:</strong> 
+                        <span class="badge bg-primary">{{ params.timeframe }}</span>
+                        <span class="timeframe-description">
+                            {{ '15 minutos' if params.timeframe == '15m' else 
+                               '30 minutos' if params.timeframe == '30m' else 
+                               '1 hora' if params.timeframe == '1h' else 
+                               '2 horas' if params.timeframe == '2h' else 
+                               '4 horas' if params.timeframe == '4h' else 
+                               '1 día' if params.timeframe == '1d' else 
+                               '1 semana' if params.timeframe == '1w' else 'Desconocido' }}
+                        </span>
                     </p>
+                    <p><small class="text-muted">Actualización automática cada 5 minutos</small></p>
                 </div>
             </div>
         </div>
 
         <!-- Sección de Filtros -->
         <div class="filter-section">
-            <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
+            <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros y Parámetros</h2>
             <form id="filters-form" method="POST" action="/update_params">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Temporalidad</label>
-                        <select name="timeframe" class="form-select" required>
-                            <option value="15m" {% if params.timeframe=='15m' %}selected{% endif %}>15m (15 min)</option>
-                            <option value="30m" {% if params.timeframe=='30m' %}selected{% endif %}>30m (30 min)</option>
-                            <option value="1h" {% if params.timeframe=='1h' %}selected{% endif %}>1h (1 hora)</option>
-                            <option value="2h" {% if params.timeframe=='2h' %}selected{% endif %}>2h (2 horas)</option>
-                            <option value="4h" {% if params.timeframe=='4h' %}selected{% endif %}>4h (4 horas)</option>
-                            <option value="1d" {% if params.timeframe=='1d' %}selected{% endif %}>1d (1 día)</option>
-                            <option value="1w" {% if params.timeframe=='1w' %}selected{% endif %}>1w (1 semana)</option>
+                        <select name="timeframe" class="form-select" id="timeframe-select">
+                            <option value="15m" {% if params.timeframe=='15m' %}selected{% endif %}>
+                                15m <span class="timeframe-description">(15 minutos)</span>
+                            </option>
+                            <option value="30m" {% if params.timeframe=='30m' %}selected{% endif %}>
+                                30m <span class="timeframe-description">(30 minutos)</span>
+                            </option>
+                            <option value="1h" {% if params.timeframe=='1h' %}selected{% endif %}>
+                                1h <span class="timeframe-description">(1 hora)</span>
+                            </option>
+                            <option value="2h" {% if params.timeframe=='2h' %}selected{% endif %}>
+                                2h <span class="timeframe-description">(2 horas)</span>
+                            </option>
+                            <option value="4h" {% if params.timeframe=='4h' %}selected{% endif %}>
+                                4h <span class="timeframe-description">(4 horas)</span>
+                            </option>
+                            <option value="1d" {% if params.timeframe=='1d' %}selected{% endif %}>
+                                1d <span class="timeframe-description">(1 día)</span>
+                            </option>
+                            <option value="1w" {% if params.timeframe=='1w' %}selected{% endif %}>
+                                1w <span class="timeframe-description">(1 semana)</span>
+                            </option>
                         </select>
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">EMA Rápida</label>
-                        <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control" min="1" max="50" required>
+                        <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control" min="1" max="50">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">EMA Lenta</label>
-                        <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control" min="1" max="100" required>
+                        <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control" min="1" max="100">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">ADX Período</label>
-                        <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control" min="1" max="50" required>
+                        <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control" min="1" max="50">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">ADX Nivel</label>
-                        <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" min="1" max="100" required>
+                        <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" min="1" max="100">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">RSI Período</label>
-                        <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control" min="1" max="50" required>
+                        <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control" min="1" max="50">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">S/R Ventana</label>
-                        <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control" min="10" max="200" required>
+                        <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control" min="10" max="200">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">Divergencia Lookback</label>
-                        <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control" min="5" max="50" required>
+                        <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control" min="5" max="50">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">Máximo Riesgo (%)</label>
-                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1" min="0.1" max="5" required>
+                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1" min="0.1" max="5">
                     </div>
                     
                     <div class="col-md-3">
                         <label class="form-label">Umbral S/R (%)</label>
-                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1" min="0.1" max="5" required>
+                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1" min="0.1" max="5">
                     </div>
                     
                     <div class="col-md-12 mt-4">
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="fas fa-sync-alt"></i> Actualizar Parámetros y Recargar Datos
                         </button>
+                        <div class="form-text">Al cambiar de temporalidad, el sistema recargará todos los datos automáticamente.</div>
                     </div>
                 </div>
             </form>
@@ -270,6 +296,9 @@
             </div>
             <div class="card-body">
                 <div id="scatterPlot" style="height: 600px;"></div>
+                <div class="text-center mt-2">
+                    <small class="text-muted">Cada punto representa una criptomoneda. Los puntos se actualizan cada 5 minutos.</small>
+                </div>
             </div>
         </div>
 
@@ -277,7 +306,7 @@
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
                 <h2 class="h5 mb-0"><i class="fas fa-history"></i> Señales Históricas (Vela Anterior - {{ params.timeframe }})</h2>
-                <small class="text-muted">Señales de la vela anterior que cumplieron con los criterios</small>
+                <small class="text-muted">Señales que cumplieron con los criterios en la vela anterior. Se mantienen durante el período completo de la vela actual.</small>
             </div>
             <div class="card-body">
                 {% if historical_signals %}
@@ -319,7 +348,15 @@
                 </div>
                 {% else %}
                 <div class="alert alert-warning">
-                    No hay señales históricas disponibles para la vela anterior en timeframe {{ params.timeframe }}
+                    <i class="fas fa-exclamation-triangle"></i> No hay señales históricas disponibles para la vela anterior en timeframe {{ params.timeframe }}.
+                    <div class="mt-2">
+                        <small>Esto puede deberse a que:</small>
+                        <ul class="small">
+                            <li>No hubo señales que cumplieran los criterios en la vela anterior</li>
+                            <li>El sistema aún está procesando los datos</li>
+                            <li>No hay suficientes datos históricos disponibles</li>
+                        </ul>
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -376,7 +413,16 @@
                         </div>
                         {% else %}
                         <div class="alert alert-warning">
-                            No se encontraron señales LONG en este momento para el timeframe {{ params.timeframe }}
+                            <i class="fas fa-exclamation-triangle"></i> No se encontraron señales LONG en timeframe {{ params.timeframe }}.
+                            <div class="mt-2">
+                                <small>Esto puede deberse a que:</small>
+                                <ul class="small">
+                                    <li>No hay tendencias alcistas fuertes en este momento</li>
+                                    <li>El ADX está por debajo del nivel configurado</li>
+                                    <li>El volumen no es suficiente para confirmar las señales</li>
+                                    <li>El sistema aún está procesando los datos</li>
+                                </ul>
+                            </div>
                         </div>
                         {% endif %}
                     </div>
@@ -433,7 +479,16 @@
                         </div>
                         {% else %}
                         <div class="alert alert-warning">
-                            No se encontraron señales SHORT en este momento para el timeframe {{ params.timeframe }}
+                            <i class="fas fa-exclamation-triangle"></i> No se encontraron señales SHORT en timeframe {{ params.timeframe }}.
+                            <div class="mt-2">
+                                <small>Esto puede deberse a que:</small>
+                                <ul class="small">
+                                    <li>No hay tendencias bajistas fuertes en este momento</li>
+                                    <li>El ADX está por debajo del nivel configurado</li>
+                                    <li>El volumen no es suficiente para confirmar las señales</li>
+                                    <li>El sistema aún está procesando los datos</li>
+                                </ul>
+                            </div>
                         </div>
                         {% endif %}
                     </div>
@@ -473,7 +528,7 @@
                         legend: { position: 'bottom' },
                         title: {
                             display: true,
-                            text: 'Distribución de Señales'
+                            text: 'Distribución de Señales - {{ params.timeframe }}'
                         }
                     }
                 }
@@ -512,7 +567,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Estadísticas Señales LONG'
+                            text: 'Estadísticas Señales LONG - {{ params.timeframe }}'
                         }
                     }
                 }
@@ -551,7 +606,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Estadísticas Señales SHORT'
+                            text: 'Estadísticas Señales SHORT - {{ params.timeframe }}'
                         }
                     }
                 }
@@ -627,7 +682,7 @@
             
             // Diseño del gráfico CORREGIDO
             const layout = {
-                title: 'Probabilidades de Trading por Criptomoneda - {{ params.timeframe }}',
+                title: `Probabilidades de Trading por Criptomoneda - ${document.getElementById('timeframe-select').selectedOptions[0].text}`,
                 xaxis: {
                     title: 'Probabilidad LONG (%)',
                     range: [0, 100],
