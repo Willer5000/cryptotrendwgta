@@ -41,6 +41,9 @@ try:
 except:
     NY_TZ = pytz.timezone('UTC')
 
+# Lista de todos los timeframes soportados
+ALL_TIMEFRAMES = ['15m', '30m', '1h', '2h', '4h', '1d', '1w']
+
 DEFAULTS = {
     'timeframe': '1h',
     'ema_fast': 9,
@@ -67,8 +70,19 @@ analysis_state = {
     'update_progress': 0,
     'params': DEFAULTS.copy(),
     'lock': Lock(),
-    'timeframe_data': {}  # Almacenar datos por timeframe
+    'timeframe_data': {},  # Almacenar datos por timeframe
+    'current_timeframe_index': 0  # Índice para ciclo de timeframes
 }
+
+# Inicializar estructura de datos para todos los timeframes
+for timeframe in ALL_TIMEFRAMES:
+    analysis_state['timeframe_data'][timeframe] = {
+        'long_signals': [],
+        'short_signals': [],
+        'scatter_data': [],
+        'historical_signals': deque(maxlen=100),
+        'last_analyzed': None
+    }
 
 # Leer lista de criptomonedas
 def load_cryptos():
@@ -521,11 +535,19 @@ def update_task():
                 total = len(cryptos)
                 processed = 0
                 
-                logger.info(f"Iniciando análisis de {total} criptomonedas...")
+                # Obtener el siguiente timeframe en el ciclo
+                current_index = analysis_state['current_timeframe_index']
+                current_timeframe = ALL_TIMEFRAMES[current_index]
+                
+                # Actualizar índice para el próximo ciclo
+                next_index = (current_index + 1) % len(ALL_TIMEFRAMES)
+                analysis_state['current_timeframe_index'] = next_index
+                
+                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
                 
                 # Obtener parámetros actuales
-                params = analysis_state['params']
-                current_timeframe = params['timeframe']
+                params = analysis_state['params'].copy()
+                params['timeframe'] = current_timeframe
                 
                 # Inicializar estructuras para este timeframe
                 if current_timeframe not in analysis_state['timeframe_data']:
@@ -533,7 +555,8 @@ def update_task():
                         'long_signals': [],
                         'short_signals': [],
                         'scatter_data': [],
-                        'historical_signals': deque(maxlen=100)
+                        'historical_signals': deque(maxlen=100),
+                        'last_analyzed': None
                     }
                 
                 timeframe_data = analysis_state['timeframe_data'][current_timeframe]
@@ -597,6 +620,7 @@ def update_task():
                 timeframe_data['long_signals'] = long_signals
                 timeframe_data['short_signals'] = short_signals
                 timeframe_data['scatter_data'] = scatter_data
+                timeframe_data['last_analyzed'] = datetime.now()
                 
                 # Actualizar estado global
                 analysis_state['cryptos_analyzed'] = total
@@ -632,12 +656,14 @@ def index():
             short_signals = timeframe_data['short_signals'][:50]
             scatter_data = timeframe_data['scatter_data']
             historical_signals = list(timeframe_data['historical_signals'])[-20:]  # Últimas 20 señales
+            last_analyzed = timeframe_data['last_analyzed']
         else:
             # Si no hay datos para este timeframe, usar estructuras vacías
             long_signals = []
             short_signals = []
             scatter_data = []
             historical_signals = []
+            last_analyzed = None
         
         last_update = analysis_state['last_update']
         cryptos_analyzed = analysis_state['cryptos_analyzed']
@@ -673,7 +699,8 @@ def index():
                                scatter_data=scatter_ready,
                                cryptos_analyzed=cryptos_analyzed,
                                is_updating=analysis_state['is_updating'],
-                               update_progress=analysis_state['update_progress'])
+                               update_progress=analysis_state['update_progress'],
+                               last_analyzed=last_analyzed)
 
 @app.route('/chart/<symbol>/<signal_type>')
 def get_chart(symbol, signal_type):
@@ -799,7 +826,7 @@ def get_historical_chart(symbol, signal_type):
         signal = historical_signals[-1]  # La más reciente
         
         # Crear gráfico histórico
-        plt.figure(figsize=(12, 8))
+        plt.figure(figsize((12, 8))
         
         # Gráfico de precio
         plt.subplot(3, 1, 1)
@@ -928,6 +955,17 @@ def update_params():
 @app.route('/status')
 def status():
     with analysis_state['lock']:
+        timeframe_status = {}
+        for timeframe in ALL_TIMEFRAMES:
+            if timeframe in analysis_state['timeframe_data']:
+                data = analysis_state['timeframe_data'][timeframe]
+                timeframe_status[timeframe] = {
+                    'last_analyzed': data['last_analyzed'].isoformat() if data['last_analyzed'] else None,
+                    'long_signals': len(data['long_signals']),
+                    'short_signals': len(data['short_signals']),
+                    'historical_signals': len(data['historical_signals'])
+                }
+        
         return jsonify({
             'last_update': analysis_state['last_update'].isoformat(),
             'is_updating': analysis_state['is_updating'],
@@ -936,7 +974,8 @@ def status():
             'short_signals': len(analysis_state['timeframe_data'].get(analysis_state['params']['timeframe'], {}).get('short_signals', [])),
             'historical_signals': len(analysis_state['timeframe_data'].get(analysis_state['params']['timeframe'], {}).get('historical_signals', [])),
             'cryptos_analyzed': analysis_state['cryptos_analyzed'],
-            'params': analysis_state['params']
+            'params': analysis_state['params'],
+            'timeframe_status': timeframe_status
         })
 
 if __name__ == '__main__':
