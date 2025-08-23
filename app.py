@@ -15,7 +15,7 @@ import io
 import base64
 import logging
 import traceback
-from threading import Lock, Event
+from threading import Lock
 from collections import deque
 import pytz
 import calendar
@@ -68,7 +68,7 @@ analysis_state = {
     'params': DEFAULTS.copy(),
     'lock': Lock(),
     'timeframe_data': {},  # Almacenar datos por timeframe
-    'update_event': Event()  # Evento para forzar actualización
+    'restart_analysis': False  # Nueva bandera para reiniciar análisis
 }
 
 # Leer lista de criptomonedas
@@ -515,6 +515,12 @@ def update_task():
     while True:
         try:
             with analysis_state['lock']:
+                # Verificar si necesitamos reiniciar el análisis
+                if analysis_state['restart_analysis']:
+                    analysis_state['restart_analysis'] = False
+                    logger.info("Reiniciando análisis debido a cambio de parámetros")
+                    continue
+                
                 analysis_state['is_updating'] = True
                 analysis_state['update_progress'] = 0
                 
@@ -522,11 +528,11 @@ def update_task():
                 total = len(cryptos)
                 processed = 0
                 
-                # Obtener el timeframe actual
+                logger.info(f"Iniciando análisis de {total} criptomonedas...")
+                
+                # Obtener parámetros actuales
                 params = analysis_state['params']
                 current_timeframe = params['timeframe']
-                
-                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
                 
                 # Inicializar estructuras para este timeframe
                 if current_timeframe not in analysis_state['timeframe_data']:
@@ -546,6 +552,13 @@ def update_task():
                 previous_candle_start = get_previous_candle_start(current_timeframe)
                 
                 for i in range(0, total, BATCH_SIZE):
+                    # Verificar si necesitamos reiniciar durante el procesamiento
+                    with analysis_state['lock']:
+                        if analysis_state['restart_analysis']:
+                            analysis_state['restart_analysis'] = False
+                            logger.info("Reiniciando análisis durante el procesamiento")
+                            break
+                    
                     batch = cryptos[i:i+BATCH_SIZE]
                     
                     for crypto in batch:
@@ -590,6 +603,11 @@ def update_task():
                     # Pausa entre lotes
                     time.sleep(1)
                 
+                # Si se solicitó reinicio durante el procesamiento, saltar al siguiente ciclo
+                with analysis_state['lock']:
+                    if analysis_state['restart_analysis']:
+                        continue
+                
                 # Ordenar por fuerza de tendencia
                 long_signals.sort(key=lambda x: x['adx'], reverse=True)
                 short_signals.sort(key=lambda x: x['adx'], reverse=True)
@@ -610,12 +628,10 @@ def update_task():
             traceback.print_exc()
             analysis_state['is_updating'] = False
         
-        # Esperar hasta la próxima actualización o hasta que se active el evento
+        # Esperar hasta la próxima actualización (5 minutos)
         next_run = datetime.now() + timedelta(seconds=CACHE_TIME)
-        sleep_time = (next_run - datetime.now()).total_seconds()
-        # Esperar hasta el próximo tiempo de actualización o hasta que se dispare el evento
-        analysis_state['update_event'].wait(sleep_time)
-        analysis_state['update_event'].clear()
+        logger.info(f"Próxima actualización a las {next_run.strftime('%H:%M:%S')}")
+        time.sleep(CACHE_TIME)
 
 # Iniciar hilo de actualización
 update_thread = threading.Thread(target=update_task, daemon=True)
@@ -915,8 +931,7 @@ def update_params():
         
         with analysis_state['lock']:
             analysis_state['params'] = new_params
-            # Activar el evento para forzar actualización inmediata
-            analysis_state['update_event'].set()
+            analysis_state['restart_analysis'] = True  # Indicar que se debe reiniciar el análisis
         
         return jsonify({
             'status': 'success',
