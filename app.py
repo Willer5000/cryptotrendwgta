@@ -15,7 +15,7 @@ import io
 import base64
 import logging
 import traceback
-from threading import Lock
+from threading import Lock, Event
 from collections import deque
 import pytz
 import calendar
@@ -68,7 +68,7 @@ analysis_state = {
     'params': DEFAULTS.copy(),
     'lock': Lock(),
     'timeframe_data': {},  # Almacenar datos por timeframe
-    'needs_update': False  # Bandera para indicar que se necesita actualización por cambio de timeframe
+    'update_event': Event()  # Evento para forzar actualización
 }
 
 # Leer lista de criptomonedas
@@ -515,8 +515,6 @@ def update_task():
     while True:
         try:
             with analysis_state['lock']:
-                # Resetear la bandera de actualización necesaria
-                analysis_state['needs_update'] = False
                 analysis_state['is_updating'] = True
                 analysis_state['update_progress'] = 0
                 
@@ -524,11 +522,11 @@ def update_task():
                 total = len(cryptos)
                 processed = 0
                 
-                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {analysis_state['params']['timeframe']}...")
-                
-                # Obtener parámetros actuales
+                # Obtener el timeframe actual
                 params = analysis_state['params']
                 current_timeframe = params['timeframe']
+                
+                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
                 
                 # Inicializar estructuras para este timeframe
                 if current_timeframe not in analysis_state['timeframe_data']:
@@ -612,13 +610,12 @@ def update_task():
             traceback.print_exc()
             analysis_state['is_updating'] = False
         
-        # Esperar hasta la próxima actualización (5 minutos) pero verificando cada 10 segundos si se necesita actualización
-        wait_until = datetime.now() + timedelta(seconds=CACHE_TIME)
-        while datetime.now() < wait_until:
-            if analysis_state['needs_update']:
-                logger.info("Se solicitó actualización por cambio de timeframe")
-                break
-            time.sleep(10)  # Esperar 10 segundos entre verificaciones
+        # Esperar hasta la próxima actualización o hasta que se active el evento
+        next_run = datetime.now() + timedelta(seconds=CACHE_TIME)
+        sleep_time = (next_run - datetime.now()).total_seconds()
+        # Esperar hasta el próximo tiempo de actualización o hasta que se dispare el evento
+        analysis_state['update_event'].wait(sleep_time)
+        analysis_state['update_event'].clear()
 
 # Iniciar hilo de actualización
 update_thread = threading.Thread(target=update_task, daemon=True)
@@ -759,7 +756,7 @@ def get_chart(symbol, signal_type):
         plt.legend()
         plt.grid(True, alpha=0.3)
         
-        plt.t tight_layout()
+        plt.tight_layout()
         
         # Convertir a base64
         img = io.BytesIO()
@@ -905,9 +902,6 @@ def update_params():
         # Actualizar parámetros
         new_params = analysis_state['params'].copy()
         
-        # Verificar si el timeframe cambió
-        old_timeframe = analysis_state['params']['timeframe']
-        
         for param in new_params:
             if param in data:
                 value = data[param]
@@ -921,9 +915,8 @@ def update_params():
         
         with analysis_state['lock']:
             analysis_state['params'] = new_params
-            # Si el timeframe cambió, marcar que se necesita actualización
-            if old_timeframe != new_params['timeframe']:
-                analysis_state['needs_update'] = True
+            # Activar el evento para forzar actualización inmediata
+            analysis_state['update_event'].set()
         
         return jsonify({
             'status': 'success',
