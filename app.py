@@ -68,7 +68,7 @@ analysis_state = {
     'params': DEFAULTS.copy(),
     'lock': Lock(),
     'timeframe_data': {},  # Almacenar datos por timeframe
-    'all_timeframes': ['15m', '30m', '1h', '2h', '4h', '1d', '1w']  # Todos los timeframes soportados
+    'needs_update': False  # Bandera para indicar que se necesita actualización por cambio de timeframe
 }
 
 # Leer lista de criptomonedas
@@ -510,128 +510,115 @@ def analyze_crypto(symbol, params, analyze_previous=False):
         logger.error(f"Error analizando {symbol} ({params['timeframe']}): {str(e)}")
         return None, None, 0, 0, 'Muy Bajo'
 
-# Tarea de actualización para un timeframe específico
-def update_timeframe_data(timeframe, params):
-    try:
-        cryptos = load_cryptos()
-        total = len(cryptos)
-        processed = 0
-        
-        logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {timeframe}...")
-        
-        # Inicializar estructuras para este timeframe
-        if timeframe not in analysis_state['timeframe_data']:
-            analysis_state['timeframe_data'][timeframe] = {
-                'long_signals': [],
-                'short_signals': [],
-                'scatter_data': [],
-                'historical_signals': deque(maxlen=100),
-                'last_update': datetime.now()
-            }
-        
-        timeframe_data = analysis_state['timeframe_data'][timeframe]
-        long_signals = []
-        short_signals = []
-        scatter_data = []
-        
-        # Obtener timestamp de inicio de vela anterior
-        previous_candle_start = get_previous_candle_start(timeframe)
-        
-        for crypto in cryptos:
-            try:
-                # Usar parámetros específicos para este timeframe
-                crypto_params = params.copy()
-                crypto_params['timeframe'] = timeframe
-                
-                # Analizar vela actual
-                long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(crypto, crypto_params, analyze_previous=False)
-                
-                if long_sig:
-                    long_signals.append(long_sig)
-                
-                if short_sig:
-                    short_signals.append(short_sig)
-                
-                scatter_data.append({
-                    'symbol': crypto,
-                    'long_prob': long_prob,
-                    'short_prob': short_prob,
-                    'volume': vol
-                })
-                
-                # Analizar vela anterior para señales históricas
-                long_sig_prev, short_sig_prev, _, _, _ = analyze_crypto(crypto, crypto_params, analyze_previous=True)
-                
-                if long_sig_prev:
-                    # Añadir a señales históricas solo si es de la vela anterior
-                    candle_time = long_sig_prev.get('candle_timestamp')
-                    if candle_time and candle_time == previous_candle_start:
-                        timeframe_data['historical_signals'].append(long_sig_prev)
-                
-                if short_sig_prev:
-                    # Añadir a señales históricas solo si es de la vela anterior
-                    candle_time = short_sig_prev.get('candle_timestamp')
-                    if candle_time and candle_time == previous_candle_start:
-                        timeframe_data['historical_signals'].append(short_sig_prev)
-                
-                processed += 1
-                progress = int((processed / total) * 100)
-                
-                # Actualizar progreso solo para el timeframe actual
-                if timeframe == analysis_state['params']['timeframe']:
-                    analysis_state['update_progress'] = progress
-                    
-            except Exception as e:
-                logger.error(f"Error procesando {crypto} en {timeframe}: {str(e)}")
-        
-        # Ordenar por fuerza de tendencia
-        long_signals.sort(key=lambda x: x['adx'], reverse=True)
-        short_signals.sort(key=lambda x: x['adx'], reverse=True)
-        
-        # Actualizar datos del timeframe
-        timeframe_data['long_signals'] = long_signals
-        timeframe_data['short_signals'] = short_signals
-        timeframe_data['scatter_data'] = scatter_data
-        timeframe_data['last_update'] = datetime.now()
-        
-        logger.info(f"Análisis completado para {timeframe}: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas")
-        
-    except Exception as e:
-        logger.error(f"Error crítico en actualización de {timeframe}: {str(e)}")
-        traceback.print_exc()
-
-# Tarea de actualización principal
+# Tarea de actualización
 def update_task():
     while True:
         try:
             with analysis_state['lock']:
+                # Resetear la bandera de actualización necesaria
+                analysis_state['needs_update'] = False
                 analysis_state['is_updating'] = True
                 analysis_state['update_progress'] = 0
                 
+                cryptos = load_cryptos()
+                total = len(cryptos)
+                processed = 0
+                
+                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {analysis_state['params']['timeframe']}...")
+                
                 # Obtener parámetros actuales
                 params = analysis_state['params']
+                current_timeframe = params['timeframe']
                 
-                # Actualizar todos los timeframes
-                for timeframe in analysis_state['all_timeframes']:
-                    update_timeframe_data(timeframe, params)
-                    # Pequeña pausa entre timeframes para no saturar la API
-                    time.sleep(10)
+                # Inicializar estructuras para este timeframe
+                if current_timeframe not in analysis_state['timeframe_data']:
+                    analysis_state['timeframe_data'][current_timeframe] = {
+                        'long_signals': [],
+                        'short_signals': [],
+                        'scatter_data': [],
+                        'historical_signals': deque(maxlen=100)
+                    }
+                
+                timeframe_data = analysis_state['timeframe_data'][current_timeframe]
+                long_signals = []
+                short_signals = []
+                scatter_data = []
+                
+                # Obtener timestamp de inicio de vela anterior
+                previous_candle_start = get_previous_candle_start(current_timeframe)
+                
+                for i in range(0, total, BATCH_SIZE):
+                    batch = cryptos[i:i+BATCH_SIZE]
+                    
+                    for crypto in batch:
+                        try:
+                            # Analizar vela actual
+                            long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(crypto, params, analyze_previous=False)
+                            
+                            if long_sig:
+                                long_signals.append(long_sig)
+                            
+                            if short_sig:
+                                short_signals.append(short_sig)
+                            
+                            scatter_data.append({
+                                'symbol': crypto,
+                                'long_prob': long_prob,
+                                'short_prob': short_prob,
+                                'volume': vol
+                            })
+                            
+                            # Analizar vela anterior para señales históricas
+                            long_sig_prev, short_sig_prev, _, _, _ = analyze_crypto(crypto, params, analyze_previous=True)
+                            
+                            if long_sig_prev:
+                                # Añadir a señales históricas solo si es de la vela anterior
+                                candle_time = long_sig_prev.get('candle_timestamp')
+                                if candle_time and candle_time == previous_candle_start:
+                                    timeframe_data['historical_signals'].append(long_sig_prev)
+                            
+                            if short_sig_prev:
+                                # Añadir a señales históricas solo si es de la vela anterior
+                                candle_time = short_sig_prev.get('candle_timestamp')
+                                if candle_time and candle_time == previous_candle_start:
+                                    timeframe_data['historical_signals'].append(short_sig_prev)
+                            
+                            processed += 1
+                            progress = int((processed / total) * 100)
+                            analysis_state['update_progress'] = progress
+                        except Exception as e:
+                            logger.error(f"Error procesando {crypto}: {str(e)}")
+                    
+                    # Pausa entre lotes
+                    time.sleep(1)
+                
+                # Ordenar por fuerza de tendencia
+                long_signals.sort(key=lambda x: x['adx'], reverse=True)
+                short_signals.sort(key=lambda x: x['adx'], reverse=True)
+                
+                # Actualizar datos del timeframe
+                timeframe_data['long_signals'] = long_signals
+                timeframe_data['short_signals'] = short_signals
+                timeframe_data['scatter_data'] = scatter_data
                 
                 # Actualizar estado global
-                analysis_state['cryptos_analyzed'] = len(load_cryptos())
+                analysis_state['cryptos_analyzed'] = total
                 analysis_state['last_update'] = datetime.now()
                 analysis_state['is_updating'] = False
                 
-                logger.info(f"Análisis completado para todos los timeframes")
+                logger.info(f"Análisis completado para {current_timeframe}: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas")
         except Exception as e:
             logger.error(f"Error crítico en actualización: {str(e)}")
             traceback.print_exc()
             analysis_state['is_updating'] = False
         
-        # Esperar hasta la próxima actualización (5 minutos)
-        next_run = datetime.now() + timedelta(seconds=CACHE_TIME)
-        logger.info(f"Próxima actualización a las {next_run.strftime('%H:%M:%S')}")
-        time.sleep(CACHE_TIME)
+        # Esperar hasta la próxima actualización (5 minutos) pero verificando cada 10 segundos si se necesita actualización
+        wait_until = datetime.now() + timedelta(seconds=CACHE_TIME)
+        while datetime.now() < wait_until:
+            if analysis_state['needs_update']:
+                logger.info("Se solicitó actualización por cambio de timeframe")
+                break
+            time.sleep(10)  # Esperar 10 segundos entre verificaciones
 
 # Iniciar hilo de actualización
 update_thread = threading.Thread(target=update_task, daemon=True)
@@ -772,7 +759,7 @@ def get_chart(symbol, signal_type):
         plt.legend()
         plt.grid(True, alpha=0.3)
         
-        plt.tight_layout()
+        plt.t tight_layout()
         
         # Convertir a base64
         img = io.BytesIO()
@@ -918,6 +905,9 @@ def update_params():
         # Actualizar parámetros
         new_params = analysis_state['params'].copy()
         
+        # Verificar si el timeframe cambió
+        old_timeframe = analysis_state['params']['timeframe']
+        
         for param in new_params:
             if param in data:
                 value = data[param]
@@ -931,6 +921,9 @@ def update_params():
         
         with analysis_state['lock']:
             analysis_state['params'] = new_params
+            # Si el timeframe cambió, marcar que se necesita actualización
+            if old_timeframe != new_params['timeframe']:
+                analysis_state['needs_update'] = True
         
         return jsonify({
             'status': 'success',
