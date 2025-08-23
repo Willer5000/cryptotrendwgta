@@ -15,7 +15,7 @@ import io
 import base64
 import logging
 import traceback
-from threading import Lock
+from threading import Lock, Event
 from collections import deque
 import pytz
 import calendar
@@ -34,7 +34,6 @@ CACHE_TIME = 300  # 5 minutos
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 BATCH_SIZE = 10  # Reducido para mejor rendimiento
-TIMEFRAMES = ['15m', '30m', '1h', '2h', '4h', '1d', '1w']  # Timeframes a analizar
 
 # Zona horaria de Nueva York (UTC-4 o UTC-5 según horario de verano)
 try:
@@ -69,17 +68,12 @@ analysis_state = {
     'params': DEFAULTS.copy(),
     'lock': Lock(),
     'timeframe_data': {},  # Almacenar datos por timeframe
-    'timeframe_index': 0   # Índice para rotar timeframes
+    'force_update': Event()  # Evento para forzar actualización
 }
 
-# Inicializar timeframe_data para cada timeframe
-for tf in TIMEFRAMES:
-    analysis_state['timeframe_data'][tf] = {
-        'long_signals': [],
-        'short_signals': [],
-        'scatter_data': [],
-        'historical_signals': deque(maxlen=100)
-    }
+# Evento para forzar actualización
+force_update_event = Event()
+force_update_event.set()  # Forzar primera actualización
 
 # Leer lista de criptomonedas
 def load_cryptos():
@@ -524,6 +518,10 @@ def analyze_crypto(symbol, params, analyze_previous=False):
 def update_task():
     while True:
         try:
+            # Esperar evento de actualización o timeout
+            force_update_event.wait(timeout=CACHE_TIME)
+            force_update_event.clear()
+            
             with analysis_state['lock']:
                 analysis_state['is_updating'] = True
                 analysis_state['update_progress'] = 0
@@ -532,16 +530,20 @@ def update_task():
                 total = len(cryptos)
                 processed = 0
                 
-                # Obtener parámetros actuales y rotar timeframe
-                params = analysis_state['params'].copy()
-                current_timeframe_index = analysis_state['timeframe_index']
-                current_timeframe = TIMEFRAMES[current_timeframe_index]
-                params['timeframe'] = current_timeframe
-
-                # Actualizar índice para próximo ciclo
-                analysis_state['timeframe_index'] = (current_timeframe_index + 1) % len(TIMEFRAMES)
+                logger.info(f"Iniciando análisis de {total} criptomonedas...")
                 
-                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
+                # Obtener parámetros actuales
+                params = analysis_state['params']
+                current_timeframe = params['timeframe']
+                
+                # Inicializar estructuras para este timeframe
+                if current_timeframe not in analysis_state['timeframe_data']:
+                    analysis_state['timeframe_data'][current_timeframe] = {
+                        'long_signals': [],
+                        'short_signals': [],
+                        'scatter_data': [],
+                        'historical_signals': deque(maxlen=100)
+                    }
                 
                 timeframe_data = analysis_state['timeframe_data'][current_timeframe]
                 long_signals = []
@@ -615,11 +617,6 @@ def update_task():
             logger.error(f"Error crítico en actualización: {str(e)}")
             traceback.print_exc()
             analysis_state['is_updating'] = False
-        
-        # Esperar hasta la próxima actualización (5 minutos)
-        next_run = datetime.now() + timedelta(seconds=CACHE_TIME)
-        logger.info(f"Próxima actualización a las {next_run.strftime('%H:%M:%S')}")
-        time.sleep(CACHE_TIME)
 
 # Iniciar hilo de actualización
 update_thread = threading.Thread(target=update_task, daemon=True)
@@ -722,7 +719,7 @@ def get_chart(symbol, signal_type):
             plt.axhline(y=signal['tp2'], color='purple', linestyle=':', alpha=0.7, label='TP2')
         else:
             plt.axhline(y=signal['entry'], color='red', linestyle='--', label='Entrada')
-            plt.axhline(y=signal['sl'], color='green', linestyle--', label='Stop Loss')
+            plt.axhline(y=signal['sl'], color='green', linestyle='--', label='Stop Loss')
             plt.axhline(y=signal['tp1'], color='blue', linestyle=':', alpha=0.7, label='TP1')
             plt.axhline(y=signal['tp2'], color='purple', linestyle=':', alpha=0.7, label='TP2')
         
@@ -760,7 +757,7 @@ def get_chart(symbol, signal_type):
         plt.legend()
         plt.grid(True, alpha=0.3)
         
-        plt.t极_layout()
+        plt.tight_layout()
         
         # Convertir a base64
         img = io.BytesIO()
@@ -919,6 +916,9 @@ def update_params():
         
         with analysis_state['lock']:
             analysis_state['params'] = new_params
+        
+        # Forzar actualización inmediata
+        force_update_event.set()
         
         return jsonify({
             'status': 'success',
