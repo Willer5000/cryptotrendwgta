@@ -69,6 +69,11 @@
         .timeframe-option {
             font-weight: bold;
         }
+        .timeframe-status {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -83,6 +88,11 @@
                         {{ 'Actualizando...' if is_updating else 'Datos listos' }}
                     </span>
                 </p>
+                {% if last_analyzed %}
+                <p class="text-muted timeframe-status">
+                    <i class="fas fa-clock"></i> Datos para {{ params.timeframe }} actualizados: {{ last_analyzed.strftime('%Y-%m-%d %H:%M:%S') }}
+                </p>
+                {% endif %}
                 {% if is_updating %}
                 <div class="progress-container">
                     <div class="progress" style="height: 10px;">
@@ -132,7 +142,7 @@
                         </span>
                     </p>
                     <p><strong>Zona horaria:</strong> Nueva York (UTC-4/5)</p>
-                    <p><strong>Actualización automática:</strong> Cada 5 minutos</p>
+                    <p><strong>Actualización automática:</strong> Cada 5 minutos (ciclo entre timeframes)</p>
                 </div>
             </div>
         </div>
@@ -204,7 +214,7 @@
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="fas fa-sync-alt"></i> Actualizar Parámetros y Recargar Datos
                         </button>
-                        <div class="form-text">Al cambiar la temporalidad, el sistema analizará todas las criptomonedas con el nuevo timeframe.</div>
+                        <div class="form-text">Al cambiar la temporalidad, el sistema mostrará los datos disponibles para ese timeframe.</div>
                     </div>
                 </div>
             </form>
@@ -322,6 +332,11 @@
                 </div>
                 {% endif %}
             </div>
+            {% if last_analyzed %}
+            <div class="card-footer text-muted">
+                <small>Datos actualizados: {{ last_analyzed.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+            </div>
+            {% endif %}
         </div>
 
         <div class="row">
@@ -379,6 +394,11 @@
                         </div>
                         {% endif %}
                     </div>
+                    {% if last_analyzed %}
+                    <div class="card-footer text-muted">
+                        <small>Datos actualizados: {{ last_analyzed.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             
@@ -436,6 +456,11 @@
                         </div>
                         {% endif %}
                     </div>
+                    {% if last_analyzed %}
+                    <div class="card-footer text-muted">
+                        <small>Datos actualizados: {{ last_analyzed.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
