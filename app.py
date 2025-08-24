@@ -15,7 +15,7 @@ import io
 import base64
 import logging
 import traceback
-from threading import Lock
+from threading import Lock, Event
 from collections import deque
 import pytz
 import calendar
@@ -68,7 +68,8 @@ analysis_state = {
     'params': DEFAULTS.copy(),
     'lock': Lock(),
     'timeframe_data': {},  # Almacenar datos por timeframe
-    'restart_analysis': False  # Nueva bandera para reiniciar análisis
+    'update_event': Event(),  # Evento para controlar las actualizaciones
+    'stop_thread': False  # Bandera para detener el hilo actual
 }
 
 # Leer lista de criptomonedas
@@ -514,13 +515,12 @@ def analyze_crypto(symbol, params, analyze_previous=False):
 def update_task():
     while True:
         try:
-            with analysis_state['lock']:
-                # Verificar si necesitamos reiniciar el análisis
-                if analysis_state['restart_analysis']:
-                    analysis_state['restart_analysis'] = False
-                    logger.info("Reiniciando análisis debido a cambio de parámetros")
-                    continue
+            # Verificar si debemos detener el hilo
+            if analysis_state.get('stop_thread', False):
+                logger.info("Hilo de actualización detenido")
+                break
                 
+            with analysis_state['lock']:
                 analysis_state['is_updating'] = True
                 analysis_state['update_progress'] = 0
                 
@@ -528,7 +528,7 @@ def update_task():
                 total = len(cryptos)
                 processed = 0
                 
-                logger.info(f"Iniciando análisis de {total} criptomonedas...")
+                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {analysis_state['params']['timeframe']}...")
                 
                 # Obtener parámetros actuales
                 params = analysis_state['params']
@@ -552,17 +552,15 @@ def update_task():
                 previous_candle_start = get_previous_candle_start(current_timeframe)
                 
                 for i in range(0, total, BATCH_SIZE):
-                    # Verificar si necesitamos reiniciar durante el procesamiento
-                    with analysis_state['lock']:
-                        if analysis_state['restart_analysis']:
-                            analysis_state['restart_analysis'] = False
-                            logger.info("Reiniciando análisis durante el procesamiento")
-                            break
-                    
                     batch = cryptos[i:i+BATCH_SIZE]
                     
                     for crypto in batch:
                         try:
+                            # Verificar si debemos detener el análisis
+                            if analysis_state.get('stop_thread', False):
+                                logger.info("Análisis interrumpido por cambio de timeframe")
+                                break
+                                
                             # Analizar vela actual
                             long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(crypto, params, analyze_previous=False)
                             
@@ -602,11 +600,16 @@ def update_task():
                     
                     # Pausa entre lotes
                     time.sleep(1)
+                    
+                    # Verificar si debemos detener el análisis después del lote
+                    if analysis_state.get('stop_thread', False):
+                        logger.info("Análisis interrumpido por cambio de timeframe")
+                        break
                 
-                # Si se solicitó reinicio durante el procesamiento, saltar al siguiente ciclo
-                with analysis_state['lock']:
-                    if analysis_state['restart_analysis']:
-                        continue
+                # Si el análisis fue interrumpido, salir sin actualizar los datos
+                if analysis_state.get('stop_thread', False):
+                    analysis_state['is_updating'] = False
+                    break
                 
                 # Ordenar por fuerza de tendencia
                 long_signals.sort(key=lambda x: x['adx'], reverse=True)
@@ -631,12 +634,22 @@ def update_task():
         # Esperar hasta la próxima actualización (5 minutos)
         next_run = datetime.now() + timedelta(seconds=CACHE_TIME)
         logger.info(f"Próxima actualización a las {next_run.strftime('%H:%M:%S')}")
-        time.sleep(CACHE_TIME)
+        
+        # Esperar con evento para poder interrumpir la espera
+        analysis_state['update_event'].wait(CACHE_TIME)
+        analysis_state['update_event'].clear()
 
 # Iniciar hilo de actualización
-update_thread = threading.Thread(target=update_task, daemon=True)
-update_thread.start()
-logger.info("Hilo de actualización iniciado")
+update_thread = None
+
+def start_update_thread():
+    global update_thread
+    analysis_state['stop_thread'] = False
+    update_thread = threading.Thread(target=update_task, daemon=True)
+    update_thread.start()
+    logger.info("Hilo de actualización iniciado")
+
+start_update_thread()
 
 @app.route('/')
 def index():
@@ -930,8 +943,18 @@ def update_params():
                     new_params[param] = value
         
         with analysis_state['lock']:
+            # Detener el hilo actual si está ejecutándose
+            if analysis_state['is_updating']:
+                analysis_state['stop_thread'] = True
+                analysis_state['update_event'].set()  # Despertar el hilo si está esperando
+                time.sleep(1)  # Esperar a que el hilo se detenga
+            
+            # Actualizar parámetros
             analysis_state['params'] = new_params
-            analysis_state['restart_analysis'] = True  # Indicar que se debe reiniciar el análisis
+            
+            # Reiniciar el hilo de actualización
+            analysis_state['stop_thread'] = False
+            start_update_thread()
         
         return jsonify({
             'status': 'success',
