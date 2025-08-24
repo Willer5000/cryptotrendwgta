@@ -68,7 +68,8 @@ analysis_state = {
     'params': DEFAULTS.copy(),
     'lock': Lock(),
     'timeframe_data': {},  # Almacenar datos por timeframe
-    'current_timeframe': DEFAULTS['timeframe']  # Nueva variable para rastrear el timeframe actual
+    'update_required': False,  # Nueva bandera para forzar actualización
+    'current_timeframe': DEFAULTS['timeframe']  # Nueva variable para trackear timeframe actual
 }
 
 # Leer lista de criptomonedas
@@ -518,15 +519,23 @@ def update_task():
                 analysis_state['is_updating'] = True
                 analysis_state['update_progress'] = 0
                 
+                # Verificar si se requiere actualización forzada
+                if analysis_state['update_required']:
+                    analysis_state['update_required'] = False
+                    # Limpiar datos existentes para el timeframe actual
+                    current_timeframe = analysis_state['params']['timeframe']
+                    if current_timeframe in analysis_state['timeframe_data']:
+                        del analysis_state['timeframe_data'][current_timeframe]
+                
                 cryptos = load_cryptos()
                 total = len(cryptos)
                 processed = 0
                 
+                logger.info(f"Iniciando análisis de {total} criptomonedas...")
+                
                 # Obtener parámetros actuales
                 params = analysis_state['params']
                 current_timeframe = params['timeframe']
-                
-                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
                 
                 # Inicializar estructuras para este timeframe
                 if current_timeframe not in analysis_state['timeframe_data']:
@@ -603,7 +612,6 @@ def update_task():
                 analysis_state['cryptos_analyzed'] = total
                 analysis_state['last_update'] = datetime.now()
                 analysis_state['is_updating'] = False
-                analysis_state['current_timeframe'] = current_timeframe
                 
                 logger.info(f"Análisis completado para {current_timeframe}: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas")
         except Exception as e:
@@ -913,11 +921,11 @@ def update_params():
                     new_params[param] = value
         
         with analysis_state['lock']:
+            # Verificar si el timeframe ha cambiado
+            if analysis_state['params']['timeframe'] != new_params['timeframe']:
+                analysis_state['update_required'] = True
+            
             analysis_state['params'] = new_params
-        
-        # Forzar una actualización inmediata con los nuevos parámetros
-        analysis_state['is_updating'] = True
-        analysis_state['update_progress'] = 0
         
         return jsonify({
             'status': 'success',
