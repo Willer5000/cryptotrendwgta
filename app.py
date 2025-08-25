@@ -69,7 +69,7 @@ analysis_state = {
     'lock': Lock(),
     'timeframe_data': {},
     'update_event': Event(),
-    'current_timeframe': DEFAULTS['timeframe']
+    'force_update': False
 }
 
 # Leer lista de criptomonedas
@@ -99,7 +99,7 @@ def get_kucoin_data(symbol, timeframe):
     
     for attempt in range(MAX_RETRIES):
         try:
-            response = requests.get(url, timeout=30)
+            response = requests.get(url, timeout=15)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('code') == '200000' and data.get('data'):
@@ -472,8 +472,10 @@ def update_task():
                 total = len(cryptos)
                 processed = 0
                 
-                current_timeframe = analysis_state['params']['timeframe']
-                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
+                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {analysis_state['params']['timeframe']}...")
+                
+                params = analysis_state['params']
+                current_timeframe = params['timeframe']
                 
                 if current_timeframe not in analysis_state['timeframe_data']:
                     analysis_state['timeframe_data'][current_timeframe] = {
@@ -495,7 +497,7 @@ def update_task():
                     
                     for crypto in batch:
                         try:
-                            long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(crypto, analysis_state['params'], analyze_previous=False)
+                            long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(crypto, params, analyze_previous=False)
                             
                             if long_sig:
                                 long_signals.append(long_sig)
@@ -510,7 +512,7 @@ def update_task():
                                 'volume': vol
                             })
                             
-                            long_sig_prev, short_sig_prev, _, _, _ = analyze_crypto(crypto, analysis_state['params'], analyze_previous=True)
+                            long_sig_prev, short_sig_prev, _, _, _ = analyze_crypto(crypto, params, analyze_previous=True)
                             
                             if long_sig_prev:
                                 candle_time = long_sig_prev.get('candle_timestamp')
@@ -540,6 +542,7 @@ def update_task():
                 analysis_state['cryptos_analyzed'] = total
                 analysis_state['last_update'] = datetime.now()
                 analysis_state['is_updating'] = False
+                analysis_state['force_update'] = False
                 
                 logger.info(f"Análisis completado para {current_timeframe}: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas")
         except Exception as e:
@@ -549,6 +552,9 @@ def update_task():
         
         # Esperar hasta la próxima actualización o hasta que se solicite una actualización
         analysis_state['update_event'].clear()
+        if analysis_state['force_update']:
+            # Si se fuerza actualización, continuar inmediatamente
+            continue
         analysis_state['update_event'].wait(CACHE_TIME)
 
 # Iniciar hilo de actualización
@@ -817,13 +823,14 @@ def update_params():
         
         with analysis_state['lock']:
             analysis_state['params'] = new_params
+            analysis_state['force_update'] = True
         
         # Forzar una actualización inmediata
         analysis_state['update_event'].set()
         
         return jsonify({
             'status': 'success',
-            'message': 'Parámetros actualizados correctamente. El sistema comenzará a analizar los datos para el nuevo timeframe.',
+            'message': 'Parámetros actualizados correctamente. El sistema comenzará a analizar los datos con el nuevo timeframe.',
             'params': new_params
         })
     except Exception as e:
