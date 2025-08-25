@@ -827,7 +827,7 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
     });
 });
 </script>
-    <script>
+<script>
 // Función para verificar el estado de actualización
 function checkUpdateStatus() {
     fetch('/status')
@@ -853,23 +853,32 @@ function checkUpdateStatus() {
                 
                 // Solo recargar si el progreso era mayor a 0 (evitar recargas innecesarias)
                 if (data.progress > 0) {
+                    // Pequeña demora para asegurar que todos los datos estén listos
                     setTimeout(() => {
                         location.reload();
-                    }, 1000);
+                    }, 2000);
                 }
             }
         })
         .catch(error => {
             console.error('Error checking update status:', error);
+            // Reintentar después de un error
+            setTimeout(checkUpdateStatus, 5000);
         });
 }
 
-// Iniciar verificación de estado cuando se envía el formulario
+// Manejar el envío del formulario
 document.getElementById('filters-form').addEventListener('submit', function(e) {
     e.preventDefault();
     
     const formData = new FormData(this);
     const params = Object.fromEntries(formData.entries());
+    
+    // Mostrar mensaje de carga
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualizando...';
+    submitBtn.disabled = true;
     
     fetch('/update_params', {
         method: 'POST',
@@ -881,18 +890,34 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
     .then(response => response.json())
     .then(result => {
         if (result.status === 'success') {
-            // Mostrar mensaje de actualización
-            alert('Parámetros actualizados. El sistema está analizando los datos para el nuevo timeframe. La página se recargará automáticamente cuando finalice.');
+            // Mostrar mensaje de éxito
+            alert('Parámetros actualizados. El sistema comenzará a analizar con el nuevo timeframe. Esta página se actualizará automáticamente cuando termine.');
             
             // Iniciar verificación de estado de actualización
             setTimeout(checkUpdateStatus, 1000);
         } else {
             alert('Error al actualizar parámetros: ' + result.message);
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
         }
     })
     .catch(error => {
         alert('Error de conexión: ' + error.message);
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
     });
+});
+
+// Auto-refresh cada 5 minutos (300 segundos)
+setTimeout(() => {
+    location.reload();
+}, 300000);
+
+// Iniciar verificación de estado si se está actualizando
+document.addEventListener('DOMContentLoaded', function() {
+    if ({{ 'true' if is_updating else 'false' }}) {
+        setTimeout(checkUpdateStatus, 1000);
+    }
 });
 </script>
 </body>
