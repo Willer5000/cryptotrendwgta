@@ -827,5 +827,73 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
     });
 });
 </script>
+    <script>
+// Función para verificar el estado de actualización
+function checkUpdateStatus() {
+    fetch('/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.is_updating) {
+                // Mostrar progreso de actualización
+                document.querySelector('.status-badge').className = 'status-badge status-updating';
+                document.querySelector('.status-badge').textContent = 'Actualizando...';
+                
+                if (document.querySelector('.progress-bar')) {
+                    document.querySelector('.progress-bar').style.width = data.progress + '%';
+                    document.querySelector('.progress-bar').setAttribute('aria-valuenow', data.progress);
+                    document.querySelector('.progress-container small').textContent = 'Progreso: ' + data.progress + '%';
+                }
+                
+                // Volver a verificar en 3 segundos
+                setTimeout(checkUpdateStatus, 3000);
+            } else {
+                // Actualización completada, recargar la página
+                document.querySelector('.status-badge').className = 'status-badge status-ready';
+                document.querySelector('.status-badge').textContent = 'Datos listos';
+                
+                // Solo recargar si el progreso era mayor a 0 (evitar recargas innecesarias)
+                if (data.progress > 0) {
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error checking update status:', error);
+        });
+}
+
+// Iniciar verificación de estado cuando se envía el formulario
+document.getElementById('filters-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const params = Object.fromEntries(formData.entries());
+    
+    fetch('/update_params', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(params)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.status === 'success') {
+            // Mostrar mensaje de actualización
+            alert('Parámetros actualizados. El sistema está analizando los datos para el nuevo timeframe. La página se recargará automáticamente cuando finalice.');
+            
+            // Iniciar verificación de estado de actualización
+            setTimeout(checkUpdateStatus, 1000);
+        } else {
+            alert('Error al actualizar parámetros: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error de conexión: ' + error.message);
+    });
+});
+</script>
 </body>
 </html>
