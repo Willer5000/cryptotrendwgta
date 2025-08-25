@@ -33,7 +33,7 @@ CRYPTOS_FILE = 'cryptos.txt'
 CACHE_TIME = 300  # 5 minutos
 MAX_RETRIES = 3
 RETRY_DELAY = 2
-BATCH_SIZE = 10  # Reducido para mejor rendimiento
+BATCH_SIZE = 5  # Reducido para mejor rendimiento
 
 # Zona horaria de Nueva York (UTC-4 o UTC-5 según horario de verano)
 try:
@@ -68,7 +68,9 @@ analysis_state = {
     'params': DEFAULTS.copy(),
     'lock': Lock(),
     'timeframe_data': {},
-    'update_event': Event()
+    'update_event': Event(),
+    'current_timeframe': DEFAULTS['timeframe'],
+    'force_update': False
 }
 
 # Leer lista de criptomonedas
@@ -98,7 +100,7 @@ def get_kucoin_data(symbol, timeframe):
     
     for attempt in range(MAX_RETRIES):
         try:
-            response = requests.get(url, timeout=15)
+            response = requests.get(url, timeout=30)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('code') == '200000' and data.get('data'):
@@ -471,18 +473,19 @@ def update_task():
                 total = len(cryptos)
                 processed = 0
                 
-                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {analysis_state['params']['timeframe']}...")
-                
                 params = analysis_state['params']
                 current_timeframe = params['timeframe']
                 
-                if current_timeframe not in analysis_state['timeframe_data']:
+                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
+                
+                if current_timeframe not in analysis_state['timeframe_data'] or analysis_state['force_update']:
                     analysis_state['timeframe_data'][current_timeframe] = {
                         'long_signals': [],
                         'short_signals': [],
                         'scatter_data': [],
                         'historical_signals': deque(maxlen=100)
                     }
+                    analysis_state['force_update'] = False
                 
                 timeframe_data = analysis_state['timeframe_data'][current_timeframe]
                 long_signals = []
@@ -817,6 +820,9 @@ def update_params():
                     new_params[param] = value
         
         with analysis_state['lock']:
+            # Si cambió el timeframe, forzar actualización completa
+            if new_params['timeframe'] != analysis_state['params']['timeframe']:
+                analysis_state['force_update'] = True
             analysis_state['params'] = new_params
         
         # Forzar una actualización inmediata
