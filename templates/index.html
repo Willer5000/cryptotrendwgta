@@ -861,8 +861,6 @@ function checkUpdateStatus() {
         })
         .catch(error => {
             console.error('Error checking update status:', error);
-            // Reintentar después de un tiempo si hay error
-            setTimeout(checkUpdateStatus, 5000);
         });
 }
 
@@ -872,9 +870,6 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
     
     const formData = new FormData(this);
     const params = Object.fromEntries(formData.entries());
-    
-    // Mostrar mensaje de carga
-    alert('Actualizando parámetros y analizando datos para el nuevo timeframe. Esto puede tomar varios minutos...');
     
     fetch('/update_params', {
         method: 'POST',
@@ -886,6 +881,9 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
     .then(response => response.json())
     .then(result => {
         if (result.status === 'success') {
+            // Mostrar mensaje de que se está actualizando
+            alert(result.message);
+            
             // Iniciar verificación de estado de actualización
             setTimeout(checkUpdateStatus, 1000);
         } else {
@@ -897,12 +895,10 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
     });
 });
 
-// Verificar el estado al cargar la página
-document.addEventListener('DOMContentLoaded', function() {
-    if ({{ is_updating|tojson }}) {
-        checkUpdateStatus();
-    }
-});
+// Auto-refresh cada 5 minutos (300 segundos)
+setTimeout(() => {
+    location.reload();
+}, 300000);
 </script>
 </body>
 </html>
