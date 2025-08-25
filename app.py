@@ -33,7 +33,7 @@ CRYPTOS_FILE = 'cryptos.txt'
 CACHE_TIME = 300  # 5 minutos
 MAX_RETRIES = 3
 RETRY_DELAY = 2
-BATCH_SIZE = 5  # Reducido para mejor rendimiento
+BATCH_SIZE = 10  # Reducido para mejor rendimiento
 
 # Zona horaria de Nueva York (UTC-4 o UTC-5 según horario de verano)
 try:
@@ -69,7 +69,7 @@ analysis_state = {
     'lock': Lock(),
     'timeframe_data': {},
     'update_event': Event(),
-    'force_update': False
+    'current_timeframe': DEFAULTS['timeframe']
 }
 
 # Leer lista de criptomonedas
@@ -465,87 +465,83 @@ def update_task():
     while True:
         try:
             with analysis_state['lock']:
-                if analysis_state['force_update']:
-                    analysis_state['force_update'] = False
-                    analysis_state['is_updating'] = True
-                    analysis_state['update_progress'] = 0
+                analysis_state['is_updating'] = True
+                analysis_state['update_progress'] = 0
+                
+                cryptos = load_cryptos()
+                total = len(cryptos)
+                processed = 0
+                
+                current_timeframe = analysis_state['params']['timeframe']
+                logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
+                
+                if current_timeframe not in analysis_state['timeframe_data']:
+                    analysis_state['timeframe_data'][current_timeframe] = {
+                        'long_signals': [],
+                        'short_signals': [],
+                        'scatter_data': [],
+                        'historical_signals': deque(maxlen=100)
+                    }
+                
+                timeframe_data = analysis_state['timeframe_data'][current_timeframe]
+                long_signals = []
+                short_signals = []
+                scatter_data = []
+                
+                previous_candle_start = get_previous_candle_start(current_timeframe)
+                
+                for i in range(0, total, BATCH_SIZE):
+                    batch = cryptos[i:i+BATCH_SIZE]
                     
-                    cryptos = load_cryptos()
-                    total = len(cryptos)
-                    processed = 0
+                    for crypto in batch:
+                        try:
+                            long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(crypto, analysis_state['params'], analyze_previous=False)
+                            
+                            if long_sig:
+                                long_signals.append(long_sig)
+                            
+                            if short_sig:
+                                short_signals.append(short_sig)
+                            
+                            scatter_data.append({
+                                'symbol': crypto,
+                                'long_prob': long_prob,
+                                'short_prob': short_prob,
+                                'volume': vol
+                            })
+                            
+                            long_sig_prev, short_sig_prev, _, _, _ = analyze_crypto(crypto, analysis_state['params'], analyze_previous=True)
+                            
+                            if long_sig_prev:
+                                candle_time = long_sig_prev.get('candle_timestamp')
+                                if candle_time and candle_time == previous_candle_start:
+                                    timeframe_data['historical_signals'].append(long_sig_prev)
+                            
+                            if short_sig_prev:
+                                candle_time = short_sig_prev.get('candle_timestamp')
+                                if candle_time and candle_time == previous_candle_start:
+                                    timeframe_data['historical_signals'].append(short_sig_prev)
+                            
+                            processed += 1
+                            progress = int((processed / total) * 100)
+                            analysis_state['update_progress'] = progress
+                        except Exception as e:
+                            logger.error(f"Error procesando {crypto}: {str(e)}")
                     
-                    logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {analysis_state['params']['timeframe']}...")
-                    
-                    params = analysis_state['params']
-                    current_timeframe = params['timeframe']
-                    
-                    if current_timeframe not in analysis_state['timeframe_data']:
-                        analysis_state['timeframe_data'][current_timeframe] = {
-                            'long_signals': [],
-                            'short_signals': [],
-                            'scatter_data': [],
-                            'historical_signals': deque(maxlen=100)
-                        }
-                    
-                    timeframe_data = analysis_state['timeframe_data'][current_timeframe]
-                    long_signals = []
-                    short_signals = []
-                    scatter_data = []
-                    
-                    previous_candle_start = get_previous_candle_start(current_timeframe)
-                    
-                    for i in range(0, total, BATCH_SIZE):
-                        batch = cryptos[i:i+BATCH_SIZE]
-                        
-                        for crypto in batch:
-                            try:
-                                long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(crypto, params, analyze_previous=False)
-                                
-                                if long_sig:
-                                    long_signals.append(long_sig)
-                                
-                                if short_sig:
-                                    short_signals.append(short_sig)
-                                
-                                scatter_data.append({
-                                    'symbol': crypto,
-                                    'long_prob': long_prob,
-                                    'short_prob': short_prob,
-                                    'volume': vol
-                                })
-                                
-                                long_sig_prev, short_sig_prev, _, _, _ = analyze_crypto(crypto, params, analyze_previous=True)
-                                
-                                if long_sig_prev:
-                                    candle_time = long_sig_prev.get('candle_timestamp')
-                                    if candle_time and candle_time == previous_candle_start:
-                                        timeframe_data['historical_signals'].append(long_sig_prev)
-                                
-                                if short_sig_prev:
-                                    candle_time = short_sig_prev.get('candle_timestamp')
-                                    if candle_time and candle_time == previous_candle_start:
-                                        timeframe_data['historical_signals'].append(short_sig_prev)
-                                
-                                processed += 1
-                                progress = int((processed / total) * 100)
-                                analysis_state['update_progress'] = progress
-                            except Exception as e:
-                                logger.error(f"Error procesando {crypto}: {str(e)}")
-                        
-                        time.sleep(1)
-                    
-                    long_signals.sort(key=lambda x: x['adx'], reverse=True)
-                    short_signals.sort(key=lambda x: x['adx'], reverse=True)
-                    
-                    timeframe_data['long_signals'] = long_signals
-                    timeframe_data['short_signals'] = short_signals
-                    timeframe_data['scatter_data'] = scatter_data
-                    
-                    analysis_state['cryptos_analyzed'] = total
-                    analysis_state['last_update'] = datetime.now()
-                    analysis_state['is_updating'] = False
-                    
-                    logger.info(f"Análisis completado para {current_timeframe}: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas")
+                    time.sleep(1)
+                
+                long_signals.sort(key=lambda x: x['adx'], reverse=True)
+                short_signals.sort(key=lambda x: x['adx'], reverse=True)
+                
+                timeframe_data['long_signals'] = long_signals
+                timeframe_data['short_signals'] = short_signals
+                timeframe_data['scatter_data'] = scatter_data
+                
+                analysis_state['cryptos_analyzed'] = total
+                analysis_state['last_update'] = datetime.now()
+                analysis_state['is_updating'] = False
+                
+                logger.info(f"Análisis completado para {current_timeframe}: {len(long_signals)} LONG, {len(short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas")
         except Exception as e:
             logger.error(f"Error crítico en actualización: {str(e)}")
             traceback.print_exc()
@@ -821,14 +817,13 @@ def update_params():
         
         with analysis_state['lock']:
             analysis_state['params'] = new_params
-            analysis_state['force_update'] = True
         
         # Forzar una actualización inmediata
         analysis_state['update_event'].set()
         
         return jsonify({
             'status': 'success',
-            'message': 'Parámetros actualizados correctamente. El sistema comenzará a analizar con el nuevo timeframe.',
+            'message': 'Parámetros actualizados correctamente. El sistema comenzará a analizar los datos para el nuevo timeframe.',
             'params': new_params
         })
     except Exception as e:
