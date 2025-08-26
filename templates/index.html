@@ -29,11 +29,11 @@
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; position: relative; }
         .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.7; }
-        .volume-very-high { background-color: #4CAF50; }   /* Verde */
-        .volume-high { background-color: #2196F3; }        /* Azul */
-        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
-        .volume-low { background-color: #FF9800; }         /* Naranja */
-        .volume-very-low { background-color: #F44336; }    /* Rojo */
+        .volume-very-high { background-color: #4CAF50; color: white; }
+        .volume-high { background-color: #2196F3; color: white; }
+        .volume-medium { background-color: #FFEB3B; }
+        .volume-low { background-color: #FF9800; color: white; }
+        .volume-very-low { background-color: #F44336; color: white; }
         .info-box {
             background-color: #e9f7fe;
             border-left: 4px solid #1e88e5;
@@ -69,26 +69,16 @@
         .timeframe-option {
             font-weight: bold;
         }
-        .tooltip-icon {
-            cursor: help;
+        .probability-badge {
+            font-size: 0.75rem;
             margin-left: 5px;
-            color: #6c757d;
         }
-        .timeframe-switcher {
-            display: flex;
-            gap: 5px;
-            margin-bottom: 15px;
+        .tooltip-inner {
+            max-width: 300px;
         }
-        .timeframe-btn {
-            flex: 1;
-        }
-        .param-tooltip {
-            border-bottom: 1px dotted #6c757d;
-            cursor: help;
-        }
-        .volume-score {
-            font-size: 0.8rem;
-            color: #6c757d;
+        .pattern-badge {
+            font-size: 0.7rem;
+            margin-right: 3px;
         }
     </style>
 </head>
@@ -127,6 +117,9 @@
                 <a href="/manual" class="btn btn-sm btn-outline-info">
                     <i class="fas fa-book"></i> Manual
                 </a>
+                <button id="force-update" class="btn btn-sm btn-outline-warning">
+                    <i class="fas fa-sync"></i> Forzar Actualización
+                </button>
             </div>
         </header>
 
@@ -134,14 +127,17 @@
         <div class="info-box">
             <h5><i class="fas fa-info-circle"></i> Información del Sistema</h5>
             <div class="row">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <p><strong>Criptomonedas analizadas:</strong> {{ cryptos_analyzed }}</p>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <p><strong>Señales LONG detectadas:</strong> {{ long_signals|length }}</p>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <p><strong>Señales SHORT detectadas:</strong> {{ short_signals|length }}</p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>Señales históricas:</strong> {{ historical_signals|length }}</p>
                 </div>
             </div>
             <div class="row mt-2">
@@ -158,23 +154,9 @@
             </div>
         </div>
 
-        <!-- Selector rápido de timeframes -->
-        <div class="timeframe-switcher mb-3">
-            {% for tf in ['15m', '30m', '1h', '2h', '4h', '1d', '1w'] %}
-            <button class="btn timeframe-btn {{ 'btn-primary' if params.timeframe == tf else 'btn-outline-primary' }}"
-                    onclick="switchTimeframe('{{ tf }}')">
-                {{ tf }}
-            </button>
-            {% endfor %}
-        </div>
-
         <!-- Sección de Filtros -->
         <div class="filter-section">
-            <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros 
-                <span class="tooltip-icon" data-bs-toggle="tooltip" title="Ajusta los parámetros técnicos del análisis">
-                    <i class="fas fa-question-circle"></i>
-                </span>
-            </h2>
+            <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
             <form id="filters-form" method="POST" action="/update_params">
                 <div class="row g-3">
                     <div class="col-md-3">
@@ -191,80 +173,53 @@
                     </div>
                     
                     <div class="col-md-2">
-                        <label class="form-label">EMA Rápida 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Media Móvil Exponencial rápida (default: 9)">ⓘ</span>
-                        </label>
+                        <label class="form-label">EMA Rápida</label>
                         <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control" min="1" max="50">
                     </div>
                     
                     <div class="col-md-2">
-                        <label class="form-label">EMA Lenta 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Media Móvil Exponencial lenta (default: 20)">ⓘ</span>
-                        </label>
+                        <label class="form-label">EMA Lenta</label>
                         <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control" min="1" max="100">
                     </div>
                     
                     <div class="col-md-2">
-                        <label class="form-label">EMA Tendencia 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Media Móvil Exponencial para tendencia mayor (default: 200)">ⓘ</span>
-                        </label>
-                        <input type="number" name="ema_trend" value="{{ params.ema_trend }}" class="form-control" min="50" max="500">
-                    </div>
-                    
-                    <div class="col-md-3">
-                        <label class="form-label">ADX Período 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Período para el cálculo del ADX (default: 14)">ⓘ</span>
-                        </label>
+                        <label class="form-label">ADX Período</label>
                         <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control" min="1" max="50">
                     </div>
                     
-                    <div class="col-md-3">
-                        <label class="form-label">ADX Nivel 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Nivel mínimo de ADX para considerar tendencia (default: 25)">ⓘ</span>
-                        </label>
+                    <div class="col-md-2">
+                        <label class="form-label">ADX Nivel</label>
                         <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" min="1" max="100">
                     </div>
                     
-                    <div class="col-md-3">
-                        <label class="form-label">RSI Período 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Período para el cálculo del RSI (default: 14)">ⓘ</span>
-                        </label>
+                    <div class="col-md-2">
+                        <label class="form-label">RSI Período</label>
                         <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control" min="1" max="50">
                     </div>
                     
-                    <div class="col-md-3">
-                        <label class="form-label">S/R Ventana 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Ventana para detectar soportes y resistencias (default: 50)">ⓘ</span>
-                        </label>
+                    <div class="col-md-2">
+                        <label class="form-label">ATR Período</label>
+                        <input type="number" name="atr_period" value="{{ params.atr_period }}" class="form-control" min="5" max="20">
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">S/R Ventana</label>
                         <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control" min="10" max="200">
                     </div>
                     
-                    <div class="col-md-3">
-                        <label class="form-label">Divergencia Lookback 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Velas hacia atrás para buscar divergencias (default: 20)">ⓘ</span>
-                        </label>
+                    <div class="col-md-2">
+                        <label class="form-label">Divergencia Lookback</label>
                         <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control" min="5" max="50">
                     </div>
                     
-                    <div class="col-md-3">
-                        <label class="form-label">Máximo Riesgo (%) 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Riesgo máximo por operación en porcentaje (default: 1.5%)">ⓘ</span>
-                        </label>
+                    <div class="col-md-2">
+                        <label class="form-label">Máximo Riesgo (%)</label>
                         <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1" min="0.1" max="5">
                     </div>
                     
-                    <div class="col-md-3">
-                        <label class="form-label">Umbral S/R (%) 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Distancia máxima para considerar precio cerca de S/R (default: 1.0%)">ⓘ</span>
-                        </label>
-                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1" min="0.1" max="5">
-                    </div>
-                    
-                    <div class="col-md-3">
-                        <label class="form-label">MA Volumen 
-                            <span class="param-tooltip" data-bs-toggle="tooltip" title="Ventana para la media móvil de volumen (default: 20)">ⓘ</span>
-                        </label>
-                        <input type="number" name="volume_ma_window" value="{{ params.volume_ma_window }}" class="form-control" min="5" max="50">
+                    <div class="col-md-2">
+                        <label class="form-label">Umbral S/R (%)</label>
+                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1" min="0.1, max=5">
                     </div>
                     
                     <div class="col-md-12 mt-4">
@@ -359,7 +314,6 @@
                                 <th>SL</th>
                                 <th>TP1</th>
                                 <th>TP2</th>
-                                <th>RSI</th>
                                 <th>Gráfico</th>
                             </tr>
                         </thead>
@@ -368,23 +322,12 @@
                             <tr class="historical-row {{ 'long-bg' if signal.type == 'LONG' else 'short-bg' }}">
                                 <td>{{ loop.index }}</td>
                                 <td>{{ signal.symbol }}</td>
-                                <td>
-                                    <span class="badge {{ 'badge-long' if signal.type == 'LONG' else 'badge-short' }}">{{ signal.type }}</span>
-                                    {% if signal.trend_major %}
-                                    <span class="badge bg-info" title="Tendencia mayor alcista">↑</span>
-                                    {% else %}
-                                    <span class="badge bg-secondary" title="Tendencia mayor bajista">↓</span>
-                                    {% endif %}
-                                </td>
-                                <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">
-                                    {{ signal.volume }}
-                                    <div class="volume-score">({{ signal.volume_score }})</div>
-                                </td>
+                                <td><span class="badge {{ 'badge-long' if signal.type == 'LONG' else 'badge-short' }}">{{ signal.type }}</span></td>
+                                <td><span class="badge volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</span></td>
                                 <td>{{ signal.entry }}</td>
                                 <td class="text-danger">{{ signal.sl }}</td>
                                 <td class="text-success">{{ signal.tp1 }}</td>
                                 <td class="text-success">{{ signal.tp2 }}</td>
-                                <td>{{ signal.rsi }}</td>
                                 <td>
                                     <a href="/historical_chart/{{ signal.symbol }}/{{ signal.type|lower }}" class="btn btn-sm btn-info">
                                         <i class="fas fa-chart-line"></i>
@@ -408,7 +351,10 @@
                 <div class="card mb-4">
                     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                         <h2 class="h5 mb-0"><i class="fas fa-arrow-up"></i> Señales LONG ({{ long_signals|length }})</h2>
-                        <span class="badge badge-long">ADX Prom: {{ avg_adx_long }}</span>
+                        <div>
+                            <span class="badge badge-long">ADX: {{ avg_adx_long }}</span>
+                            <span class="badge bg-info">RSI: {{ long_signals|map(attribute='rsi')|sum / long_signals|length if long_signals else 0 | round(1) }}</span>
+                        </div>
                     </div>
                     <div class="card-body">
                         {% if long_signals %}
@@ -425,8 +371,7 @@
                                         <th>TP1</th>
                                         <th>TP2</th>
                                         <th>Volumen</th>
-                                        <th>ADX</th>
-                                        <th>RSI</th>
+                                        <th>Prob</th>
                                         <th>Gráfico</th>
                                     </tr>
                                 </thead>
@@ -434,19 +379,27 @@
                                     {% for signal in long_signals %}
                                     <tr class="long-bg">
                                         <td>{{ loop.index }}</td>
-                                        <td>{{ signal.symbol }}</td>
+                                        <td>
+                                            {{ signal.symbol }}
+                                            {% if signal.patterns %}
+                                            <span class="badge pattern-badge bg-info" data-bs-toggle="tooltip" title="Patrones: {{ signal.patterns|join(', ') }}">
+                                                <i class="fas fa-star"></i>
+                                            </span>
+                                            {% endif %}
+                                            {% if signal.divergence %}
+                                            <span class="badge pattern-badge bg-warning" data-bs-toggle="tooltip" title="Divergencia alcista detectada">
+                                                <i class="fas fa-arrow-up"></i>
+                                            </span>
+                                            {% endif %}
+                                        </td>
                                         <td>{{ signal.price }}</td>
                                         <td>{{ signal.entry }}</td>
                                         <td>{{ signal.distance }}%</td>
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">
-                                            {{ signal.volume }}
-                                            <div class="volume-score">({{ signal.volume_score }})</div>
-                                        </td>
-                                        <td>{{ signal.adx }}</td>
-                                        <td>{{ signal.rsi }}</td>
+                                        <td><span class="badge volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</span></td>
+                                        <td><span class="badge bg-secondary probability-badge">{{ signal.probability }}%</span></td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
                                                 <i class="fas fa-chart-line"></i>
@@ -470,7 +423,10 @@
                 <div class="card">
                     <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
                         <h2 class="h5 mb-0"><i class="fas fa-arrow-down"></i> Señales SHORT ({{ short_signals|length }})</h2>
-                        <span class="badge badge-short">ADX Prom: {{ avg_adx_short }}</span>
+                        <div>
+                            <span class="badge badge-short">ADX: {{ avg_adx_short }}</span>
+                            <span class="badge bg-info">RSI: {{ short_signals|map(attribute='rsi')|sum / short_signals|length if short_signals else 0 | round(1) }}</span>
+                        </div>
                     </div>
                     <div class="card-body">
                         {% if short_signals %}
@@ -487,8 +443,7 @@
                                         <th>TP1</th>
                                         <th>TP2</th>
                                         <th>Volumen</th>
-                                        <th>ADX</th>
-                                        <th>RSI</th>
+                                        <th>Prob</th>
                                         <th>Gráfico</th>
                                     </tr>
                                 </thead>
@@ -496,19 +451,27 @@
                                     {% for signal in short_signals %}
                                     <tr class="short-bg">
                                         <td>{{ loop.index }}</td>
-                                        <td>{{ signal.symbol }}</td>
+                                        <td>
+                                            {{ signal.symbol }}
+                                            {% if signal.patterns %}
+                                            <span class="badge pattern-badge bg-info" data-bs-toggle="tooltip" title="Patrones: {{ signal.patterns|join(', ') }}">
+                                                <i class="fas fa-star"></i>
+                                            </span>
+                                            {% endif %}
+                                            {% if signal.divergence %}
+                                            <span class="badge pattern-badge bg-warning" data-bs-toggle="tooltip" title="Divergencia bajista detectada">
+                                                <i class="fas fa-arrow-down"></i>
+                                            </span>
+                                            {% endif %}
+                                        </td>
                                         <td>{{ signal.price }}</td>
                                         <td>{{ signal.entry }}</td>
                                         <td>{{ signal.distance }}%</td>
                                         <td class="text-danger">{{ signal.sl }}</td>
                                         <td class="text-success">{{ signal.tp1 }}</td>
                                         <td class="text-success">{{ signal.tp2 }}</td>
-                                        <td class="volume-{{ signal.volume|lower|replace(' ', '-') }}">
-                                            {{ signal.volume }}
-                                            <div class="volume-score">({{ signal.volume_score }})</div>
-                                        </td>
-                                        <td>{{ signal.adx }}</td>
-                                        <td>{{ signal.rsi }}</td>
+                                        <td><span class="badge volume-{{ signal.volume|lower|replace(' ', '-') }}">{{ signal.volume }}</span></td>
+                                        <td><span class="badge bg-secondary probability-badge">{{ signal.probability }}%</span></td>
                                         <td>
                                             <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
                                                 <i class="fas fa-chart-line"></i>
@@ -530,70 +493,16 @@
         </div>
     </div>
 
-    <!-- Modal de Actualización -->
-    <div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="updateModalLabel">Actualizando Datos</h5>
-                </div>
-                <div class="modal-body">
-                    <p>Actualizando datos para el timeframe {{ params.timeframe }}. Por favor espere...</p>
-                    <div class="progress">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" 
-                             style="width: {{ update_progress }}%;" 
-                             aria-valuenow="{{ update_progress }}" aria-valuemin="0" aria-valuemax="100">
-                        </div>
-                    </div>
-                    <p class="text-center mt-2">{{ update_progress }}% completado</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Inicializar tooltips
-        document.addEventListener('DOMContentLoaded', function() {
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl)
-            });
-            
-            // Mostrar modal si se está actualizando
-            {% if is_updating %}
-            var updateModal = new bootstrap.Modal(document.getElementById('updateModal'));
-            updateModal.show();
-            {% endif %}
-            
-            // Inicializar gráficos
-            initializeCharts();
-            
-            // Auto-refresh cada 5 minutos (300 segundos)
-            setTimeout(() => {
-                location.reload();
-            }, 300000);
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
         });
-        
-        // Función para cambiar timeframe
-        function switchTimeframe(timeframe) {
-            fetch('/switch_timeframe/' + timeframe)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        // Forzar recarga de la página
-                        location.reload();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    alert('Error de conexión: ' + error.message);
-                });
-        }
-        
-        // Inicializar gráficos
-        function initializeCharts() {
+
+        // Inicializar gráficos cuando la página esté lista
+        document.addEventListener('DOMContentLoaded', function() {
             // Gráfico de resumen
             const marketCtx = document.getElementById('marketChart').getContext('2d');
             const marketChart = new Chart(marketCtx, {
@@ -714,11 +623,11 @@
             
             // Mapeo de colores por volumen
             const volumeColors = {
-                'Muy Alto': '#4CAF50',   // Verde
-                'Alto': '#2196F3',       // Azul
-                'Medio': '#FFEB3B',      // Amarillo
-                'Bajo': '#FF9800',       // Naranja
-                'Muy Bajo': '#F44336'    // Rojo
+                'Muy Alto': '#4CAF50',
+                'Alto': '#2196F3',
+                'Medio': '#FFEB3B',
+                'Bajo': '#FF9800',
+                'Muy Bajo': '#F44336'
             };
             
             // Preparar datos para el gráfico
@@ -732,18 +641,22 @@
                     const trace = {
                         x: data.map(item => item.long_prob),
                         y: data.map(item => item.short_prob),
-                        text: data.map(item => `${item.symbol}<br>LONG: ${item.long_prob.toFixed(1)}%<br>SHORT: ${item.short_prob.toFixed(1)}%<br>Vol: ${item.volume} (${item.volume_score.toFixed(2)})`),
+                        text: data.map(item => `${item.symbol}<br>LONG: ${item.long_prob.toFixed(1)}%<br>SHORT: ${item.short_prob.toFixed(1)}%<br>Vol: ${item.volume}`),
                         mode: 'markers',
                         type: 'scatter',
                         name: vol,
                         marker: {
-                            size: data.map(item => 5 + (item.volume_score || 1) * 3), // Tamaño según score de volumen
+                            size: 10,
                             color: volumeColors[vol],
-                            opacity: 0.8
+                            opacity: 0.8,
+                            line: {
+                                width: 1,
+                                color: 'darkgray'
+                            }
                         },
                         hoverinfo: 'text',
                         hoverlabel: {
-                            bgcolor: 'rgba(0,0,0,0.7)',
+                            bgcolor: 'rgba(0,0,0,0.8)',
                             font: {
                                 color: 'white',
                                 size: 12
@@ -761,78 +674,117 @@
                 traces.push({
                     x: [btcData.long_prob],
                     y: [btcData.short_prob],
-                    text: [`BTC<br>LONG: ${btcData.long_prob.toFixed(1)}%<br>SHORT: ${btcData.short_prob.toFixed(1)}%<br>Vol: ${btcData.volume} (${btcData.volume_score.toFixed(2)})`],
+                    text: [`BTC<br>LONG: ${btcData.long_prob.toFixed(1)}%<br>SHORT: ${btcData.short_prob.toFixed(1)}%<br>Vol: ${btcData.volume}`],
                     mode: 'markers+text',
                     type: 'scatter',
                     name: 'Bitcoin',
                     marker: {
-                        size: 12,
+                        size: 14,
                         color: '#FFD700',
-                        symbol: 'star'
+                        symbol: 'star',
+                        line: {
+                            width: 2,
+                            color: 'black'
+                        }
                     },
                     textfont: {
                         size: 12,
-                        color: '#FFD700'
+                        color: '#FFD700',
+                        weight: 'bold'
                     },
+                    textposition: 'top',
                     hoverinfo: 'text'
                 });
             }
             
             // Diseño del gráfico
             const layout = {
-                title: `Probabilidades de Trading por Criptomoneda - ${scatterData.length} activos ({{ params.timeframe }})`,
+                title: {
+                    text: `Probabilidades de Trading - ${params.timeframe}`,
+                    font: { size: 16 }
+                },
                 xaxis: {
                     title: 'Probabilidad LONG (%)',
                     range: [0, 100],
                     gridcolor: 'rgba(0,0,0,0.1)',
-                    zerolinecolor: 'rgba(0,0,0,0.3)'
+                    zerolinecolor: 'rgba(0,0,0,0.3)',
+                    tickmode: 'linear',
+                    tick0: 0,
+                    dtick: 10
                 },
                 yaxis: {
                     title: 'Probabilidad SHORT (%)',
                     range: [0, 100],
                     gridcolor: 'rgba(0,0,0,0.1)',
-                    zerolinecolor: 'rgba(0,0,0,0.3)'
+                    zerolinecolor: 'rgba(0,0,0,0.3)',
+                    tickmode: 'linear',
+                    tick0: 0,
+                    dtick: 10
                 },
                 shapes: [
-                    // Zonas de probabilidad
-                    // Alto LONG (verde oscuro): X>66.6, Y<33.3
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 0, y1: 33.3, fillcolor: 'rgba(46, 204, 113, 0.2)', line: {width: 0}},
-                    // Medio LONG (verde claro): X entre 33.3 y 66.6, Y<33.3
-                    {type: 'rect', x0: 33.3, x1: 66.6, y0: 0, y1: 33.3, fillcolor: 'rgba(46, 204, 113, 0.1)', line: {width: 0}},
-                    
-                    // Alto SHORT (rojo oscuro): Y>66.6, X<33.3
-                    {type: 'rect', x0: 0, x1: 33.3, y0: 66.6, y1: 100, fillcolor: 'rgba(231, 76, 60, 0.2)', line: {width: 0}},
-                    // Medio SHORT (rojo claro): Y entre 33.3 y 66.6, X<33.3
-                    {type: 'rect', x0: 0, x1: 33.3, y0: 33.3, y1: 66.6, fillcolor: 'rgba(231, 76, 60, 0.1)', line: {width: 0}},
-                    
-                    // Neutral en el centro (amarillo)
-                    {type: 'rect', x0: 33.3, x1: 66.6, y0: 33.3, y1: 66.6, fillcolor: 'rgba(255, 235, 59, 0.1)', line: {width: 0}},
-                    
-                    // Otras zonas neutrales
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 33.3, y1: 66.6, fillcolor: 'rgba(255, 235, 59, 0.05)', line: {width: 0}},
-                    {type: 'rect', x0: 33.3, x1: 66.6, y0: 66.6, y1: 100, fillcolor: 'rgba(255, 235, 59, 0.05)', line: {width: 0}},
-                    {type: 'rect', x0: 66.6, x1: 100, y0: 66.6, y1: 100, fillcolor: 'rgba(255, 235, 59, 0.05)', line: {width: 0}},
-                    {type: 'rect', x0: 0, x1: 33.3, y0: 0, y1: 33.3, fillcolor: 'rgba(255, 235, 59, 0.05)', line: {width: 0}}
+                    // Zona Alto LONG
+                    {
+                        type: 'rect', x0: 66.6, x1: 100, y0: 0, y1: 33.3,
+                        fillcolor: 'rgba(46, 204, 113, 0.2)',
+                        line: { width: 0 }
+                    },
+                    // Zona Medio LONG
+                    {
+                        type: 'rect', x0: 33.3, x1: 66.6, y0: 0, y1: 33.3,
+                        fillcolor: 'rgba(46, 204, 113, 0.1)',
+                        line: { width: 0 }
+                    },
+                    // Zona Alto SHORT
+                    {
+                        type: 'rect', x0: 0, x1: 33.3, y0: 66.6, y1: 100,
+                        fillcolor: 'rgba(231, 76, 60, 0.2)',
+                        line: { width: 0 }
+                    },
+                    // Zona Medio SHORT
+                    {
+                        type: 'rect', x0: 0, x1: 33.3, y0: 33.3, y1: 66.6,
+                        fillcolor: 'rgba(231, 76, 60, 0.1)',
+                        line: { width: 0 }
+                    },
+                    // Zona Neutral central
+                    {
+                        type: 'rect', x0: 33.3, x1: 66.6, y0: 33.3, y1: 66.6,
+                        fillcolor: 'rgba(255, 235, 59, 0.1)',
+                        line: { width: 0 }
+                    }
                 ],
                 annotations: [
-                    // Zona Alto LONG
-                    {x: 83.3, y: 16.65, text: 'Alto LONG', showarrow: false, font: {size: 12, color: 'darkgreen'}},
-                    // Zona Medio LONG
-                    {x: 50, y: 16.65, text: 'Medio LONG', showarrow: false, font: {size: 12, color: 'green'}},
-                    // Zona Alto SHORT
-                    {x: 16.65, y: 83.3, text: 'Alto SHORT', showarrow: false, font: {size: 12, color: 'darkred'}},
-                    // Zona Medio SHORT
-                    {x: 16.65, y: 50, text: 'Medio SHORT', showarrow: false, font: {size: 12, color: 'red'}},
-                    // Zona Neutral central
-                    {x: 50, y: 50, text: 'Neutral', showarrow: false, font: {size: 12, color: 'gray'}}
+                    {
+                        x: 83.3, y: 16.65, text: 'Alto LONG',
+                        showarrow: false, font: { size: 12, color: 'darkgreen' }
+                    },
+                    {
+                        x: 50, y: 16.65, text: 'Medio LONG',
+                        showarrow: false, font: { size: 12, color: 'green' }
+                    },
+                    {
+                        x: 16.65, y: 83.3, text: 'Alto SHORT',
+                        showarrow: false, font: { size: 12, color: 'darkred' }
+                    },
+                    {
+                        x: 16.65, y: 50, text: 'Medio SHORT',
+                        showarrow: false, font: { size: 12, color: 'red' }
+                    },
+                    {
+                        x: 50, y: 50, text: 'Neutral',
+                        showarrow: false, font: { size: 12, color: 'gray' }
+                    }
                 ],
                 hovermode: 'closest',
                 showlegend: true,
                 legend: {
                     orientation: 'h',
-                    y: -0.2
+                    y: -0.2,
+                    font: { size: 12 }
                 },
-                margin: {t: 50, b: 80}
+                margin: { t: 50, b: 80, l: 80, r: 40 },
+                plot_bgcolor: 'rgba(240,240,240,0.1)',
+                paper_bgcolor: 'white'
             };
             
             // Crear gráfico
@@ -849,7 +801,27 @@
                     }
                 });
                 
-                Plotly.restyle('scatterPlot', 'visible', traces.map((_, i) => visibleTraces.includes(i)));
+                Plotly.restyle('scatterPlot', 'visible', 
+                    traces.map((_, i) => visibleTraces.includes(i)));
+            });
+            
+            // Auto-refresh cada 5 minutos
+            setTimeout(() => {
+                location.reload();
+            }, 300000);
+            
+            // Forzar actualización
+            document.getElementById('force-update').addEventListener('click', function() {
+                fetch('/force_update')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('Actualización forzada iniciada. La página se recargará en unos momentos.');
+                        }
+                    })
+                    .catch(error => {
+                        alert('Error forzando actualización: ' + error.message);
+                    });
             });
             
             // Manejar el envío del formulario
@@ -871,12 +843,10 @@
                     const result = await response.json();
                     
                     if (result.status === 'success') {
-                        // Mostrar modal de actualización
-                        var updateModal = new bootstrap.Modal(document.getElementById('updateModal'));
-                        updateModal.show();
-                        
-                        // Iniciar verificación de estado
-                        checkUpdateStatus();
+                        alert('Parámetros actualizados correctamente. La página se recargará en 3 segundos.');
+                        setTimeout(() => {
+                            location.reload();
+                        }, 3000);
                     } else {
                         alert('Error al actualizar parámetros: ' + result.message);
                     }
@@ -884,34 +854,67 @@
                     alert('Error de conexión: ' + error.message);
                 }
             });
-        }
-        
+        });
+    </script>
+    <script>
         // Función para verificar el estado de actualización
         function checkUpdateStatus() {
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.is_updating) {
-                        // Actualizar barra de progreso
-                        document.querySelector('.progress-bar').style.width = data.progress + '%';
-                        document.querySelector('.progress-bar').setAttribute('aria-valuenow', data.progress);
-                        document.querySelector('.modal-body p:nth-child(3)').textContent = data.progress + '% completado';
+                        document.querySelector('.status-badge').className = 'status-badge status-updating';
+                        document.querySelector('.status-badge').textContent = 'Actualizando...';
                         
-                        // Volver a verificar en 3 segundos
+                        if (document.querySelector('.progress-bar')) {
+                            document.querySelector('.progress-bar').style.width = data.progress + '%';
+                            document.querySelector('.progress-bar').setAttribute('aria-valuenow', data.progress);
+                            document.querySelector('.progress-container small').textContent = 'Progreso: ' + data.progress + '%';
+                        }
+                        
                         setTimeout(checkUpdateStatus, 3000);
                     } else {
-                        // Ocultar modal y recargar
-                        var updateModal = bootstrap.Modal.getInstance(document.getElementById('updateModal'));
-                        if (updateModal) {
-                            updateModal.hide();
+                        document.querySelector('.status-badge').className = 'status-badge status-ready';
+                        document.querySelector('.status-badge').textContent = 'Datos listos';
+                        
+                        if (data.progress > 0) {
+                            setTimeout(() => {
+                                location.reload();
+                            }, 1000);
                         }
-                        location.reload();
                     }
                 })
                 .catch(error => {
                     console.error('Error checking update status:', error);
                 });
         }
+
+        // Iniciar verificación de estado cuando se envía el formulario
+        document.getElementById('filters-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const params = Object.fromEntries(formData.entries());
+            
+            fetch('/update_params', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams(params)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.status === 'success') {
+                    setTimeout(checkUpdateStatus, 1000);
+                } else {
+                    alert('Error al actualizar parámetros: ' + result.message);
+                }
+            })
+            .catch(error => {
+                alert('Error de conexión: ' + error.message);
+            });
+        });
     </script>
 </body>
 </html>
