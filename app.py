@@ -22,7 +22,7 @@ import calendar
 from dateutil.relativedelta import relativedelta
 
 app = Flask(__name__)
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Deshabilitar caché
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,12 +30,12 @@ logger = logging.getLogger(__name__)
 
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
-CACHE_TIME = 300  # 5 minutos
-MAX_RETRIES = 3
-RETRY_DELAY = 2
-BATCH_SIZE = 5  # Reducido para mejor rendimiento
+CACHE_TIME = 300
+MAX_RETRIES = 5
+RETRY_DELAY = 3
+BATCH_SIZE = 5
 
-# Zona horaria de Nueva York (UTC-4 o UTC-5 según horario de verano)
+# Zona horaria
 try:
     NY_TZ = pytz.timezone('America/New_York')
 except:
@@ -54,7 +54,7 @@ DEFAULTS = {
     'price_distance_threshold': 1.0
 }
 
-# Estado global con bloqueo
+# Estado global
 analysis_state = {
     'long_signals': [],
     'short_signals': [],
@@ -82,7 +82,7 @@ def load_cryptos():
             return cryptos
     except Exception as e:
         logger.error(f"Error cargando criptomonedas: {str(e)}")
-        return ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'DOT', 'AVAX', 'LINK']
+        return ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'AVAX', 'DOT', 'LINK']
 
 # Obtener datos de KuCoin con reintentos
 def get_kucoin_data(symbol, timeframe):
@@ -95,6 +95,7 @@ def get_kucoin_data(symbol, timeframe):
         '1d': '1day',
         '1w': '1week'
     }
+    
     kucoin_tf = tf_mapping.get(timeframe, '1hour')
     url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}-USDT"
     
@@ -109,7 +110,12 @@ def get_kucoin_data(symbol, timeframe):
                     
                     if len(candles) < 100:
                         logger.warning(f"Datos insuficientes para {symbol} ({timeframe}): {len(candles)} velas")
-                        return None
+                        
+                        # Para timeframes más largos, aceptamos menos datos
+                        if timeframe in ['1d', '1w'] and len(candles) > 30:
+                            logger.info(f"Aceptando {len(candles)} velas para {symbol} ({timeframe})")
+                        else:
+                            return None
                     
                     df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
                     
@@ -355,13 +361,13 @@ def format_xaxis_by_timeframe(timeframe, ax):
 # Analizar una criptomoneda
 def analyze_crypto(symbol, params, analyze_previous=False):
     df = get_kucoin_data(symbol, params['timeframe'])
-    if df is None or len(df) < 100:
+    if df is None or len(df) < 50:
         logger.warning(f"No hay suficientes datos para {symbol} en timeframe {params['timeframe']}")
         return None, None, 0, 0, 'Muy Bajo'
     
     try:
         df = calculate_indicators(df, params)
-        if df is None or len(df) < 50:
+        if df is None or len(df) < 20:
             logger.warning(f"No hay suficientes datos después de calcular indicadores para {symbol} en timeframe {params['timeframe']}")
             return None, None, 0, 0, 'Muy Bajo'
         
@@ -468,14 +474,6 @@ def update_task():
     while True:
         try:
             with analysis_state['lock']:
-                if analysis_state['force_update']:
-                    # Limpiar datos existentes para forzar nueva actualización
-                    current_timeframe = analysis_state['params']['timeframe']
-                    if current_timeframe in analysis_state['timeframe_data']:
-                        del analysis_state['timeframe_data'][current_timeframe]
-                    analysis_state['force_update'] = False
-                    logger.info(f"Forzando actualización para timeframe {current_timeframe}")
-                
                 analysis_state['is_updating'] = True
                 analysis_state['update_progress'] = 0
                 
@@ -488,13 +486,14 @@ def update_task():
                 
                 logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
                 
-                if current_timeframe not in analysis_state['timeframe_data']:
+                if current_timeframe not in analysis_state['timeframe_data'] or analysis_state['force_update']:
                     analysis_state['timeframe_data'][current_timeframe] = {
                         'long_signals': [],
                         'short_signals': [],
                         'scatter_data': [],
                         'historical_signals': deque(maxlen=100)
                     }
+                    analysis_state['force_update'] = False
                 
                 timeframe_data = analysis_state['timeframe_data'][current_timeframe]
                 long_signals = []
@@ -541,7 +540,7 @@ def update_task():
                         except Exception as e:
                             logger.error(f"Error procesando {crypto}: {str(e)}")
                     
-                    time.sleep(1)
+                    time.sleep(2)
                 
                 long_signals.sort(key=lambda x: x['adx'], reverse=True)
                 short_signals.sort(key=lambda x: x['adx'], reverse=True)
@@ -832,13 +831,12 @@ def update_params():
             # Forzar actualización si cambia el timeframe
             if new_params['timeframe'] != analysis_state['params']['timeframe']:
                 analysis_state['force_update'] = True
-                logger.info(f"Timeframe cambiado de {analysis_state['params']['timeframe']} a {new_params['timeframe']}, forzando actualización")
+                logger.info(f"Cambio de timeframe detectado: {analysis_state['params']['timeframe']} -> {new_params['timeframe']}")
             
             analysis_state['params'] = new_params
         
         # Forzar una actualización inmediata
         analysis_state['update_event'].set()
-        logger.info("Evento de actualización establecido")
         
         return jsonify({
             'status': 'success',
@@ -865,6 +863,25 @@ def status():
             'cryptos_analyzed': analysis_state['cryptos_analyzed'],
             'params': analysis_state['params']
         })
+
+@app.route('/debug')
+def debug():
+    with analysis_state['lock']:
+        debug_info = {
+            'params': analysis_state['params'],
+            'timeframes_available': list(analysis_state['timeframe_data'].keys()),
+            'timeframe_data': {}
+        }
+        
+        for tf, data in analysis_state['timeframe_data'].items():
+            debug_info['timeframe_data'][tf] = {
+                'long_signals_count': len(data['long_signals']),
+                'short_signals_count': len(data['short_signals']),
+                'scatter_data_count': len(data['scatter_data']),
+                'historical_signals_count': len(data['historical_signals'])
+            }
+        
+        return jsonify(debug_info)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
