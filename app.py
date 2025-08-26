@@ -22,7 +22,7 @@ import calendar
 from dateutil.relativedelta import relativedelta
 
 app = Flask(__name__)
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Deshabilitar caché
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,12 +30,12 @@ logger = logging.getLogger(__name__)
 
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
-CACHE_TIME = 300  # 5 minutos
+CACHE_TIME = 300
 MAX_RETRIES = 3
 RETRY_DELAY = 2
-BATCH_SIZE = 5  # Reducido para mejor rendimiento en Render
+BATCH_SIZE = 5
 
-# Zona horaria de Nueva York (UTC-4 o UTC-5 según horario de verano)
+# Zona horaria de Nueva York
 try:
     NY_TZ = pytz.timezone('America/New_York')
 except:
@@ -52,6 +52,17 @@ DEFAULTS = {
     'divergence_lookback': 20,
     'max_risk_percent': 1.5,
     'price_distance_threshold': 1.0
+}
+
+# Sistema de caching multi-timeframe
+timeframe_cache = {
+    '15m': {'data': {}, 'last_update': None},
+    '30m': {'data': {}, 'last_update': None},
+    '1h': {'data': {}, 'last_update': None},
+    '2h': {'data': {}, 'last_update': None},
+    '4h': {'data': {}, 'last_update': None},
+    '1d': {'data': {}, 'last_update': None},
+    '1w': {'data': {}, 'last_update': None}
 }
 
 # Estado global con bloqueo
@@ -83,8 +94,17 @@ def load_cryptos():
         logger.error(f"Error cargando criptomonedas: {str(e)}")
         return ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'DOT', 'AVAX', 'LINK']
 
-# Obtener datos de KuCoin con reintentos
-def get_kucoin_data(symbol, timeframe):
+# Obtener datos de KuCoin con reintentos y caching
+def get_kucoin_data(symbol, timeframe, force_update=False):
+    # Verificar cache primero
+    current_time = datetime.now()
+    cache_data = timeframe_cache[timeframe]['data'].get(symbol)
+    
+    if (cache_data and not force_update and 
+        timeframe_cache[timeframe]['last_update'] and 
+        (current_time - timeframe_cache[timeframe]['last_update']).total_seconds() < CACHE_TIME):
+        return cache_data.copy()
+    
     tf_mapping = {
         '15m': '15min',
         '30m': '30min',
@@ -123,6 +143,10 @@ def get_kucoin_data(symbol, timeframe):
                     
                     df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='s', utc=True)
                     df['timestamp'] = df['timestamp'].dt.tz_convert(NY_TZ)
+                    
+                    # Actualizar cache
+                    timeframe_cache[timeframe]['data'][symbol] = df.copy()
+                    timeframe_cache[timeframe]['last_update'] = current_time
                     
                     return df
                 else:
@@ -328,6 +352,40 @@ def get_previous_candle_start(timeframe):
     
     return now - timedelta(hours=1)
 
+# Análisis de tendencia en timeframe superior
+def calculate_higher_tf_trend(symbol, current_tf, price):
+    tf_hierarchy = {'15m': '1h', '30m': '2h', '1h': '4h', '2h': '4h', '4h': '1d', '1d': '1w'}
+    
+    higher_tf = tf_hierarchy.get(current_tf)
+    if not higher_tf:
+        return 0.5  # Neutral
+    
+    df = get_kucoin_data(symbol, higher_tf)
+    if df is None or len(df) < 20:
+        return 0.5
+        
+    higher_params = {
+        'ema_fast': 9,
+        'ema_slow': 21,
+        'adx_period': 14,
+        'rsi_period': 14
+    }
+    
+    df = calculate_indicators(df, higher_params)
+    if df is None or len(df) < 10:
+        return 0.5
+        
+    last = df.iloc[-1]
+    
+    # Tendencia alcista en TF superior
+    if last['ema_fast'] > last['ema_slow'] and last['adx'] > 20:
+        return 0.7  # Fuerte tendencia alcista
+    # Tendencia bajista en TF superior
+    elif last['ema_fast'] < last['ema_slow'] and last['adx'] > 20:
+        return 0.3  # Fuerte tendencia bajista
+        
+    return 0.5  # Neutral
+
 # Formatear eje X según timeframe
 def format_xaxis_by_timeframe(timeframe, ax):
     try:
@@ -385,28 +443,45 @@ def analyze_crypto(symbol, params, analyze_previous=False):
         trend_up = last['ema_fast'] > last['ema_slow'] and last['adx'] > params['adx_level']
         trend_down = last['ema_fast'] < last['ema_slow'] and last['adx'] > params['adx_level']
         
+        # Análisis de tendencia en timeframe superior
+        higher_tf_trend = calculate_higher_tf_trend(symbol, params['timeframe'], last['close'])
+        
         long_prob = 0
         short_prob = 0
         
-        if trend_up: long_prob += 35
-        if near_level(last['close'], supports, params['price_distance_threshold']): long_prob += 25
-        if last['rsi'] < 40: long_prob += 15
-        if is_breakout or divergence == 'bullish': long_prob += 20
-        if volume_class in ['Alto', 'Muy Alto']: long_prob += 20
+        # Ajustar probabilidades según tendencia superior
+        trend_weight = 0.3  # Peso de la tendencia superior
         
-        if trend_down: short_prob += 35
-        if near_level(last['close'], resistances, params['price_distance_threshold']): short_prob += 25
-        if last['rsi'] > 60: short_prob += 15
-        if is_breakdown or divergence == 'bearish': short_prob += 20
-        if volume_class in ['Alto', 'Muy Alto']: short_prob += 20
+        if trend_up: 
+            long_prob += 35 * (1 - trend_weight) + (higher_tf_trend * 100 * trend_weight)
+        if near_level(last['close'], supports, params['price_distance_threshold']): 
+            long_prob += 25
+        if last['rsi'] < 40: 
+            long_prob += 15
+        if is_breakout or divergence == 'bullish': 
+            long_prob += 20
+        if volume_class in ['Alto', 'Muy Alto']: 
+            long_prob += 20
         
+        if trend_down: 
+            short_prob += 35 * (1 - trend_weight) + ((1 - higher_tf_trend) * 100 * trend_weight)
+        if near_level(last['close'], resistances, params['price_distance_threshold']): 
+            short_prob += 25
+        if last['rsi'] > 60: 
+            short_prob += 15
+        if is_breakdown or divergence == 'bearish': 
+            short_prob += 20
+        if volume_class in ['Alto', 'Muy Alto']: 
+            short_prob += 20
+        
+        # Normalizar probabilidades
         total = long_prob + short_prob
         if total > 100:
             long_prob = (long_prob / total) * 100
             short_prob = (short_prob / total) * 100
         
         long_signal = None
-        if long_prob >= 60 and volume_class in ['Alto', 'Muy Alto']:
+        if long_prob >= 60 and volume_class in ['Alto', 'Muy Alto'] and higher_tf_trend >= 0.4:
             next_supports = [s for s in supports if s < last['close']]
             sl = max(next_supports) * 0.99 if next_supports else last['close'] * (1 - params['max_risk_percent']/100)
             
@@ -427,11 +502,12 @@ def analyze_crypto(symbol, params, analyze_previous=False):
                 'timestamp': datetime.now().isoformat(),
                 'type': 'LONG',
                 'timeframe': params['timeframe'],
-                'candle_timestamp': last['timestamp']
+                'candle_timestamp': last['timestamp'],
+                'higher_tf_trend': higher_tf_trend
             }
         
         short_signal = None
-        if short_prob >= 60 and volume_class in ['Alto', 'Muy Alto']:
+        if short_prob >= 60 and volume_class in ['Alto', 'Muy Alto'] and higher_tf_trend <= 0.6:
             next_resistances = [r for r in resistances if r > last['close']]
             sl = min(next_resistances) * 1.01 if next_resistances else last['close'] * (1 + params['max_risk_percent']/100)
             
@@ -452,7 +528,8 @@ def analyze_crypto(symbol, params, analyze_previous=False):
                 'timestamp': datetime.now().isoformat(),
                 'type': 'SHORT',
                 'timeframe': params['timeframe'],
-                'candle_timestamp': last['timestamp']
+                'candle_timestamp': last['timestamp'],
+                'higher_tf_trend': higher_tf_trend
             }
         
         return long_signal, short_signal, long_prob, short_prob, volume_class
@@ -765,11 +842,11 @@ def get_historical_chart(symbol, signal_type):
         
         plt.subplot(3, 1, 3)
         plt.plot(df['timestamp'], df['rsi'], label='RSI', color='purple')
-        plt.axhline(y=70, color='red', linestyle='--', alpha=0.5)
-        plt.axhline(y=30, color='green', linestyle='--', alpha=0.5)
+        plt.axhline(y=70, color='red', linestyle='-', alpha=0.5)
+        plt.axhline(y=30, color='green', linestyle='-', alpha=0.5)
         
         plt.plot(df['timestamp'], df['adx'], label='ADX', color='brown')
-        plt.axhline(y=params['adx_level'], color='blue', linestyle='--', alpha=0.5)
+        plt.axhline(y=params['adx_level'], color='blue', linestyle='-', alpha=0.5)
         
         if len(prev_candle_idx) > 0:
             idx = prev_candle_idx[0]
