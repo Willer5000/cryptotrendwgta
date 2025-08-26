@@ -7,5 +7,3 @@ gunicorn
 plotly
 pytz
 python-dateutil
-talib-binary
-scipy
