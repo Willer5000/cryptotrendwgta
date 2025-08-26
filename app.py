@@ -69,7 +69,7 @@ analysis_state = {
     'lock': Lock(),
     'timeframe_data': {},
     'update_event': Event(),
-    'force_update': False
+    'current_timeframe': DEFAULTS['timeframe']
 }
 
 # Leer lista de criptomonedas
@@ -99,7 +99,7 @@ def get_kucoin_data(symbol, timeframe):
     
     for attempt in range(MAX_RETRIES):
         try:
-            response = requests.get(url, timeout=30)
+            response = requests.get(url, timeout=15)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('code') == '200000' and data.get('data'):
@@ -107,7 +107,7 @@ def get_kucoin_data(symbol, timeframe):
                     candles.reverse()
                     
                     if len(candles) < 100:
-                        logger.warning(f"Datos insuficientes para {symbol} ({timeframe}): {len(candles)} velas")
+                        logger.warning(f"Datos insuficientes para {symbol}: {len(candles)} velas")
                         return None
                     
                     df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
@@ -118,7 +118,7 @@ def get_kucoin_data(symbol, timeframe):
                     df = df.dropna()
                     
                     if len(df) < 50:
-                        logger.warning(f"Datos insuficientes después de limpieza para {symbol} ({timeframe}): {len(df)} velas")
+                        logger.warning(f"Datos insuficientes después de limpieza para {symbol}: {len(df)} velas")
                         return None
                     
                     df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='s', utc=True)
@@ -126,10 +126,10 @@ def get_kucoin_data(symbol, timeframe):
                     
                     return df
                 else:
-                    logger.warning(f"Respuesta no válida de KuCoin para {symbol} ({timeframe}): {data.get('msg')}")
+                    logger.warning(f"Respuesta no válida de KuCoin para {symbol}: {data.get('msg')}")
                     return None
             else:
-                logger.warning(f"Error HTTP {response.status_code} para {symbol} ({timeframe}), reintento {attempt+1}/{MAX_RETRIES}")
+                logger.warning(f"Error HTTP {response.status_code} para {symbol}, reintento {attempt+1}/{MAX_RETRIES}")
         except Exception as e:
             logger.error(f"Error fetching data for {symbol} ({timeframe}): {str(e)}")
         
@@ -355,13 +355,11 @@ def format_xaxis_by_timeframe(timeframe, ax):
 def analyze_crypto(symbol, params, analyze_previous=False):
     df = get_kucoin_data(symbol, params['timeframe'])
     if df is None or len(df) < 100:
-        logger.warning(f"No hay suficientes datos para {symbol} en timeframe {params['timeframe']}")
         return None, None, 0, 0, 'Muy Bajo'
     
     try:
         df = calculate_indicators(df, params)
         if df is None or len(df) < 50:
-            logger.warning(f"No hay suficientes datos después de calcular indicadores para {symbol} en timeframe {params['timeframe']}")
             return None, None, 0, 0, 'Muy Bajo'
         
         if analyze_previous:
@@ -476,17 +474,15 @@ def update_task():
                 
                 params = analysis_state['params']
                 current_timeframe = params['timeframe']
-                
                 logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
                 
-                if current_timeframe not in analysis_state['timeframe_data'] or analysis_state['force_update']:
+                if current_timeframe not in analysis_state['timeframe_data']:
                     analysis_state['timeframe_data'][current_timeframe] = {
                         'long_signals': [],
                         'short_signals': [],
                         'scatter_data': [],
                         'historical_signals': deque(maxlen=100)
                     }
-                    analysis_state['force_update'] = False
                 
                 timeframe_data = analysis_state['timeframe_data'][current_timeframe]
                 long_signals = []
@@ -821,10 +817,6 @@ def update_params():
                     new_params[param] = value
         
         with analysis_state['lock']:
-            # Forzar actualización si cambia el timeframe
-            if new_params['timeframe'] != analysis_state['params']['timeframe']:
-                analysis_state['force_update'] = True
-            
             analysis_state['params'] = new_params
         
         # Forzar una actualización inmediata
