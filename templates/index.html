@@ -69,14 +69,29 @@
         .timeframe-option {
             font-weight: bold;
         }
-        .timeframe-status {
-            font-size: 0.8rem;
-            color: #6c757d;
-            margin-top: 5px;
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            flex-direction: column;
         }
     </style>
 </head>
 <body>
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mt-3">Actualizando datos para el nuevo timeframe. Esto puede tomar unos minutos...</p>
+    </div>
+
     <div class="container py-4">
         <header class="d-flex justify-content-between align-items-center mb-4 border-bottom">
             <div>
@@ -88,11 +103,6 @@
                         {{ 'Actualizando...' if is_updating else 'Datos listos' }}
                     </span>
                 </p>
-                {% if last_analyzed %}
-                <p class="text-muted timeframe-status">
-                    <i class="fas fa-clock"></i> Datos para {{ params.timeframe }} actualizados: {{ last_analyzed.strftime('%Y-%m-%d %H:%M:%S') }}
-                </p>
-                {% endif %}
                 {% if is_updating %}
                 <div class="progress-container">
                     <div class="progress" style="height: 10px;">
@@ -142,7 +152,7 @@
                         </span>
                     </p>
                     <p><strong>Zona horaria:</strong> Nueva York (UTC-4/5)</p>
-                    <p><strong>Actualización automática:</strong> Cada 5 minutos (ciclo entre timeframes)</p>
+                    <p><strong>Actualización automática:</strong> Cada 5 minutos</p>
                 </div>
             </div>
         </div>
@@ -214,7 +224,7 @@
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="fas fa-sync-alt"></i> Actualizar Parámetros y Recargar Datos
                         </button>
-                        <div class="form-text">Al cambiar la temporalidad, el sistema mostrará los datos disponibles para ese timeframe.</div>
+                        <div class="form-text">Al cambiar la temporalidad, el sistema analizará todas las criptomonedas con el nuevo timeframe.</div>
                     </div>
                 </div>
             </form>
@@ -332,11 +342,6 @@
                 </div>
                 {% endif %}
             </div>
-            {% if last_analyzed %}
-            <div class="card-footer text-muted">
-                <small>Datos actualizados: {{ last_analyzed.strftime('%Y-%m-%d %H:%M:%S') }}</small>
-            </div>
-            {% endif %}
         </div>
 
         <div class="row">
@@ -394,11 +399,6 @@
                         </div>
                         {% endif %}
                     </div>
-                    {% if last_analyzed %}
-                    <div class="card-footer text-muted">
-                        <small>Datos actualizados: {{ last_analyzed.strftime('%Y-%m-%d %H:%M:%S') }}</small>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
             
@@ -456,11 +456,6 @@
                         </div>
                         {% endif %}
                     </div>
-                    {% if last_analyzed %}
-                    <div class="card-footer text-muted">
-                        <small>Datos actualizados: {{ last_analyzed.strftime('%Y-%m-%d %H:%M:%S') }}</small>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -728,133 +723,83 @@
                 location.reload();
             }, 300000);
             
+            // Función para verificar el estado de actualización
+            function checkUpdateStatus() {
+                fetch('/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.is_updating) {
+                            // Mostrar progreso de actualización
+                            document.querySelector('.status-badge').className = 'status-badge status-updating';
+                            document.querySelector('.status-badge').textContent = 'Actualizando...';
+                            
+                            if (document.querySelector('.progress-bar')) {
+                                document.querySelector('.progress-bar').style.width = data.progress + '%';
+                                document.querySelector('.progress-bar').setAttribute('aria-valuenow', data.progress);
+                                document.querySelector('.progress-container small').textContent = 'Progreso: ' + data.progress + '%';
+                            }
+                            
+                            // Mostrar overlay de carga
+                            document.getElementById('loadingOverlay').style.display = 'flex';
+                            
+                            // Volver a verificar en 3 segundos
+                            setTimeout(checkUpdateStatus, 3000);
+                        } else {
+                            // Actualización completada, recargar la página
+                            document.querySelector('.status-badge').className = 'status-badge status-ready';
+                            document.querySelector('.status-badge').textContent = 'Datos listos';
+                            
+                            // Ocultar overlay de carga
+                            document.getElementById('loadingOverlay').style.display = 'none';
+                            
+                            // Solo recargar si el progreso era mayor a 0 (evitar recargas innecesarias)
+                            if (data.progress > 0) {
+                                setTimeout(() => {
+                                    location.reload();
+                                }, 1000);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking update status:', error);
+                        // Ocultar overlay en caso de error
+                        document.getElementById('loadingOverlay').style.display = 'none';
+                    });
+            }
+
             // Manejar el envío del formulario
-            document.getElementById('filters-form').addEventListener('submit', async function(e) {
+            document.getElementById('filters-form').addEventListener('submit', function(e) {
                 e.preventDefault();
+                
+                // Mostrar overlay de carga inmediatamente
+                document.getElementById('loadingOverlay').style.display = 'flex';
                 
                 const formData = new FormData(this);
                 const params = Object.fromEntries(formData.entries());
                 
-                try {
-                    const response = await fetch('/update_params', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: new URLSearchParams(params)
-                    });
-                    
-                    const result = await response.json();
-                    
+                fetch('/update_params', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams(params)
+                })
+                .then(response => response.json())
+                .then(result => {
                     if (result.status === 'success') {
-                        alert('Parámetros actualizados correctamente. La página se recargará en 3 segundos.');
-                        setTimeout(() => {
-                            location.reload();
-                        }, 3000);
+                        // Iniciar verificación de estado de actualización
+                        setTimeout(checkUpdateStatus, 1000);
                     } else {
                         alert('Error al actualizar parámetros: ' + result.message);
+                        document.getElementById('loadingOverlay').style.display = 'none';
                     }
-                } catch (error) {
+                })
+                .catch(error => {
                     alert('Error de conexión: ' + error.message);
-                }
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                });
             });
         });
     </script>
-<script>
-// Función para verificar el estado de actualización
-function checkUpdateStatus() {
-    fetch('/status')
-        .then(response => response.json())
-        .then(data => {
-            if (data.is_updating) {
-                // Mostrar progreso de actualización
-                document.querySelector('.status-badge').className = 'status-badge status-updating';
-                document.querySelector('.status-badge').textContent = 'Actualizando...';
-                
-                if (document.querySelector('.progress-bar')) {
-                    document.querySelector('.progress-bar').style.width = data.progress + '%';
-                    document.querySelector('.progress-bar').setAttribute('aria-valuenow', data.progress);
-                    document.querySelector('.progress-container small').textContent = 'Progreso: ' + data.progress + '%';
-                }
-                
-                // Volver a verificar en 3 segundos
-                setTimeout(checkUpdateStatus, 3000);
-            } else {
-                // Actualización completada, recargar la página
-                document.querySelector('.status-badge').className = 'status-badge status-ready';
-                document.querySelector('.status-badge').textContent = 'Datos listos';
-                
-                // Solo recargar si el progreso era mayor a 0 (evitar recargas innecesarias)
-                if (data.progress > 0) {
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1000);
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error checking update status:', error);
-        });
-}
-
-// Iniciar verificación de estado cuando se envía el formulario
-document.getElementById('filters-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(this);
-    const params = Object.fromEntries(formData.entries());
-    
-    // Mostrar mensaje de actualización
-    document.querySelector('.status-badge').className = 'status-badge status-updating';
-    document.querySelector('.status-badge').textContent = 'Actualizando...';
-    
-    if (!document.querySelector('.progress-container')) {
-        const progressHtml = `
-            <div class="progress-container">
-                <div class="progress" style="height: 10px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" 
-                         style="width: 0%;" 
-                         aria-valuenow="0" 
-                         aria-valuemin="0" 
-                         aria-valuemax="100">
-                    </div>
-                </div>
-                <small>Progreso: 0%</small>
-            </div>
-        `;
-        document.querySelector('.status-badge').insertAdjacentHTML('afterend', progressHtml);
-    }
-    
-    fetch('/update_params', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams(params)
-    })
-    .then(response => response.json())
-    .then(result => {
-        if (result.status === 'success') {
-            // Iniciar verificación de estado de actualización
-            setTimeout(checkUpdateStatus, 1000);
-        } else {
-            alert('Error al actualizar parámetros: ' + result.message);
-            document.querySelector('.status-badge').className = 'status-badge status-ready';
-            document.querySelector('.status-badge').textContent = 'Datos listos';
-        }
-    })
-    .catch(error => {
-        alert('Error de conexión: ' + error.message);
-        document.querySelector('.status-badge').className = 'status-badge status-ready';
-        document.querySelector('.status-badge').textContent = 'Datos listos';
-    });
-});
-
-// Auto-refresh cada 5 minutos (300 segundos)
-setTimeout(() => {
-    location.reload();
-}, 300000);
-</script>
 </body>
 </html>
