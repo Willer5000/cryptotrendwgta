@@ -771,14 +771,10 @@ function checkUpdateStatus() {
                 document.querySelector('.status-badge').className = 'status-badge status-updating';
                 document.querySelector('.status-badge').textContent = 'Actualizando...';
                 
-                // Actualizar barra de progreso
-                const progressBar = document.querySelector('.progress-bar');
-                const progressText = document.querySelector('.progress-container small');
-                
-                if (progressBar && progressText) {
-                    progressBar.style.width = data.progress + '%';
-                    progressBar.setAttribute('aria-valuenow', data.progress);
-                    progressText.textContent = 'Progreso: ' + data.progress + '%';
+                if (document.querySelector('.progress-bar')) {
+                    document.querySelector('.progress-bar').style.width = data.progress + '%';
+                    document.querySelector('.progress-bar').setAttribute('aria-valuenow', data.progress);
+                    document.querySelector('.progress-container small').textContent = 'Progreso: ' + data.progress + '%';
                 }
                 
                 // Volver a verificar en 3 segundos
@@ -788,7 +784,7 @@ function checkUpdateStatus() {
                 document.querySelector('.status-badge').className = 'status-badge status-ready';
                 document.querySelector('.status-badge').textContent = 'Datos listos';
                 
-                // Recargar la página si el progreso era mayor a 0
+                // Solo recargar si el progreso era mayor a 0 (evitar recargas innecesarias)
                 if (data.progress > 0) {
                     setTimeout(() => {
                         location.reload();
@@ -798,8 +794,6 @@ function checkUpdateStatus() {
         })
         .catch(error => {
             console.error('Error checking update status:', error);
-            // Reintentar después de un error
-            setTimeout(checkUpdateStatus, 5000);
         });
 }
 
@@ -814,7 +808,6 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
     document.querySelector('.status-badge').className = 'status-badge status-updating';
     document.querySelector('.status-badge').textContent = 'Actualizando...';
     
-    // Crear contenedor de progreso si no existe
     if (!document.querySelector('.progress-container')) {
         const progressHtml = `
             <div class="progress-container">
@@ -863,10 +856,24 @@ setTimeout(() => {
     location.reload();
 }, 300000);
 
-// Verificar estado al cargar la página
+// Botón de debug para ver el estado interno
 document.addEventListener('DOMContentLoaded', function() {
-    // Verificar si estamos en estado de actualización
-    setTimeout(checkUpdateStatus, 1000);
+    const debugBtn = document.createElement('button');
+    debugBtn.textContent = 'Debug Info';
+    debugBtn.className = 'btn btn-sm btn-outline-secondary';
+    debugBtn.style.position = 'fixed';
+    debugBtn.style.bottom = '10px';
+    debugBtn.style.right = '10px';
+    debugBtn.style.zIndex = '1000';
+    debugBtn.onclick = function() {
+        fetch('/debug')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Debug info:', data);
+                alert('Debug info disponible en la consola. Presiona F12 para verla.');
+            });
+    };
+    document.body.appendChild(debugBtn);
 });
 </script>
 </body>
