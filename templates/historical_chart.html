@@ -7,34 +7,13 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { 
-            padding: 20px; 
-            background-color: #0E1117; 
-            color: #F8F9FA;
-        }
-        .chart-container { 
-            max-width: 1400px; 
-            margin: 0 auto; 
-            background: #161B26; 
-            padding: 20px; 
-            border-radius: 8px; 
-            box-shadow: 0 0 20px rgba(0,0,0,0.3); 
-        }
-        .chart-title { 
-            text-align: center; 
-            margin-bottom: 20px; 
-        }
-        .chart-img { 
-            width: 100%; 
-            border: 1px solid #2A2F3B;
-            border-radius: 4px;
-        }
-        .back-btn { 
-            margin-top: 20px; 
-            text-align: center;
-        }
+        body { padding: 20px; background-color: #f8f9fa; }
+        .chart-container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .chart-title { text-align: center; margin-bottom: 20px; }
+        .chart-img { width: 100%; border: 1px solid #eee; }
+        .back-btn { margin-top: 20px; }
         .info-box {
-            background-color: #1A3B5C;
+            background-color: #e9f7fe;
             border-left: 4px solid #1e88e5;
             padding: 15px;
             border-radius: 4px;
@@ -49,19 +28,15 @@
             <p class="text-muted">Análisis de la vela anterior con indicadores técnicos</p>
             
             <div class="info-box">
-                <p><strong><i class="fas fa-info-circle"></i> Nota:</strong> Este gráfico muestra la señal que se generó en la vela anterior según el timeframe seleccionado.</p>
+                <p><strong>Nota:</strong> Este gráfico muestra la señal que se generó en la vela anterior según el timeframe seleccionado.</p>
                 <p>La línea vertical gris indica el inicio de la vela anterior analizada.</p>
             </div>
             
-            <div class="back-btn">
-                <a href="/" class="btn btn-primary">
-                    <i class="fas fa-arrow-left"></i> Volver al panel
-                </a>
-            </div>
+            <a href="/" class="btn btn-primary mt-3">
+                <i class="fas fa-arrow-left"></i> Volver al panel
+            </a>
         </div>
         <img src="data:image/png;base64,{{ plot_url }}" alt="Gráfico Histórico de {{ symbol }}" class="chart-img">
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
