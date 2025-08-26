@@ -469,10 +469,12 @@ def update_task():
         try:
             with analysis_state['lock']:
                 if analysis_state['force_update']:
-                    # Limpiar datos existentes para forzar una actualización completa
-                    analysis_state['timeframe_data'] = {}
+                    # Limpiar datos existentes para forzar nueva actualización
+                    current_timeframe = analysis_state['params']['timeframe']
+                    if current_timeframe in analysis_state['timeframe_data']:
+                        del analysis_state['timeframe_data'][current_timeframe]
                     analysis_state['force_update'] = False
-                    logger.info("Forzando actualización completa de datos...")
+                    logger.info(f"Forzando actualización para timeframe {current_timeframe}")
                 
                 analysis_state['is_updating'] = True
                 analysis_state['update_progress'] = 0
@@ -556,8 +558,7 @@ def update_task():
         except Exception as e:
             logger.error(f"Error crítico en actualización: {str(e)}")
             traceback.print_exc()
-            with analysis_state['lock']:
-                analysis_state['is_updating'] = False
+            analysis_state['is_updating'] = False
         
         # Esperar hasta la próxima actualización o hasta que se solicite una actualización
         analysis_state['update_event'].clear()
@@ -831,16 +832,17 @@ def update_params():
             # Forzar actualización si cambia el timeframe
             if new_params['timeframe'] != analysis_state['params']['timeframe']:
                 analysis_state['force_update'] = True
-                logger.info(f"Cambio de timeframe detectado: {analysis_state['params']['timeframe']} -> {new_params['timeframe']}")
+                logger.info(f"Timeframe cambiado de {analysis_state['params']['timeframe']} a {new_params['timeframe']}, forzando actualización")
             
             analysis_state['params'] = new_params
         
         # Forzar una actualización inmediata
         analysis_state['update_event'].set()
+        logger.info("Evento de actualización establecido")
         
         return jsonify({
             'status': 'success',
-            'message': 'Parámetros actualizados correctamente. El sistema comenzará a actualizar los datos para el nuevo timeframe.',
+            'message': 'Parámetros actualizados correctamente',
             'params': new_params
         })
     except Exception as e:
@@ -863,13 +865,6 @@ def status():
             'cryptos_analyzed': analysis_state['cryptos_analyzed'],
             'params': analysis_state['params']
         })
-
-@app.route('/force_update')
-def force_update():
-    with analysis_state['lock']:
-        analysis_state['force_update'] = True
-    analysis_state['update_event'].set()
-    return jsonify({'status': 'success', 'message': 'Actualización forzada iniciada'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
