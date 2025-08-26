@@ -838,7 +838,24 @@ function checkUpdateStatus() {
                 document.querySelector('.status-badge').className = 'status-badge status-updating';
                 document.querySelector('.status-badge').textContent = 'Actualizando...';
                 
-                if (document.querySelector('.progress-bar')) {
+                // Asegurarse de que el contenedor de progreso existe
+                if (!document.querySelector('.progress-container')) {
+                    const progressHtml = `
+                        <div class="progress-container">
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" 
+                                     style="width: ${data.progress}%;" 
+                                     aria-valuenow="${data.progress}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                </div>
+                            </div>
+                            <small>Progreso: ${data.progress}%</small>
+                        </div>
+                    `;
+                    document.querySelector('.status-badge').insertAdjacentHTML('afterend', progressHtml);
+                } else {
                     document.querySelector('.progress-bar').style.width = data.progress + '%';
                     document.querySelector('.progress-bar').setAttribute('aria-valuenow', data.progress);
                     document.querySelector('.progress-container small').textContent = 'Progreso: ' + data.progress + '%';
@@ -847,9 +864,14 @@ function checkUpdateStatus() {
                 // Volver a verificar en 3 segundos
                 setTimeout(checkUpdateStatus, 3000);
             } else {
-                // Actualización completada, recargar la página
+                // Actualización completada
                 document.querySelector('.status-badge').className = 'status-badge status-ready';
                 document.querySelector('.status-badge').textContent = 'Datos listos';
+                
+                // Eliminar el contenedor de progreso si existe
+                if (document.querySelector('.progress-container')) {
+                    document.querySelector('.progress-container').remove();
+                }
                 
                 // Solo recargar si el progreso era mayor a 0 (evitar recargas innecesarias)
                 if (data.progress > 0) {
@@ -861,6 +883,8 @@ function checkUpdateStatus() {
         })
         .catch(error => {
             console.error('Error checking update status:', error);
+            // Reintentar después de un tiempo en caso de error
+            setTimeout(checkUpdateStatus, 5000);
         });
 }
 
@@ -875,6 +899,7 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
     document.querySelector('.status-badge').className = 'status-badge status-updating';
     document.querySelector('.status-badge').textContent = 'Actualizando...';
     
+    // Mostrar contenedor de progreso
     if (!document.querySelector('.progress-container')) {
         const progressHtml = `
             <div class="progress-container">
@@ -909,12 +934,18 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
             alert('Error al actualizar parámetros: ' + result.message);
             document.querySelector('.status-badge').className = 'status-badge status-ready';
             document.querySelector('.status-badge').textContent = 'Datos listos';
+            if (document.querySelector('.progress-container')) {
+                document.querySelector('.progress-container').remove();
+            }
         }
     })
     .catch(error => {
         alert('Error de conexión: ' + error.message);
         document.querySelector('.status-badge').className = 'status-badge status-ready';
         document.querySelector('.status-badge').textContent = 'Datos listos';
+        if (document.querySelector('.progress-container')) {
+            document.querySelector('.progress-container').remove();
+        }
     });
 });
 
@@ -922,6 +953,12 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
 setTimeout(() => {
     location.reload();
 }, 300000);
+
+// Verificar el estado al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar si hay una actualización en curso
+    setTimeout(checkUpdateStatus, 1000);
+});
 </script>
 </body>
 </html>
