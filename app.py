@@ -33,7 +33,7 @@ CRYPTOS_FILE = 'cryptos.txt'
 CACHE_TIME = 300  # 5 minutos
 MAX_RETRIES = 3
 RETRY_DELAY = 2
-BATCH_SIZE = 10  # Reducido para mejor rendimiento
+BATCH_SIZE = 5  # Reducido para mejor rendimiento en Render
 
 # Zona horaria de Nueva York (UTC-4 o UTC-5 según horario de verano)
 try:
