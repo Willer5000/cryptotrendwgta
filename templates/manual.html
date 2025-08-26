@@ -7,27 +7,114 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background-color: #f8f9fa; padding-top: 20px; }
-        .manual-container { max-width: 1200px; margin: 0 auto 40px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
-        .section { margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
-        .section-title { color: #0d6efd; border-bottom: 2px solid #0d6efd; padding-bottom: 10px; margin-bottom: 20px; }
-        .indicator-card { transition: transform 0.3s; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .indicator-card:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .indicator-header { background-color: #0d6efd; color: white; padding: 15px; }
-        .indicator-body { padding: 20px; }
-        .back-btn { margin-top: 20px; text-align: center; }
-        .param-table th { background-color: #f8f9fa; }
-        .zone-explanation { padding: 15px; border-radius: 8px; margin-bottom: 15px; }
-        .zone-high-long { background-color: rgba(46, 204, 113, 0.1); border-left: 4px solid #2ecc71; }
-        .zone-mid-long { background-color: rgba(46, 204, 113, 0.05); border-left: 4px solid #2ecc71; }
-        .zone-high-short { background-color: rgba(231, 76, 60, 0.1); border-left: 4px solid #e74c3c; }
-        .zone-mid-short { background-color: rgba(231, 76, 60, 0.05); border-left: 4px solid #e74c3c; }
-        .zone-neutral { background-color: rgba(255, 235, 59, 0.1); border-left: 4px solid #ffeb3b; }
-        .risk-matrix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
-        .risk-card { padding: 15px; border-radius: 8px; text-align: center; }
-        .risk-low { background-color: rgba(46, 204, 113, 0.2); }
-        .risk-medium { background-color: rgba(255, 235, 59, 0.2); }
-        .risk-high { background-color: rgba(231, 76, 60, 0.2); }
+        body { 
+            background-color: #0E1117; 
+            color: #F8F9FA;
+            padding-top: 20px; 
+        }
+        .manual-container { 
+            max-width: 1200px; 
+            margin: 0 auto 40px; 
+            background: #161B26; 
+            padding: 30px; 
+            border-radius: 8px; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.3); 
+        }
+        .section { 
+            margin-bottom: 40px; 
+            padding-bottom: 20px; 
+            border-bottom: 1px solid #2A2F3B; 
+        }
+        .section-title { 
+            color: #4A90E2; 
+            border-bottom: 2px solid #4A90E2; 
+            padding-bottom: 10px; 
+            margin-bottom: 20px; 
+        }
+        .indicator-card { 
+            transition: transform 0.3s; 
+            border: 1px solid #2A2F3B; 
+            border-radius: 8px; 
+            overflow: hidden; 
+            margin-bottom: 20px; 
+            background: #1A1F2C;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+        }
+        .indicator-card:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2); 
+        }
+        .indicator-header { 
+            background-color: #4A90E2; 
+            color: white; 
+            padding: 15px; 
+        }
+        .indicator-body { 
+            padding: 20px; 
+        }
+        .back-btn { 
+            margin-top: 20px; 
+            text-align: center; 
+        }
+        .param-table th { 
+            background-color: #1A1F2C; 
+            color: #F8F9FA;
+        }
+        .param-table td {
+            color: #F8F9FA;
+            background-color: #161B26;
+        }
+        .zone-explanation { 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin-bottom: 15px; 
+            background: #1A1F2C;
+        }
+        .zone-high-long { 
+            background-color: rgba(46, 204, 113, 0.1); 
+            border-left: 4px solid #2ecc71; 
+        }
+        .zone-mid-long { 
+            background-color: rgba(46, 204, 113, 0.05); 
+            border-left: 4px solid #2ecc71; 
+        }
+        .zone-high-short { 
+            background-color: rgba(231, 76, 60, 0.1); 
+            border-left: 4px solid #e74c3c; 
+        }
+        .zone-mid-short { 
+            background-color: rgba(231, 76, 60, 0.05); 
+            border-left: 4px solid #e74c3c; 
+        }
+        .zone-neutral { 
+            background-color: rgba(255, 235, 59, 0.1); 
+            border-left: 4px solid #ffeb3b; 
+        }
+        .risk-matrix { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 10px; 
+            margin: 20px 0; 
+        }
+        .risk-card { 
+            padding: 15px; 
+            border-radius: 8px; 
+            text-align: center; 
+        }
+        .risk-low { 
+            background-color: rgba(46, 204, 113, 0.2); 
+        }
+        .risk-medium { 
+            background-color: rgba(255, 235, 59, 0.2); 
+        }
+        .risk-high { 
+            background-color: rgba(231, 76, 60, 0.2); 
+        }
+        .alert {
+            background-color: #1A3B5C;
+            border: 1px solid #2A2F3B;
+            color: #F8F9FA;
+        }
     </style>
 </head>
 <body>
@@ -39,7 +126,7 @@
         
         <div class="section">
             <h2 class="section-title"><i class="fas fa-lightbulb"></i> Conceptos Clave del Sistema</h2>
-            <p>Este sistema automatizado analiza las 150 principales criptomonedas utilizando múltiples indicadores técnicos para identificar oportunidades de trading de alta probabilidad. El sistema combina:</p>
+            <p>Este sistema automatizado analiza las principales criptomonedas utilizando múltiples indicadores técnicos para identificar oportunidades de trading de alta probabilidad. El sistema combina:</p>
             
             <div class="row">
                 <div class="col-md-6">
@@ -50,9 +137,10 @@
                         <div class="indicator-body">
                             <p>Identificamos la dirección del mercado usando:</p>
                             <ul>
-                                <li><strong>EMAs (9 y 20 períodos):</strong> Cruce de medias para determinar tendencia</li>
+                                <li><strong>EMAs (9 y 21 períodos):</strong> Cruce de medias para determinar tendencia</li>
                                 <li><strong>ADX (Índice Direccional Medio):</strong> Fuerza de la tendencia</li>
                                 <li><strong>Soportes y Resistencias:</strong> Niveles clave de precio</li>
+                                <li><strong>Tendencia del Mercado:</strong> Análisis de BTC dominance y capitalización</li>
                             </ul>
                             <p>Una tendencia fuerte aumenta significativamente la probabilidad de éxito en las operaciones.</p>
                         </div>
@@ -70,6 +158,7 @@
                                 <li><strong>RSI (Índice de Fuerza Relativa):</strong> Sobrecarga/sobreventa y divergencias</li>
                                 <li><strong>Análisis de Volumen:</strong> Confirmación de quiebres y tendencias</li>
                                 <li><strong>Quiebres de Estructura:</strong> Ruptura de soportes/resistencias</li>
+                                <li><strong>Patrones de Velas:</strong> Confirmación de reversión o continuación</li>
                             </ul>
                             <p>El volumen es el combustible que impulsa los movimientos del mercado.</p>
                         </div>
@@ -94,7 +183,7 @@
                                 <li><strong>50-75:</strong> Tendencia muy fuerte (poco común en criptos)</li>
                                 <li><strong>75-100:</strong> Tendencia extremadamente fuerte (raramente alcanzado)</li>
                             </ul>
-                            <p>Se usa con +DI y -DI para determinar dirección, pero nuestro sistema lo simplifica combinándolo con EMAs.</p>
+                            <p>Se usa con +DI y -DI para determinar dirección. Nuestro sistema requiere ADX > 25 para considerar una tendencia válida.</p>
                         </div>
                     </div>
                 </div>
@@ -129,12 +218,12 @@
                             <p>Indicadores de tendencia que dan más peso a los precios recientes:</p>
                             <ul>
                                 <li><strong>EMA Rápida (9):</strong> Responde rápidamente a cambios de precio</li>
-                                <li><strong>EMA Lenta (20):</strong> Suaviza las fluctuaciones a corto plazo</li>
+                                <li><strong>EMA Lenta (21):</strong> Suaviza las fluctuaciones a corto plazo</li>
                             </ul>
                             <p>Reglas de trading:</p>
                             <ul>
-                                <li><strong>Cruce Alcista:</strong> EMA9 > EMA20 (señal LONG)</li>
-                                <li><strong>Cruce Bajista:</strong> EMA9 < EMA20 (señal SHORT)</li>
+                                <li><strong>Cruce Alcista:</strong> EMA9 > EMA21 (señal LONG)</li>
+                                <li><strong>Cruce Bajista:</strong> EMA9 < EMA21 (señal SHORT)</li>
                                 <li><strong>Separación Creciente:</strong> Confirmación de fortaleza de tendencia</li>
                             </ul>
                             <p>Las EMAs también actúan como soportes dinámicos en tendencias alcistas y resistencias en bajistas.</p>
@@ -157,8 +246,8 @@
                             </ul>
                             <p>Nuestro sistema detecta estos niveles usando:</p>
                             <ul>
-                                <li>Máximos y mínimos históricos en una ventana configurable</li>
-                                <li>Agrupamiento de precios con alto volumen (Volume Profile)</li>
+                                <li>Máximos y mínimos locales en una ventana de 20 velas</li>
+                                <li>Agrupamiento de precios con alto volumen</li>
                                 <li>Niveles psicológicos (precios redondos)</li>
                             </ul>
                             <p>Los quiebres de estos niveles con volumen son señales poderosas.</p>
@@ -178,8 +267,9 @@
                                 <li><strong>Take Profit:</strong> Objetivos escalonados (TP1, TP2, TP3)</li>
                                 <li><strong>Ratio Riesgo/Beneficio:</strong> Mínimo 1:3</li>
                                 <li><strong>Tamaño de Posición:</strong> Máximo 2% del capital por operación</li>
+                                <li><strong>Diversificación:</strong> Máximo 5 operaciones simultáneas</li>
                             </ul>
-                            <p>El sistema calcula automáticamente SL y TP basados en la volatilidad (ATR) y estructura de mercado.</p>
+                            <p>El sistema calcula automáticamente SL y TP basados en la estructura de mercado.</p>
                         </div>
                     </div>
                 </div>
@@ -200,6 +290,7 @@
                                 <li>Divergencia alcista detectada en el RSI (precio hace mínimos más bajos mientras RSI hace mínimos más altos)</li>
                                 <li>Posterior ruptura de una resistencia clave con aumento de volumen</li>
                                 <li>Confirmación con cruce alcista de EMAs y ADX > 25</li>
+                                <li>Volumen mínimo 1.2x del promedio</li>
                             </ul>
                             
                             <h5>Ruptura Bajista (SHORT):</h5>
@@ -207,6 +298,7 @@
                                 <li>Divergencia bajista detectada en el RSI (precio hace máximos más altos mientras RSI hace máximos más bajos)</li>
                                 <li>Posterior ruptura de un soporte clave con aumento de volumen</li>
                                 <li>Confirmación con cruce bajista de EMAs y ADX > 25</li>
+                                <li>Volumen mínimo 1.2x del promedio</li>
                             </ul>
                             
                             <p>Esta combinación de factores aumenta significativamente la probabilidad de éxito de la operación y es una de las señales más fuertes que busca nuestro sistema.</p>
@@ -227,11 +319,11 @@
                         <p>Las criptos en esta zona tienen alta probabilidad de operaciones LONG. Características:</p>
                         <ul>
                             <li>Tendencia alcista fuerte (EMAs y ADX)</li>
-                            <li>Volumen alto o muy alto</li>
+                            <li>Volumen alto o muy alto (>1.8x promedio)</li>
                             <li>Precio cerca de soporte clave</li>
                             <li>Posible quiebre de resistencia o divergencia alcista</li>
                         </ul>
-                        <p><strong>Estrategia:</strong> Buscar entradas LONG con SL debajo del último soporte.</p>
+                        <p><strong>Estrategia:</strong> Buscar entradas LONG con SL debajo del último soporte. Tamaño de posición: 2%.</p>
                     </div>
                     
                     <div class="zone-explanation zone-mid-long">
@@ -239,11 +331,11 @@
                         <p><strong>Probabilidad LONG entre 33-66% y Probabilidad SHORT < 33%</strong></p>
                         <p>Oportunidades LONG moderadas. Validar con:</p>
                         <ul>
-                            <li>Confirmación de volumen</li>
+                            <li>Confirmación de volumen (>1.2x promedio)</li>
                             <li>Señales adicionales de momentum (RSI)</li>
                             <li>Patrones de velas de confirmación</li>
                         </ul>
-                        <p><strong>Estrategia:</strong> Operar con tamaño de posición reducido.</p>
+                        <p><strong>Estrategia:</strong> Operar con tamaño de posición reducido (1%).</p>
                     </div>
                     
                     <div class="zone-explanation zone-neutral">
@@ -266,11 +358,11 @@
                         <p>Las criptos en esta zona tienen alta probabilidad de operaciones SHORT. Características:</p>
                         <ul>
                             <li>Tendencia bajista fuerte (EMAs y ADX)</li>
-                            <li>Volumen alto o muy alto</li>
+                            <li>Volumen alto o muy alto (>1.8x promedio)</li>
                             <li>Precio cerca de resistencia clave</li>
                             <li>Posible quiebre de soporte o divergencia bajista</li>
                         </ul>
-                        <p><strong>Estrategia:</strong> Buscar entradas SHORT con SL encima de la última resistencia.</p>
+                        <p><strong>Estrategia:</strong> Buscar entradas SHORT con SL encima de la última resistencia. Tamaño de posición: 2%.</p>
                     </div>
                     
                     <div class="zone-explanation zone-mid-short">
@@ -278,22 +370,22 @@
                         <p><strong>Probabilidad SHORT entre 33-66% y Probabilidad LONG < 33%</strong></p>
                         <p>Oportunidades SHORT moderadas. Validar con:</p>
                         <ul>
-                            <li>Volumen en expansión en movimientos bajistas</li>
+                            <li>Volumen en expansión en movimientos bajistas (>1.2x promedio)</li>
                             <li>Rechazo en resistencias clave</li>
                             <li>Debilitamiento del momentum alcista</li>
                         </ul>
-                        <p><strong>Estrategia:</strong> Operar con tamaño de posición reducido.</p>
+                        <p><strong>Estrategia:</strong> Operar con tamaño de posición reducido (1%).</p>
                     </div>
                     
                     <div class="zone-explanation">
                         <h4><i class="fas fa-filter"></i> Filtro por Volumen</h4>
                         <p>Los puntos se colorean según el volumen relativo:</p>
                         <ul>
-                            <li><span style="color: #4CAF50">●</span> Muy Alto (Alta confiabilidad)</li>
-                            <li><span style="color: #2196F3">●</span> Alto (Buena confiabilidad)</li>
-                            <li><span style="color: #FFEB3B">●</span> Medio (Confianza moderada)</li>
-                            <li><span style="color: #FF9800">●</span> Bajo (Baja confiabilidad)</li>
-                            <li><span style="color: #F44336">●</span> Muy Bajo (Evitar operar)</li>
+                            <li><span style="color: #4CAF50">●</span> Muy Alto (Alta confiabilidad) >2.5x</li>
+                            <li><span style="color: #2196F3">●</span> Alto (Buena confiabilidad) 1.8-2.5x</li>
+                            <li><span style="color: #FFEB3B">●</span> Medio (Confianza moderada) 1.2-1.8x</li>
+                            <li><span style="color: #FF9800">●</span> Bajo (Baja confiabilidad) 0.8-1.2x</li>
+                            <li><span style="color: #F44336">●</span> Muy Bajo (Evitar operar) <0.8x</li>
                         </ul>
                         <p>Priorice operaciones con volumen Alto o Muy Alto para mayor probabilidad de éxito.</p>
                     </div>
@@ -329,9 +421,9 @@
                         </tr>
                         <tr>
                             <td>EMA Lenta</td>
-                            <td>20</td>
+                            <td>21</td>
                             <td>Períodos para EMA lenta</td>
-                            <td>20-50 para tendencias sólidas</td>
+                            <td>20-25 para tendencias sólidas</td>
                         </tr>
                         <tr>
                             <td>ADX Período</td>
@@ -353,15 +445,21 @@
                         </tr>
                         <tr>
                             <td>S/R Ventana</td>
-                            <td>50</td>
+                            <td>20</td>
                             <td>Velas para detectar S/R</td>
-                            <td>50-100 para marcos mayores</td>
+                            <td>20-30 para marcos menores</td>
                         </tr>
                         <tr>
                             <td>Máximo Riesgo</td>
-                            <td>1.5%</td>
+                            <td>1.0%</td>
                             <td>Máximo riesgo por operación</td>
                             <td>1-2% para gestión conservadora</td>
+                        </tr>
+                        <tr>
+                            <td>Mín. Volumen</td>
+                            <td>1.2x</td>
+                            <td>Mínimo volumen relativo</td>
+                            <td>1.2-1.5x para mayor confiabilidad</td>
                         </tr>
                     </tbody>
                 </table>
@@ -376,16 +474,19 @@
                     <h4>Riesgo Bajo</h4>
                     <p>Zona Alto Long/Short con volumen Muy Alto</p>
                     <p><strong>Tamaño: 2% capital</strong></p>
+                    <p><strong>Ratio R/R: 1:3 o mayor</strong></p>
                 </div>
                 <div class="risk-card risk-medium">
                     <h4>Riesgo Medio</h4>
                     <p>Zona Alto Long/Short con volumen Alto</p>
-                    <p><strong>Tamaño: 1% capital</strong></p>
+                    <p><strong>Tamaño: 1.5% capital</strong></p>
+                    <p><strong>Ratio R/R: 1:2.5</strong></p>
                 </div>
                 <div class="risk-card risk-high">
                     <h4>Riesgo Alto</h4>
                     <p>Zona Medio Long/Short o volumen Medio</p>
-                    <p><strong>Tamaño: 0.5% capital</strong></p>
+                    <p><strong>Tamaño: 1% capital</strong></p>
+                    <p><strong>Ratio R/R: 1:2</strong></p>
                 </div>
             </div>
             
@@ -398,6 +499,8 @@
                     <li>Tome beneficios escalonadamente (TP1, TP2, TP3)</li>
                     <li>No fuerce operaciones cuando el mercado está lateral</li>
                     <li>Revise el calendario económico para eventos de alta volatilidad</li>
+                    <li>Diversifique entre diferentes criptomonedas</li>
+                    <li>Considere la tendencia general del mercado (BTC dominance)</li>
                 </ol>
             </div>
         </div>
