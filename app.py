@@ -33,7 +33,7 @@ CRYPTOS_FILE = 'cryptos.txt'
 CACHE_TIME = 300  # 5 minutos
 MAX_RETRIES = 3
 RETRY_DELAY = 2
-BATCH_SIZE = 10  # Reducido para mejor rendimiento
+BATCH_SIZE = 5  # Reducido para mejor rendimiento
 
 # Zona horaria de Nueva York (UTC-4 o UTC-5 según horario de verano)
 try:
@@ -69,7 +69,8 @@ analysis_state = {
     'lock': Lock(),
     'timeframe_data': {},
     'update_event': Event(),
-    'force_update': False
+    'force_update': False,
+    'current_timeframe': DEFAULTS['timeframe']
 }
 
 # Leer lista de criptomonedas
@@ -467,6 +468,12 @@ def update_task():
     while True:
         try:
             with analysis_state['lock']:
+                if analysis_state['force_update']:
+                    # Limpiar datos existentes para forzar una actualización completa
+                    analysis_state['timeframe_data'] = {}
+                    analysis_state['force_update'] = False
+                    logger.info("Forzando actualización completa de datos...")
+                
                 analysis_state['is_updating'] = True
                 analysis_state['update_progress'] = 0
                 
@@ -479,14 +486,13 @@ def update_task():
                 
                 logger.info(f"Iniciando análisis de {total} criptomonedas para timeframe {current_timeframe}...")
                 
-                if current_timeframe not in analysis_state['timeframe_data'] or analysis_state['force_update']:
+                if current_timeframe not in analysis_state['timeframe_data']:
                     analysis_state['timeframe_data'][current_timeframe] = {
                         'long_signals': [],
                         'short_signals': [],
                         'scatter_data': [],
                         'historical_signals': deque(maxlen=100)
                     }
-                    analysis_state['force_update'] = False
                 
                 timeframe_data = analysis_state['timeframe_data'][current_timeframe]
                 long_signals = []
@@ -550,7 +556,8 @@ def update_task():
         except Exception as e:
             logger.error(f"Error crítico en actualización: {str(e)}")
             traceback.print_exc()
-            analysis_state['is_updating'] = False
+            with analysis_state['lock']:
+                analysis_state['is_updating'] = False
         
         # Esperar hasta la próxima actualización o hasta que se solicite una actualización
         analysis_state['update_event'].clear()
@@ -824,6 +831,7 @@ def update_params():
             # Forzar actualización si cambia el timeframe
             if new_params['timeframe'] != analysis_state['params']['timeframe']:
                 analysis_state['force_update'] = True
+                logger.info(f"Cambio de timeframe detectado: {analysis_state['params']['timeframe']} -> {new_params['timeframe']}")
             
             analysis_state['params'] = new_params
         
@@ -832,7 +840,7 @@ def update_params():
         
         return jsonify({
             'status': 'success',
-            'message': 'Parámetros actualizados correctamente',
+            'message': 'Parámetros actualizados correctamente. El sistema comenzará a actualizar los datos para el nuevo timeframe.',
             'params': new_params
         })
     except Exception as e:
@@ -855,6 +863,13 @@ def status():
             'cryptos_analyzed': analysis_state['cryptos_analyzed'],
             'params': analysis_state['params']
         })
+
+@app.route('/force_update')
+def force_update():
+    with analysis_state['lock']:
+        analysis_state['force_update'] = True
+    analysis_state['update_event'].set()
+    return jsonify({'status': 'success', 'message': 'Actualización forzada iniciada'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
