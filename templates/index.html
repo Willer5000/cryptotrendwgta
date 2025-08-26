@@ -855,26 +855,6 @@ document.getElementById('filters-form').addEventListener('submit', function(e) {
 setTimeout(() => {
     location.reload();
 }, 300000);
-
-// Botón de debug para ver el estado interno
-document.addEventListener('DOMContentLoaded', function() {
-    const debugBtn = document.createElement('button');
-    debugBtn.textContent = 'Debug Info';
-    debugBtn.className = 'btn btn-sm btn-outline-secondary';
-    debugBtn.style.position = 'fixed';
-    debugBtn.style.bottom = '10px';
-    debugBtn.style.right = '10px';
-    debugBtn.style.zIndex = '1000';
-    debugBtn.onclick = function() {
-        fetch('/debug')
-            .then(response => response.json())
-            .then(data => {
-                console.log('Debug info:', data);
-                alert('Debug info disponible en la consola. Presiona F12 para verla.');
-            });
-    };
-    document.body.appendChild(debugBtn);
-});
 </script>
 </body>
 </html>
