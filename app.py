@@ -6,7 +6,7 @@ import numpy as np
 import json
 import threading
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -14,186 +14,152 @@ import matplotlib.dates as mdates
 import io
 import base64
 import logging
-import traceback
-from threading import Lock, Event, Timer
+from threading import Lock, Event
 from collections import deque
 import pytz
-from functools import lru_cache
-import hashlib
 
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
-app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 CRYPTOS_FILE = 'cryptos.txt'
 CACHE_TIME = 300
 MAX_RETRIES = 3
 RETRY_DELAY = 2
-BATCH_SIZE = 10
+BATCH_SIZE = 3
 
 try:
     NY_TZ = pytz.timezone('America/New_York')
 except:
     NY_TZ = pytz.timezone('UTC')
-    logger.warning("No se pudo cargar la zona horaria de NY, usando UTC")
 
 DEFAULTS = {
     'timeframe': '1h',
     'ema_fast': 9,
-    'ema_slow': 21,
+    'ema_slow': 20,
     'adx_period': 14,
     'adx_level': 25,
     'rsi_period': 14,
-    'sr_window': 20,
-    'divergence_lookback': 14,
+    'sr_window': 50,
+    'divergence_lookback': 20,
     'max_risk_percent': 1.5,
     'price_distance_threshold': 1.0,
-    'atr_period': 14,
-    'volume_multiplier': 1.5
+    'volume_filter': 1.0
 }
 
-class AnalysisState:
+class TradingSystem:
     def __init__(self):
         self.lock = Lock()
+        self.update_event = Event()
         self.timeframe_data = {}
+        self.params = DEFAULTS.copy()
         self.last_update = datetime.now()
         self.is_updating = False
         self.update_progress = 0
-        self.params = DEFAULTS.copy()
-        self.update_event = Event()
-        self.symbols = self.load_cryptos()
-        self.data_cache = {}
-        self.cache_expiry = {}
+        self.cryptos_analyzed = 0
         
     def load_cryptos(self):
         try:
             with open(CRYPTOS_FILE, 'r') as f:
-                cryptos = [line.strip() for line in f.readlines() if line.strip()]
-                logger.info(f"Cargadas {len(cryptos)} criptomonedas")
-                return cryptos
-        except Exception as e:
-            logger.error(f"Error cargando criptomonedas: {str(e)}")
-            return ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'AVAX', 'DOT', 'LINK', 'MATIC']
-    
-    def get_cached_data(self, symbol, timeframe):
-        cache_key = f"{symbol}_{timeframe}"
-        now = time.time()
-        
-        if cache_key in self.data_cache and now - self.cache_expiry.get(cache_key, 0) < CACHE_TIME:
-            return self.data_cache[cache_key]
-        return None
-    
-    def set_cached_data(self, symbol, timeframe, data):
-        cache_key = f"{symbol}_{timeframe}"
-        self.data_cache[cache_key] = data
-        self.cache_expiry[cache_key] = time.time()
+                return [line.strip() for line in f.readlines() if line.strip()]
+        except:
+            return ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'AVAX', 'DOT', 'LINK']
 
-analysis_state = AnalysisState()
+trading_system = TradingSystem()
 
-def get_kucoin_data(symbol, timeframe, retry=0):
-    cached_data = analysis_state.get_cached_data(symbol, timeframe)
-    if cached_data is not None:
-        return cached_data.copy()
-
+def get_kucoin_data(symbol, timeframe, limit=100):
     tf_mapping = {
-        '15m': '15min', '30m': '30min', '1h': '1hour', 
+        '15m': '15min', '30m': '30min', '1h': '1hour',
         '2h': '2hour', '4h': '4hour', '1d': '1day', '1w': '1week'
     }
     
     kucoin_tf = tf_mapping.get(timeframe, '1hour')
     url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}-USDT"
     
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('code') == '200000' and data.get('data'):
-                candles = data['data']
-                if not candles:
-                    return None
-                
-                candles.reverse()
-                df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
-                
-                for col in ['open', 'close', 'high', 'low', 'volume']:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                
-                df = df.dropna()
-                
-                if len(df) < 50:
-                    return None
-                
-                df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='s', utc=True)
-                df['timestamp'] = df['timestamp'].dt.tz_convert(NY_TZ)
-                
-                analysis_state.set_cached_data(symbol, timeframe, df)
-                return df
-        else:
-            logger.warning(f"HTTP {response.status_code} for {symbol}")
-    except Exception as e:
-        logger.error(f"Error fetching {symbol}: {str(e)}")
-    
-    if retry < MAX_RETRIES:
-        time.sleep(RETRY_DELAY)
-        return get_kucoin_data(symbol, timeframe, retry + 1)
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('code') == '200000' and data.get('data'):
+                    candles = data['data'][-limit:] if limit else data['data']
+                    candles.reverse()
+                    
+                    if len(candles) < 20:
+                        return None
+                    
+                    df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
+                    
+                    for col in ['open', 'close', 'high', 'low', 'volume']:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                    
+                    df = df.dropna()
+                    
+                    if len(df) < 20:
+                        return None
+                    
+                    df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='s', utc=True)
+                    df['timestamp'] = df['timestamp'].dt.tz_convert(NY_TZ)
+                    
+                    return df
+        except Exception as e:
+            logger.warning(f"Intento {attempt+1} para {symbol} falló: {str(e)}")
+            time.sleep(RETRY_DELAY)
     
     return None
 
 def calculate_ema(series, window):
-    if len(series) < window:
-        return pd.Series([np.nan] * len(series))
     return series.ewm(span=window, adjust=False).mean()
 
-def calculate_rsi(series, period=14):
+def calculate_rsi(series, window=14):
     delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi.fillna(50)
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    
+    avg_gain = gain.ewm(com=window-1, min_periods=window).mean()
+    avg_loss = loss.ewm(com=window-1, min_periods=window).mean()
+    
+    rs = avg_gain / (avg_loss + 1e-10)
+    return 100 - (100 / (1 + rs))
 
-def calculate_adx(high, low, close, period):
-    plus_dm = high.diff()
-    minus_dm = low.diff().abs()
+def calculate_adx(high, low, close, window):
+    tr = pd.DataFrame()
+    tr['h-l'] = high - low
+    tr['h-pc'] = (high - close.shift()).abs()
+    tr['l-pc'] = (low - close.shift()).abs()
+    tr['tr'] = tr.max(axis=1)
     
-    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
-    minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+    atr = tr['tr'].rolling(window).mean()
     
-    tr1 = high - low
-    tr2 = (high - close.shift()).abs()
-    tr3 = (low - close.shift()).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    up = high - high.shift()
+    down = low.shift() - low
     
-    atr = tr.rolling(period).mean()
-    plus_di = 100 * (plus_dm.rolling(period).mean() / atr)
-    minus_di = 100 * (minus_dm.rolling(period).mean() / atr)
+    plus_dm = np.where((up > down) & (up > 0), up, 0)
+    minus_dm = np.where((down > up) & (down > 0), down, 0)
     
-    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
-    adx = dx.rolling(period).mean()
+    plus_di = 100 * (pd.Series(plus_dm).rolling(window).mean() / atr)
+    minus_di = 100 * (pd.Series(minus_dm).rolling(window).mean() / atr)
     
-    return adx.fillna(0), plus_di.fillna(0), minus_di.fillna(0)
-
-def calculate_atr(high, low, close, period):
-    tr1 = high - low
-    tr2 = (high - close.shift()).abs()
-    tr3 = (low - close.shift()).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.rolling(period).mean()
-    return atr.fillna(0)
+    dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10))
+    adx = dx.rolling(window).mean()
+    
+    return adx, plus_di, minus_di
 
 def calculate_indicators(df, params):
     try:
-        df = df.copy()
         df['ema_fast'] = calculate_ema(df['close'], params['ema_fast'])
         df['ema_slow'] = calculate_ema(df['close'], params['ema_slow'])
         df['rsi'] = calculate_rsi(df['close'], params['rsi_period'])
-        df['adx'], df['plus_di'], df['minus_di'] = calculate_adx(
+        
+        adx, plus_di, minus_di = calculate_adx(
             df['high'], df['low'], df['close'], params['adx_period']
         )
-        df['atr'] = calculate_atr(df['high'], df['low'], df['close'], params['atr_period'])
+        df['adx'] = adx
+        df['plus_di'] = plus_di
+        df['minus_di'] = minus_di
+        
         return df.dropna()
     except Exception as e:
         logger.error(f"Error calculando indicadores: {str(e)}")
@@ -201,161 +167,135 @@ def calculate_indicators(df, params):
 
 def find_support_resistance(df, window=20):
     try:
-        rolling_high = df['high'].rolling(window=window, center=True).max()
-        rolling_low = df['low'].rolling(window=window, center=True).min()
+        pivot_range = 3
+        df['pivot_low'] = df['low'].rolling(window=pivot_range*2+1, center=True).min()
+        df['pivot_high'] = df['high'].rolling(window=pivot_range*2+1, center=True).max()
         
-        resistance_levels = df[df['high'] == rolling_high]['high'].unique()
-        support_levels = df[df['low'] == rolling_low]['low'].unique()
+        supports = df[df['low'] == df['pivot_low']]['low'].tail(5).values
+        resistances = df[df['high'] == df['pivot_high']]['high'].tail(5).values
         
-        return support_levels.tolist(), resistance_levels.tolist()
-    except Exception as e:
-        logger.error(f"Error finding S/R: {str(e)}")
+        return supports, resistances
+    except:
         return [], []
 
-def classify_volume(current_vol, historical_vol):
-    if historical_vol == 0:
-        return "Muy Bajo"
-    
-    ratio = current_vol / historical_vol
-    if ratio > 3.0: return "Muy Alto"
-    if ratio > 2.0: return "Alto"
-    if ratio > 1.5: return "Medio"
-    if ratio > 1.0: return "Bajo"
-    return "Muy Bajo"
+def classify_volume(current_vol, avg_vol):
+    try:
+        if avg_vol <= 0:
+            return 'Muy Bajo'
+        
+        ratio = current_vol / avg_vol
+        if ratio > 2.0: return 'Muy Alto'
+        if ratio > 1.5: return 'Alto'
+        if ratio > 1.0: return 'Medio'
+        if ratio > 0.5: return 'Bajo'
+        return 'Muy Bajo'
+    except:
+        return 'Muy Bajo'
 
-def detect_divergence(price, indicator, lookback=14):
-    if len(price) < lookback + 5:
+def detect_divergence(df, lookback=14):
+    try:
+        if len(df) < lookback + 5:
+            return None
+            
+        price_highs = df['high'].rolling(5).max().dropna()
+        price_lows = df['low'].rolling(5).min().dropna()
+        rsi_highs = df['rsi'].rolling(5).max().dropna()
+        rsi_lows = df['rsi'].rolling(5).min().dropna()
+        
+        if len(price_highs) < 2 or len(rsi_highs) < 2:
+            return None
+        
+        bearish_div = (price_highs.iloc[-1] > price_highs.iloc[-2] and 
+                      rsi_highs.iloc[-1] < rsi_highs.iloc[-2])
+        bullish_div = (price_lows.iloc[-1] < price_lows.iloc[-2] and 
+                      rsi_lows.iloc[-1] > rsi_lows.iloc[-2])
+        
+        if bearish_div:
+            return 'bearish'
+        elif bullish_div:
+            return 'bullish'
         return None
-    
-    price = price[-lookback:]
-    indicator = indicator[-lookback:]
-    
-    price_max_idx = price.idxmax()
-    price_min_idx = price.idxmin()
-    indicator_max_idx = indicator.idxmax()
-    indicator_min_idx = indicator.idxmin()
-    
-    if price_max_idx != indicator_max_idx and price[-1] > price.iloc[-2]:
-        return "bearish"
-    if price_min_idx != indicator_min_idx and price[-1] < price.iloc[-2]:
-        return "bullish"
-    
-    return None
-
-def calculate_distance_percent(price1, price2):
-    return abs(price1 - price2) / price1 * 100
-
-def get_previous_candle_start(timeframe):
-    now = datetime.now(NY_TZ)
-    
-    if timeframe.endswith('m'):
-        minutes = int(timeframe[:-1])
-        current_candle_start = now.replace(second=0, microsecond=0)
-        current_candle_start = current_candle_start - timedelta(
-            minutes=current_candle_start.minute % minutes,
-            seconds=current_candle_start.second
-        )
-        return current_candle_start - timedelta(minutes=minutes)
-    elif timeframe.endswith('h'):
-        hours = int(timeframe[:-1])
-        current_candle_start = now.replace(minute=0, second=0, microsecond=0)
-        current_candle_start = current_candle_start - timedelta(
-            hours=current_candle_start.hour % hours
-        )
-        return current_candle_start - timedelta(hours=hours)
-    elif timeframe.endswith('d'):
-        return (now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1))
-    elif timeframe.endswith('w'):
-        start_of_week = now - timedelta(days=now.weekday())
-        return start_of_week.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(weeks=1)
-    
-    return now - timedelta(hours=1)
+    except:
+        return None
 
 def analyze_crypto(symbol, params, analyze_previous=False):
-    df = get_kucoin_data(symbol, params['timeframe'])
-    if df is None or len(df) < 100:
+    df = get_kucoin_data(symbol, params['timeframe'], 100)
+    if df is None or len(df) < 50:
         return None, None, 0, 0, 'Muy Bajo'
     
     try:
         df = calculate_indicators(df, params)
-        if df is None or len(df) < 50:
+        if df is None or len(df) < 20:
             return None, None, 0, 0, 'Muy Bajo'
         
         current_idx = -2 if analyze_previous else -1
         last = df.iloc[current_idx]
-        prev = df.iloc[current_idx - 1] if len(df) > abs(current_idx) else last
         
-        avg_volume = df['volume'].rolling(20).mean().iloc[current_idx]
-        volume_class = classify_volume(last['volume'], avg_volume)
+        avg_vol = df['volume'].rolling(20).mean().iloc[current_idx]
+        volume_class = classify_volume(last['volume'], avg_vol)
         
         supports, resistances = find_support_resistance(df, params['sr_window'])
         
-        trend_up = last['ema_fast'] > last['ema_slow'] and last['adx'] > params['adx_level']
-        trend_down = last['ema_fast'] < last['ema_slow'] and last['adx'] > params['adx_level']
+        divergence = detect_divergence(df, params['divergence_lookback'])
         
-        divergence = detect_divergence(
-            df['close'].iloc[-params['divergence_lookback']:], 
-            df['rsi'].iloc[-params['divergence_lookback']:],
-            params['divergence_lookback']
-        )
+        trend_up = (last['ema_fast'] > last['ema_slow'] and 
+                   last['adx'] > params['adx_level'] and
+                   last['plus_di'] > last['minus_di'])
+        trend_down = (last['ema_fast'] < last['ema_slow'] and 
+                     last['adx'] > params['adx_level'] and
+                     last['minus_di'] > last['plus_di'])
         
         long_prob = 0
         short_prob = 0
         
-        if trend_up: long_prob += 30
+        if trend_up: long_prob += 40
         if last['rsi'] < 40: long_prob += 20
         if divergence == 'bullish': long_prob += 25
-        if volume_class in ['Alto', 'Muy Alto']: long_prob += 25
+        if volume_class in ['Alto', 'Muy Alto']: long_prob += 15
         
-        if trend_down: short_prob += 30
+        if trend_down: short_prob += 40
         if last['rsi'] > 60: short_prob += 20
         if divergence == 'bearish': short_prob += 25
-        if volume_class in ['Alto', 'Muy Alto']: short_prob += 25
+        if volume_class in ['Alto', 'Muy Alto']: short_prob += 15
         
         long_signal = None
         if long_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
-            atr = last['atr']
-            entry = last['close']
-            sl = entry - (2 * atr)
+            entry = last['close'] * 1.005
+            sl = min(supports) if len(supports) > 0 else last['close'] * 0.98
             risk = entry - sl
             
             long_signal = {
                 'symbol': symbol,
-                'price': round(entry, 4),
+                'price': round(last['close'], 4),
                 'entry': round(entry, 4),
                 'sl': round(sl, 4),
                 'tp1': round(entry + risk, 4),
-                'tp2': round(entry + (2 * risk), 4),
+                'tp2': round(entry + risk * 2, 4),
                 'volume': volume_class,
                 'adx': round(last['adx'], 1),
-                'distance': round(calculate_distance_percent(entry, last['close']), 2),
+                'distance': round(((entry - last['close']) / last['close']) * 100, 2),
                 'timestamp': datetime.now().isoformat(),
-                'type': 'LONG',
-                'timeframe': params['timeframe'],
-                'candle_timestamp': last['timestamp']
+                'type': 'LONG'
             }
         
         short_signal = None
         if short_prob >= 70 and volume_class in ['Alto', 'Muy Alto']:
-            atr = last['atr']
-            entry = last['close']
-            sl = entry + (2 * atr)
+            entry = last['close'] * 0.995
+            sl = max(resistances) if len(resistances) > 0 else last['close'] * 1.02
             risk = sl - entry
             
             short_signal = {
                 'symbol': symbol,
-                'price': round(entry, 4),
+                'price': round(last['close'], 4),
                 'entry': round(entry, 4),
                 'sl': round(sl, 4),
                 'tp1': round(entry - risk, 4),
-                'tp2': round(entry - (2 * risk), 4),
+                'tp2': round(entry - risk * 2, 4),
                 'volume': volume_class,
                 'adx': round(last['adx'], 1),
-                'distance': round(calculate_distance_percent(entry, last['close']), 2),
+                'distance': round(((last['close'] - entry) / last['close']) * 100, 2),
                 'timestamp': datetime.now().isoformat(),
-                'type': 'SHORT',
-                'timeframe': params['timeframe'],
-                'candle_timestamp': last['timestamp']
+                'type': 'SHORT'
             }
         
         return long_signal, short_signal, long_prob, short_prob, volume_class
@@ -363,40 +303,36 @@ def analyze_crypto(symbol, params, analyze_previous=False):
         logger.error(f"Error analizando {symbol}: {str(e)}")
         return None, None, 0, 0, 'Muy Bajo'
 
-def update_timeframe_data(timeframe):
-    with analysis_state.lock:
-        if timeframe not in analysis_state.timeframe_data:
-            analysis_state.timeframe_data[timeframe] = {
-                'long_signals': [],
-                'short_signals': [],
-                'scatter_data': [],
-                'historical_signals': deque(maxlen=50),
-                'last_updated': datetime.now()
-            }
-        return analysis_state.timeframe_data[timeframe]
-
 def update_task():
     while True:
         try:
-            with analysis_state.lock:
-                analysis_state.is_updating = True
-                analysis_state.update_progress = 0
+            with trading_system.lock:
+                trading_system.is_updating = True
+                trading_system.update_progress = 0
                 
-                params = analysis_state.params.copy()
+                cryptos = trading_system.load_cryptos()
+                total = len(cryptos)
+                processed = 0
+                
+                params = trading_system.params
                 timeframe = params['timeframe']
-                symbols = analysis_state.symbols
-                total = len(symbols)
                 
-                timeframe_data = update_timeframe_data(timeframe)
+                if timeframe not in trading_system.timeframe_data:
+                    trading_system.timeframe_data[timeframe] = {
+                        'long_signals': [],
+                        'short_signals': [],
+                        'scatter_data': [],
+                        'historical_signals': []
+                    }
+                
+                tf_data = trading_system.timeframe_data[timeframe]
                 long_signals = []
                 short_signals = []
                 scatter_data = []
                 
-                previous_candle_start = get_previous_candle_start(timeframe)
-                
-                for i, symbol in enumerate(symbols):
+                for crypto in cryptos:
                     try:
-                        long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(symbol, params, False)
+                        long_sig, short_sig, long_prob, short_prob, vol = analyze_crypto(crypto, params)
                         
                         if long_sig:
                             long_signals.append(long_sig)
@@ -404,57 +340,57 @@ def update_task():
                             short_signals.append(short_sig)
                             
                         scatter_data.append({
-                            'symbol': symbol,
+                            'symbol': crypto,
                             'long_prob': long_prob,
                             'short_prob': short_prob,
                             'volume': vol
                         })
                         
-                        long_hist, short_hist, _, _, _ = analyze_crypto(symbol, params, True)
-                        
-                        if long_hist and long_hist.get('candle_timestamp') == previous_candle_start:
-                            timeframe_data['historical_signals'].append(long_hist)
-                        if short_hist and short_hist.get('candle_timestamp') == previous_candle_start:
-                            timeframe_data['historical_signals'].append(short_hist)
+                        long_prev, short_prev, _, _, _ = analyze_crypto(crypto, params, True)
+                        if long_prev:
+                            tf_data['historical_signals'].append(long_prev)
+                        if short_prev:
+                            tf_data['historical_signals'].append(short_prev)
                             
                     except Exception as e:
-                        logger.error(f"Error procesando {symbol}: {str(e)}")
+                        logger.error(f"Error procesando {crypto}: {str(e)}")
                     
-                    analysis_state.update_progress = int((i + 1) / total * 100)
+                    processed += 1
+                    progress = int((processed / total) * 100)
+                    trading_system.update_progress = progress
+                    time.sleep(0.5)
                 
-                timeframe_data['long_signals'] = sorted(long_signals, key=lambda x: x['adx'], reverse=True)
-                timeframe_data['short_signals'] = sorted(short_signals, key=lambda x: x['adx'], reverse=True)
-                timeframe_data['scatter_data'] = scatter_data
-                timeframe_data['last_updated'] = datetime.now()
+                tf_data['long_signals'] = sorted(long_signals, key=lambda x: x['adx'], reverse=True)
+                tf_data['short_signals'] = sorted(short_signals, key=lambda x: x['adx'], reverse=True)
+                tf_data['scatter_data'] = scatter_data
+                tf_data['historical_signals'] = tf_data['historical_signals'][-50:]
                 
-                analysis_state.last_update = datetime.now()
-                analysis_state.is_updating = False
-                
-                logger.info(f"Actualización completada para {timeframe}. "
-                           f"LONG: {len(long_signals)}, SHORT: {len(short_signals)}")
+                trading_system.cryptos_analyzed = total
+                trading_system.last_update = datetime.now()
+                trading_system.is_updating = False
                 
         except Exception as e:
-            logger.error(f"Error crítico en update_task: {str(e)}")
-            analysis_state.is_updating = False
+            logger.error(f"Error en update_task: {str(e)}")
+            trading_system.is_updating = False
         
-        analysis_state.update_event.clear()
-        analysis_state.update_event.wait(CACHE_TIME)
+        trading_system.update_event.clear()
+        trading_system.update_event.wait(CACHE_TIME)
 
 update_thread = threading.Thread(target=update_task, daemon=True)
 update_thread.start()
 
 @app.route('/')
 def index():
-    with analysis_state.lock:
-        params = analysis_state.params
+    with trading_system.lock:
+        params = trading_system.params
         timeframe = params['timeframe']
         
-        if timeframe in analysis_state.timeframe_data:
-            data = analysis_state.timeframe_data[timeframe]
-            long_signals = data['long_signals'][:100]
-            short_signals = data['short_signals'][:100]
-            scatter_data = data['scatter_data']
-            historical_signals = list(data['historical_signals'])[-20:]
+        if timeframe in trading_system.timeframe_data:
+            tf_data = trading_system.timeframe_data[timeframe]
+            long_signals = tf_data['long_signals'][:50]
+            short_signals = tf_data['short_signals'][:50]
+            scatter_data = tf_data['scatter_data']
+            historical_signals = tf_data['historical_signals'][-20:]
         else:
             long_signals = []
             short_signals = []
@@ -474,23 +410,23 @@ def index():
             })
         
         return render_template('index.html', 
-                               long_signals=long_signals, 
-                               short_signals=short_signals,
-                               historical_signals=historical_signals,
-                               last_update=analysis_state.last_update,
-                               params=params,
-                               avg_adx_long=round(avg_adx_long, 1),
-                               avg_adx_short=round(avg_adx_short, 1),
-                               scatter_data=scatter_ready,
-                               cryptos_analyzed=len(analysis_state.symbols),
-                               is_updating=analysis_state.is_updating,
-                               update_progress=analysis_state.update_progress)
+                             long_signals=long_signals,
+                             short_signals=short_signals,
+                             historical_signals=historical_signals,
+                             last_update=trading_system.last_update,
+                             params=params,
+                             avg_adx_long=round(avg_adx_long, 1),
+                             avg_adx_short=round(avg_adx_short, 1),
+                             scatter_data=scatter_ready,
+                             cryptos_analyzed=trading_system.cryptos_analyzed,
+                             is_updating=trading_system.is_updating,
+                             update_progress=trading_system.update_progress)
 
 @app.route('/chart/<symbol>/<signal_type>')
 def get_chart(symbol, signal_type):
     try:
-        params = analysis_state.params
-        df = get_kucoin_data(symbol, params['timeframe'])
+        params = trading_system.params
+        df = get_kucoin_data(symbol, params['timeframe'], 100)
         if df is None:
             return "Datos no disponibles", 404
         
@@ -498,152 +434,110 @@ def get_chart(symbol, signal_type):
         if df is None:
             return "Datos insuficientes", 404
         
-        timeframe_data = analysis_state.timeframe_data.get(params['timeframe'], {})
-        signals = timeframe_data.get(f'{signal_type.lower()}_signals', [])
-        signal = next((s for s in signals if s['symbol'] == symbol), None)
+        plt.figure(figsize=(12, 10))
         
-        if not signal:
-            return "Señal no encontrada", 404
+        plt.subplot(4, 1, 1)
+        plt.plot(df['timestamp'], df['close'], label='Precio', color='blue', linewidth=1.5)
+        plt.plot(df['timestamp'], df['ema_fast'], label=f'EMA{params["ema_fast"]}', color='orange', alpha=0.8)
+        plt.plot(df['timestamp'], df['ema_slow'], label=f'EMA{params["ema_slow"]}', color='green', alpha=0.8)
+        plt.title(f'{symbol} - Price & EMAs')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
         
-        plt.style.use('dark_background')
-        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 10), gridspec_kw={'height_ratios': [3, 1, 2]})
+        plt.subplot(4, 1, 2)
+        plt.bar(df['timestamp'], df['volume'], color=['green' if c > o else 'red' for c, o in zip(df['close'], df['open'])])
+        plt.title('Volume')
+        plt.grid(True, alpha=0.3)
         
-        # Precio y EMAs
-        ax1.plot(df['timestamp'], df['close'], label='Precio', color='white', linewidth=1.5)
-        ax1.plot(df['timestamp'], df['ema_fast'], label=f'EMA{params["ema_fast"]}', color='cyan', linewidth=1)
-        ax1.plot(df['timestamp'], df['ema_slow'], label=f'EMA{params["ema_slow"]}', color='magenta', linewidth=1)
+        plt.subplot(4, 1, 3)
+        plt.plot(df['timestamp'], df['rsi'], label='RSI', color='purple')
+        plt.axhline(y=70, color='red', linestyle='--', alpha=0.7)
+        plt.axhline(y=30, color='green', linestyle='--', alpha=0.7)
+        plt.axhline(y=50, color='gray', linestyle='-', alpha=0.5)
+        plt.title('RSI')
+        plt.grid(True, alpha=0.3)
         
-        if signal_type.lower() == 'long':
-            ax1.axhline(y=signal['entry'], color='green', linestyle='--', alpha=0.7, label='Entrada')
-            ax1.axhline(y=signal['sl'], color='red', linestyle='--', alpha=0.7, label='Stop Loss')
-            ax1.axhline(y=signal['tp1'], color='blue', linestyle=':', alpha=0.7, label='TP1')
-            ax1.axhline(y=signal['tp2'], color='purple', linestyle=':', alpha=0.7, label='TP2')
-        else:
-            ax1.axhline(y=signal['entry'], color='red', linestyle='--', alpha=0.7, label='Entrada')
-            ax1.axhline(y=signal['sl'], color='green', linestyle='--', alpha=0.7, label='Stop Loss')
-            ax1.axhline(y=signal['tp1'], color='blue', linestyle=':', alpha=0.7, label='TP1')
-            ax1.axhline(y=signal['tp2'], color='purple', linestyle=':', alpha=0.7, label='TP2')
-        
-        ax1.set_title(f'{symbol} - {signal_type.upper()} Signal ({params["timeframe"]})', color='white', fontsize=14)
-        ax1.legend(loc='upper left')
-        ax1.grid(True, alpha=0.3)
-        
-        # Volumen
-        colors = ['green' if close > open else 'red' for close, open in zip(df['close'], df['open'])]
-        ax2.bar(df['timestamp'], df['volume'], color=colors, alpha=0.7)
-        ax2.set_title('Volumen', color='white')
-        ax2.grid(True, alpha=0.3)
-        
-        # Indicadores
-        ax3.plot(df['timestamp'], df['rsi'], label='RSI', color='yellow', linewidth=1)
-        ax3.axhline(y=70, color='red', linestyle='--', alpha=0.5)
-        ax3.axhline(y=30, color='green', linestyle='--', alpha=0.5)
-        
-        ax3_twin = ax3.twinx()
-        ax3_twin.plot(df['timestamp'], df['adx'], label='ADX', color='cyan', linewidth=1)
-        ax3_twin.axhline(y=params['adx_level'], color='white', linestyle='--', alpha=0.5)
-        
-        ax3.set_title('Indicadores', color='white')
-        ax3.legend(loc='upper left')
-        ax3_twin.legend(loc='upper right')
-        ax3.grid(True, alpha=0.3)
+        plt.subplot(4, 1, 4)
+        plt.plot(df['timestamp'], df['adx'], label='ADX', color='brown')
+        plt.plot(df['timestamp'], df['plus_di'], label='+DI', color='green', alpha=0.7)
+        plt.plot(df['timestamp'], df['minus_di'], label='-DI', color='red', alpha=0.7)
+        plt.axhline(y=params['adx_level'], color='blue', linestyle='--', alpha=0.7)
+        plt.title('ADX & DI')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
         
         plt.tight_layout()
         
         img = io.BytesIO()
-        plt.savefig(img, format='png', dpi=100, facecolor='#0E1117')
+        plt.savefig(img, format='png', dpi=100)
         img.seek(0)
         plot_url = base64.b64encode(img.getvalue()).decode()
-        plt.close(fig)
+        plt.close()
         
         return render_template('chart.html', plot_url=plot_url, symbol=symbol, signal_type=signal_type)
     except Exception as e:
-        logger.error(f"Error generando gráfico: {str(e)}")
         return "Error generando gráfico", 500
 
 @app.route('/historical_chart/<symbol>/<signal_type>')
 def get_historical_chart(symbol, signal_type):
     try:
-        params = analysis_state.params
-        df = get_kucoin_data(symbol, params['timeframe'])
+        params = trading_system.params
+        df = get_kucoin_data(symbol, params['timeframe'], 100)
         if df is None:
             return "Datos no disponibles", 404
         
         df = calculate_indicators(df, params)
         if df is None:
-            return "Datos insuficientes", 404
+            return "Datos insuficientes", 404        
+            
+        plt.figure(figsize=(12, 10))
         
-        timeframe_data = analysis_state.timeframe_data.get(params['timeframe'], {})
-        historical_signals = [s for s in timeframe_data.get('historical_signals', []) 
-                             if s['symbol'] == symbol and s['type'].lower() == signal_type.lower()]
+        plt.subplot(4, 1, 1)
+        plt.plot(df['timestamp'], df['close'], label='Precio', color='blue', linewidth=1.5)
+        plt.plot(df['timestamp'], df['ema_fast'], label=f'EMA{params["ema_fast"]}', color='orange', alpha=0.8)
+        plt.plot(df['timestamp'], df['ema_slow'], label=f'EMA{params["ema_slow"]}', color='green', alpha=0.8)
         
-        if not historical_signals:
-            return "Señal histórica no encontrada", 404
+        if len(df) > 1:
+            plt.axvline(x=df['timestamp'].iloc[-2], color='gray', linestyle='--', alpha=0.7, label='Vela Anterior')
         
-        signal = historical_signals[-1]
-        prev_candle_start = get_previous_candle_start(params['timeframe'])
+        plt.title(f'{symbol} - Historical Signal ({signal_type.upper()})')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
         
-        plt.style.use('dark_background')
-        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 10), gridspec_kw={'height_ratios': [3, 1, 2]})
+        plt.subplot(4, 1, 2)
+        plt.bar(df['timestamp'], df['volume'], color=['green' if c > o else 'red' for c, o in zip(df['close'], df['open'])])
+        if len(df) > 1:
+            plt.axvline(x=df['timestamp'].iloc[-2], color='gray', linestyle='--', alpha=0.7)
+        plt.title('Volume')
+        plt.grid(True, alpha=0.3)
         
-        # Precio y EMAs
-        ax1.plot(df['timestamp'], df['close'], label='Precio', color='white', linewidth=1.5)
-        ax1.plot(df['timestamp'], df['ema_fast'], label=f'EMA{params["ema_fast"]}', color='cyan', linewidth=1)
-        ax1.plot(df['timestamp'], df['ema_slow'], label=f'EMA{params["ema_slow"]}', color='magenta', linewidth=1)
+        plt.subplot(4, 1, 3)
+        plt.plot(df['timestamp'], df['rsi'], label='RSI', color='purple')
+        plt.axhline(y=70, color='red', linestyle='--', alpha=0.7)
+        plt.axhline(y=30, color='green', linestyle='--', alpha=0.7)
+        if len(df) > 1:
+            plt.axvline(x=df['timestamp'].iloc[-2], color='gray', linestyle='--', alpha=0.7)
+        plt.title('RSI')
+        plt.grid(True, alpha=0.3)
         
-        if signal_type.lower() == 'long':
-            ax1.axhline(y=signal['entry'], color='green', linestyle='--', alpha=0.7, label='Entrada')
-            ax1.axhline(y=signal['sl'], color='red', linestyle='--', alpha=0.7, label='Stop Loss')
-            ax1.axhline(y=signal['tp1'], color='blue', linestyle=':', alpha=0.7, label='TP1')
-            ax1.axhline(y=signal['tp2'], color='purple', linestyle=':', alpha=0.7, label='TP2')
-        else:
-            ax1.axhline(y=signal['entry'], color='red', linestyle='--', alpha=0.7, label='Entrada')
-            ax1.axhline(y=signal['sl'], color='green', linestyle='--', alpha=0.7, label='Stop Loss')
-            ax1.axhline(y=signal['tp1'], color='blue', linestyle=':', alpha=0.7, label='TP1')
-            ax1.axhline(y=signal['tp2'], color='purple', linestyle=':', alpha=0.7, label='TP2')
-        
-        # Marcar vela anterior
-        prev_idx = df[df['timestamp'] == prev_candle_start].index
-        if len(prev_idx) > 0:
-            idx = prev_idx[0]
-            if idx < len(df):
-                ax1.axvline(x=df.iloc[idx]['timestamp'], color='gray', linestyle='-', alpha=0.5, label='Vela Anterior')
-        
-        ax1.set_title(f'{symbol} - Señal Histórica {signal_type.upper()} ({params["timeframe"]})', color='white', fontsize=14)
-        ax1.legend(loc='upper left')
-        ax1.grid(True, alpha=0.3)
-        
-        # Volumen
-        colors = ['green' if close > open else 'red' for close, open in zip(df['close'], df['open'])]
-        ax2.bar(df['timestamp'], df['volume'], color=colors, alpha=0.7)
-        ax2.set_title('Volumen', color='white')
-        ax2.grid(True, alpha=0.3)
-        
-        # Indicadores
-        ax3.plot(df['timestamp'], df['rsi'], label='RSI', color='yellow', linewidth=1)
-        ax3.axhline(y=70, color='red', linestyle='--', alpha=0.5)
-        ax3.axhline(y=30, color='green', linestyle='--', alpha=0.5)
-        
-        ax3_twin = ax3.twinx()
-        ax3_twin.plot(df['timestamp'], df['adx'], label='ADX', color='cyan', linewidth=1)
-        ax3_twin.axhline(y=params['adx_level'], color='white', linestyle='--', alpha=0.5)
-        
-        ax3.set_title('Indicadores', color='white')
-        ax3.legend(loc='upper left')
-        ax3_twin.legend(loc='upper right')
-        ax3.grid(True, alpha=0.3)
+        plt.subplot(4, 1, 4)
+        plt.plot(df['timestamp'], df['adx'], label='ADX', color='brown')
+        plt.axhline(y=params['adx_level'], color='blue', linestyle='--', alpha=0.7)
+        if len(df) > 1:
+            plt.axvline(x=df['timestamp'].iloc[-2], color='gray', linestyle='--', alpha=0.7)
+        plt.title('ADX')
+        plt.grid(True, alpha=0.3)
         
         plt.tight_layout()
         
         img = io.BytesIO()
-        plt.savefig(img, format='png', dpi=100, facecolor='#0E1117')
+        plt.savefig(img, format='png', dpi=100)
         img.seek(0)
         plot_url = base64.b64encode(img.getvalue()).decode()
-        plt.close(fig)
+        plt.close()
         
         return render_template('historical_chart.html', plot_url=plot_url, symbol=symbol, signal_type=signal_type)
     except Exception as e:
-        logger.error(f"Error generando gráfico histórico: {str(e)}")
         return "Error generando gráfico histórico", 500
 
 @app.route('/manual')
@@ -654,50 +548,39 @@ def manual():
 def update_params():
     try:
         data = request.form.to_dict()
-        new_params = analysis_state.params.copy()
+        new_params = trading_system.params.copy()
         
         for key in new_params:
             if key in data:
-                if key in ['ema_fast', 'ema_slow', 'adx_period', 'rsi_period', 'sr_window', 'divergence_lookback', 'atr_period']:
+                if key in ['ema_fast', 'ema_slow', 'adx_period', 'rsi_period', 'sr_window', 'divergence_lookback']:
                     new_params[key] = int(data[key])
-                elif key in ['adx_level', 'max_risk_percent', 'price_distance_threshold', 'volume_multiplier']:
+                elif key in ['adx_level', 'max_risk_percent', 'price_distance_threshold', 'volume_filter']:
                     new_params[key] = float(data[key])
                 else:
                     new_params[key] = data[key]
         
-        with analysis_state.lock:
-            analysis_state.params = new_params
+        with trading_system.lock:
+            trading_system.params = new_params
         
-        analysis_state.update_event.set()
+        trading_system.update_event.set()
         
         return jsonify({
             'status': 'success',
-            'message': 'Parámetros actualizados correctamente',
-            'params': new_params
+            'message': 'Parámetros actualizados correctamente'
         })
     except Exception as e:
-        logger.error(f"Error actualizando parámetros: {str(e)}")
         return jsonify({
             'status': 'error',
-            'message': f"Error actualizando parámetros: {str(e)}"
+            'message': f'Error: {str(e)}'
         }), 500
 
 @app.route('/status')
 def status():
-    with analysis_state.lock:
-        timeframe = analysis_state.params['timeframe']
-        timeframe_data = analysis_state.timeframe_data.get(timeframe, {})
-        
-        return jsonify({
-            'last_update': analysis_state.last_update.isoformat(),
-            'is_updating': analysis_state.is_updating,
-            'progress': analysis_state.update_progress,
-            'long_signals': len(timeframe_data.get('long_signals', [])),
-            'short_signals': len(timeframe_data.get('short_signals', [])),
-            'historical_signals': len(timeframe_data.get('historical_signals', [])),
-            'cryptos_analyzed': len(analysis_state.symbols),
-            'params': analysis_state.params
-        })
+    return jsonify({
+        'is_updating': trading_system.is_updating,
+        'progress': trading_system.update_progress,
+        'last_update': trading_system.last_update.isoformat()
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
