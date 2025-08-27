@@ -7,36 +7,130 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { padding: 20px; background-color: #1a1a1a; color: #e0e0e0; }
-        .chart-container { max-width: 1400px; margin: 0 auto; background: #2d2d2d; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        body { padding: 20px; background-color: #f8f9fa; }
+        .chart-container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.1); 
+        }
         .chart-title { text-align: center; margin-bottom: 20px; }
-        .chart-img { width: 100%; border: 1px solid #444; border-radius: 4px; }
+        .chart-img { width: 100%; border: 1px solid #eee; }
         .back-btn { margin-top: 20px; }
         .info-box {
-            background: linear-gradient(135deg, #3498db, #2c3e50);
+            background-color: #e9f7fe;
+            border-left: 4px solid #1e88e5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .signal-info {
+            background-color: #f8f9fa;
             padding: 15px;
             border-radius: 8px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
+        .signal-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .detail-card {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .detail-value {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .positive { color: #28a745; }
+        .negative { color: #dc3545; }
+        .neutral { color: #6c757d; }
     </style>
 </head>
 <body>
     <div class="chart-container">
         <div class="chart-title">
-            <h2><i class="fas fa-history"></i> {{ symbol }}-USDT - Señal Histórica {{ signal_type|upper }}</h2>
+            <h2>{{ symbol }}-USDT - Señal Histórica {{ signal_type|upper }} ({{ timeframe }})</h2>
             <p class="text-muted">Análisis de la vela anterior con indicadores técnicos</p>
             
             <div class="info-box">
-                <p><strong><i class="fas fa-info-circle"></i> Nota:</strong> Este gráfico muestra la señal que se generó en la vela anterior según el timeframe seleccionado.</p>
+                <p><strong>Nota:</strong> Este gráfico muestra la señal que se generó en la vela anterior según el timeframe seleccionado.</p>
                 <p>La línea vertical gris indica el inicio de la vela anterior analizada.</p>
             </div>
             
-            <a href="/" class="btn btn-primary mt-3">
+            <div class="signal-info">
+                <h4>Información de la Señal Histórica</h4>
+                <div class="signal-details">
+                    <div class="detail-card">
+                        <div>Precio de Cierre</div>
+                        <div class="detail-value">{{ signal.price if signal else 'N/A' }}</div>
+                    </div>
+                    <div class="detail-card">
+                        <div>Precio Entrada</div>
+                        <div class="detail-value">{{ signal.entry if signal else 'N/A' }}</div>
+                    </div>
+                    <div class="detail-card">
+                        <div>Stop Loss</div>
+                        <div class="detail-value negative">{{ signal.sl if signal else 'N/A' }}</div>
+                    </div>
+                    <div class="detail-card">
+                        <div>Take Profit 1</div>
+                        <div class="detail-value positive">{{ signal.tp1 if signal else 'N/A' }}</div>
+                    </div>
+                    <div class="detail-card">
+                        <div>Take Profit 2</div>
+                        <div class="detail-value positive">{{ signal.tp2 if signal else 'N/A' }}</div>
+                    </div>
+                    <div class="detail-card">
+                        <div>Take Profit 3</div>
+                        <div class="detail-value positive">{{ signal.tp3 if signal else 'N/A' }}</div>
+                    </div>
+                    <div class="detail-card">
+                        <div>Resultado</div>
+                        <div class="detail-value neutral">Por verificar</div>
+                    </div>
+                    <div class="detail-card">
+                        <div>ATR</div>
+                        <div class="detail-value neutral">{{ signal.atr if signal else 'N/A' }}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <a href="/" class="btn btn-primary">
                 <i class="fas fa-arrow-left"></i> Volver al panel
             </a>
+            <a href="/chart/{{ symbol }}/{{ signal_type|lower }}" class="btn btn-info">
+                <i class="fas fa-chart-line"></i> Ver señal actual
+            </a>
+            <button class="btn btn-warning" onclick="runBacktest('{{ symbol }}')">
+                <i class="fas fa-play-circle"></i> Ejecutar Backtest
+            </button>
         </div>
         <img src="data:image/png;base64,{{ plot_url }}" alt="Gráfico Histórico de {{ symbol }}" class="chart-img">
     </div>
+
+    <script>
+        function runBacktest(symbol) {
+            fetch(`/backtest/${symbol}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Error en backtest: ' + data.error);
+                    } else {
+                        alert(`Backtest de ${symbol}: ${data.total_trades} operaciones, ${data.win_rate}% de aciertos`);
+                    }
+                })
+                .catch(error => {
+                    alert('Error realizando backtest: ' + error.message);
+                });
+        }
+    </script>
 </body>
 </html>
