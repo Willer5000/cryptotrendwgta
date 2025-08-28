@@ -30,10 +30,9 @@
         .risk-high { background-color: rgba(231, 76, 60, 0.2); }
         .strategy-table { font-size: 0.9rem; }
         .strategy-table th { background-color: #f8f9fa; position: sticky; top: 0; }
-        .trading-example { border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px 0; }
-        .example-long { border-left: 4px solid #2ecc71; background-color: rgba(46, 204, 113, 0.05); }
-        .example-short { border-left: 4px solid #e74c3c; background-color: rgba(231, 76, 60, 0.05); }
-        .example-image { width: 100%; border: 1px solid #ddd; border-radius: 4px; margin: 10px 0; }
+        .chart-example { width: 100%; border: 1px solid #ddd; border-radius: 8px; margin: 15px 0; }
+        .example-container { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .example-image { max-width: 100%; border: 1px solid #ddd; border-radius: 8px; margin: 10px 0; }
     </style>
 </head>
 <body>
@@ -45,7 +44,7 @@
         
         <div class="section">
             <h2 class="section-title"><i class="fas fa-lightbulb"></i> Conceptos Clave del Sistema</h2>
-            <p>Este sistema automatizado analiza las 90 principales criptomonedas utilizando múltiples indicadores técnicos para identificar oportunidades de trading de alta probabilidad. El sistema combina:</p>
+            <p>Este sistema automatizado analiza las principales criptomonedas utilizando múltiples indicadores técnicos para identificar oportunidades de trading de alta probabilidad. El sistema combina:</p>
             
             <div class="row">
                 <div class="col-md-6">
@@ -87,189 +86,116 @@
         </div>
         
         <div class="section">
-            <h2 class="section-title"><i class="fas fa-balance-scale"></i> Sistema Híbrido S/R + ATR</h2>
+            <h2 class="section-title"><i class="fas fa-chart-line"></i> Sistema de Soportes/Resistencias y ATR</h2>
             
-            <div class="indicator-card">
-                <div class="indicator-header bg-info">
-                    <h3 class="h5 mb-0">Combinación de Soportes/Resistencias y ATR</h3>
-                </div>
-                <div class="indicator-body">
-                    <p>Nuestro sistema utiliza un enfoque híbrido que combina lo mejor de ambos métodos:</p>
-                    
-                    <h5>Stop Loss basado en ATR:</h5>
-                    <ul>
-                        <li>Calculamos el Stop Loss usando el Average True Range (ATR)</li>
-                        <li>Para LONG: SL = Precio de entrada - (2 × ATR)</li>
-                        <li>Para SHORT: SL = Precio de entrada + (2 × ATR)</li>
-                        <li>Esto adapta el stop loss a la volatilidad actual del mercado</li>
-                    </ul>
-                    
-                    <h5>Entrada y Take Profit basados en S/R:</h5>
-                    <ul>
-                        <li>Las entradas se colocan cerca de niveles de soporte/resistencia identificados</li>
-                        <li>Para LONG: Entrada ligeramente arriba de una resistencia rota o cerca de un soporte</li>
-                        <li>Para SHORT: Entrada ligeramente debajo de un soporte roto o cerca de una resistencia</li>
-                        <li>Take Profit se calcula en base al riesgo (distancia entre entrada y stop loss)</li>
-                    </ul>
-                    
-                    <div class="alert alert-success">
-                        <strong>Ventaja de este enfoque:</strong> Combinamos la precisión de los niveles S/R con la adaptabilidad del ATR a la volatilidad del mercado.
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row mt-4">
+            <div class="row">
                 <div class="col-md-6">
-                    <div class="trading-example example-long">
-                        <h4><i class="fas fa-arrow-up"></i> Ejemplo de Operación LONG</h4>
-                        <p><strong>Condiciones:</strong></p>
-                        <ul>
-                            <li>Precio: $100</li>
-                            <li>ATR: $2.50</li>
-                            <li>Resistencia identificada: $102</li>
-                            <li>Soporte más cercano: $97</li>
-                        </ul>
-                        <p><strong>Cálculos:</strong></p>
-                        <ul>
-                            <li>Entrada: $102.10 (ligeramente arriba de la resistencia)</li>
-                            <li>Stop Loss: $102.10 - (2 × $2.50) = $97.10</li>
-                            <li>Take Profit 1: $102.10 + $5.00 = $107.10</li>
-                            <li>Take Profit 2: $102.10 + $10.00 = $112.10</li>
-                            <li>Take Profit 3: $102.10 + $15.00 = $117.10</li>
-                        </ul>
+                    <div class="indicator-card">
+                        <div class="indicator-header bg-success">
+                            <h3 class="h5 mb-0">Soportes y Resistencias</h3>
+                        </div>
+                        <div class="indicator-body">
+                            <p>El sistema detecta automáticamente niveles clave de precio:</p>
+                            <ul>
+                                <li><strong>Método:</strong> Análisis de máximos y mínimos históricos</li>
+                                <li><strong>Ventana:</strong> Configurable (por defecto 50 velas)</li>
+                                <li><strong>Consolidación:</strong> Niveles cercanos se agrupan automáticamente</li>
+                            </ul>
+                            <p><strong>Uso en señales:</strong></p>
+                            <ul>
+                                <li>Entradas cerca de soportes (LONG) o resistencias (SHORT)</li>
+                                <li>Stop Loss colocados beyond de estos niveles</li>
+                                <li>Take Profit en siguientes niveles de S/R</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="col-md-6">
-                    <div class="trading-example example-short">
-                        <h4><i class="fas fa-arrow-down"></i> Ejemplo de Operación SHORT</h4>
-                        <p><strong>Condiciones:</strong></p>
-                        <ul>
-                            <li>Precio: $100</li>
-                            <li>ATR: $2.50</li>
-                            <li>Soporte identificado: $97</li>
-                            <li>Resistencia más cercana: $103</li>
-                        </ul>
-                        <p><strong>Cálculos:</strong></p>
-                        <ul>
-                            <li>Entrada: $96.90 (ligeramente debajo del soporte)</li>
-                            <li>Stop Loss: $96.90 + (2 × $2.50) = $101.90</li>
-                            <li>Take Profit 1: $96.90 - $5.00 = $91.90</li>
-                            <li>Take Profit 2: $96.90 - $10.00 = $86.90</li>
-                            <li>Take Profit 3: $96.90 - $15.00 = $81.90</li>
-                        </ul>
+                    <div class="indicator-card">
+                        <div class="indicator-header bg-info">
+                            <h3 class="h5 mb-0">ATR (Average True Range)</h3>
+                        </div>
+                        <div class="indicator-body">
+                            <p>Indicador de volatilidad que mejora la gestión de riesgo:</p>
+                            <ul>
+                                <li><strong>Cálculo:</strong> Basado en el rango verdadero de las velas</li>
+                                <li><strong>Propósito:</strong> Adaptar stops y entradas a la volatilidad actual</li>
+                                <li><strong>Ventaja:</strong> Stops dinámicos que se ajustan automáticamente</li>
+                            </ul>
+                            <p><strong>Uso en señales (prioridad sobre S/R):</strong></p>
+                            <ul>
+                                <li>Stop Loss = Precio ± (2 × ATR)</li>
+                                <li>Entrada = Precio ± (0.5 × ATR)</li>
+                                <li>Take Profit = Entrada + (N × Riesgo)</li>
+                            </ul>
+                            <p>El ATR tiene prioridad, solo se usa S/R si el ATR no está disponible.</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
         <div class="section">
-            <h2 class="section-title"><i class="fas fa-chart-line"></i> Indicadores Técnicos Detallados</h2>
+            <h2 class="section-title"><i class="fas fa-chart-area"></i> Ejemplos Gráficos de Señales</h2>
+            
             <div class="row">
-                <div class="col-md-4">
-                    <div class="indicator-card">
-                        <div class="indicator-header bg-success">
-                            <h3 class="h5 mb-0">ADX (Índice Direccional Medio)</h3>
-                        </div>
-                        <div class="indicator-body">
-                            <p>Mide la fuerza de la tendencia independientemente de su dirección:</p>
-                            <ul>
-                                <li><strong>0-25:</strong> Mercado lateral (evitar operaciones de tendencia)</li>
-                                <li><strong>25-50:</strong> Tendencia fuerte (mejores oportunidades)</li>
-                                <li><strong>50-75:</strong> Tendencia muy fuerte (poco común en criptos)</li>
-                                <li><strong>75-100:</strong> Tendencia extremadamente fuerte (raramente alcanzado)</li>
-                            </ul>
-                            <p>Se usa con +DI y -DI para determinar dirección. +DI > -DI indica tendencia alcista, y viceversa.</p>
-                        </div>
+                <div class="col-md-6">
+                    <div class="example-container">
+                        <h4><i class="fas fa-arrow-up text-success"></i> Ejemplo de Señal LONG</h4>
+                        <img src="https://via.placeholder.com/600x300/4CAF50/FFFFFF?text=Ejemplo+Señal+LONG" alt="Ejemplo señal LONG" class="example-image">
+                        <p><strong>Características:</strong></p>
+                        <ol>
+                            <li>Precio cerca de soporte identificado</li>
+                            <li>EMA rápida (9) > EMA lenta (20)</li>
+                            <li>ADX > 25 indicando tendencia fuerte</li>
+                            <li>RSI por encima de 30 (sin sobreventa extrema)</li>
+                            <li>Volumen por encima del promedio</li>
+                            <li>Entrada: Precio + 0.5 × ATR</li>
+                            <li>Stop Loss: Soporte - 2 × ATR</li>
+                            <li>Take Profit: 3 niveles (1:1, 2:1, 3:1 risk-reward)</li>
+                        </ol>
                     </div>
                 </div>
                 
-                <div class="col-md-4">
-                    <div class="indicator-card">
-                        <div class="indicator-header bg-info">
-                            <h3 class="h5 mb-0">RSI (Índice de Fuerza Relativa)</h3>
-                        </div>
-                        <div class="indicator-body">
-                            <p>Oscilador que mese la velocidad de los movimientos de precios:</p>
-                            <ul>
-                                <li><strong>0-30:</strong> Sobrevendido (posible rebote alcista)</li>
-                                <li><strong>30-70:</strong> Zona neutra (mercado en equilibrio)</li>
-                                <li><strong>70-100:</strong> Sobrecomprado (posible corrección bajista)</li>
-                            </ul>
-                            <p>Las divergencias entre precio y RSI son poderosas señales de reversión:</p>
-                            <ul>
-                                <li><strong>Divergencia Alcista:</strong> Precio hace mínimos más bajos mientras RSI hace mínimos más altos</li>
-                                <li><strong>Divergencia Bajista:</strong> Precio hace máximos más altos mientras RSI hace máximos más bajos</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <div class="indicator-card">
-                        <div class="indicator-header bg-warning">
-                            <h3 class="h5 mb-0">EMAs (Medias Móviles Exponenciales)</h3>
-                        </div>
-                        <div class="indicator-body">
-                            <p>Indicadores de tendencia que dan más peso a los precios recientes:</p>
-                            <ul>
-                                <li><strong>EMA Rápida (9):</strong> Responde rápidamente a cambios de precio</li>
-                                <li><strong>EMA Lenta (20):</strong> Suaviza las fluctuaciones a corto plazo</li>
-                            </ul>
-                            <p>Reglas de trading:</p>
-                            <ul>
-                                <li><strong>Cruce Alcista:</strong> EMA9 > EMA20 (señal LONG)</li>
-                                <li><strong>Cruce Bajista:</strong> EMA9 < EMA20 (señal SHORT)</li>
-                                <li><strong>Separación Creciente:</strong> Confirmación de fortaleza de tendencia</li>
-                            </ul>
-                            <p>Las EMAs también actúan como soportes dinámicos en tendencias alcistas y resistencias en bajistas.</p>
-                        </div>
+                <div class="col-md-6">
+                    <div class="example-container">
+                        <h4><i class="fas fa-arrow-down text-danger"></i> Ejemplo de Señal SHORT</h4>
+                        <img src="https://via.placeholder.com/600x300/F44336/FFFFFF?text=Ejemplo+Señal+SHORT" alt="Ejemplo señal SHORT" class="example-image">
+                        <p><strong>Características:</strong></p>
+                        <ol>
+                            <li>Precio cerca de resistencia identificada</li>
+                            <li>EMA rápida (9) < EMA lenta (20)</li>
+                            <li>ADX > 25 indicando tendencia fuerte</li>
+                            <li>RSI por debajo de 70 (sin sobrecompra extrema)</li>
+                            <li>Volumen por encima del promedio</li>
+                            <li>Entrada: Precio - 0.5 × ATR</li>
+                            <li>Stop Loss: Resistencia + 2 × ATR</li>
+                            <li>Take Profit: 3 niveles (1:1, 2:1, 3:1 risk-reward)</li>
+                        </ol>
                     </div>
                 </div>
             </div>
             
             <div class="row mt-4">
-                <div class="col-md-6">
-                    <div class="indicator-card">
-                        <div class="indicator-header bg-secondary">
-                            <h3 class="h5 mb-0">Soportes y Resistencias</h3>
-                        </div>
-                        <div class="indicator-body">
-                            <p>Niveles de precio donde históricamente:</p>
-                            <ul>
-                                <li><strong>Soporte:</strong> La demanda supera la oferta, previniendo caídas</li>
-                                <li><strong>Resistencia:</strong> La oferta supera la demanda, previniendo subidas</li>
-                            </ul>
-                            <p>Nuestro sistema detecta estos niveles usando:</p>
-                            <ul>
-                                <li>Máximos y mínimos históricos en una ventana configurable</li>
-                                <li>Agrupamiento de precios con alto volumen (Volume Profile)</li>
-                                <li>Niveles psicológicos (precios redondos)</li>
-                            </ul>
-                            <p>Los quiebres de estos niveles con volumen son señales poderosas.</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-6">
-                    <div class="indicator-card">
-                        <div class="indicator-header bg-danger">
-                            <h3 class="h5 mb-0">ATR (Average True Range)</h3>
-                        </div>
-                        <div class="indicator-body">
-                            <p>Indicador de volatilidad que mide el rango de trading de un activo:</p>
-                            <ul>
-                                <li><strong>Alto ATR:</strong> Alta volatilidad, stops más amplios</li>
-                                <li><strong>Bajo ATR:</strong> Baja volatilidad, stops más ajustados</li>
-                            </ul>
-                            <p>Se utiliza para:</p>
-                            <ul>
-                                <li>Calcular stop loss basado en volatilidad (ej: 2 x ATR)</li>
-                                <li>Ajustar el tamaño de la posición (riesgo constante)</li>
-                                <li>Identificar periodos de expansión/contracción de volatilidad</li>
-                            </ul>
-                            <p>En nuestro sistema, el ATR se usa para calcular stops y tomar decisiones de gestión de riesgo.</p>
-                        </div>
+                <div class="col-md-12">
+                    <div class="example-container">
+                        <h4><i class="fas fa-exchange-alt text-info"></i> Ejemplo de Divergencia</h4>
+                        <img src="https://via.placeholder.com/1000x300/2196F3/FFFFFF?text=Ejemplo+Divergencia+RSI" alt="Ejemplo divergencia" class="example-image">
+                        <p><strong>Divergencia Alcista (LONG):</strong></p>
+                        <ul>
+                            <li>Precio hace mínimos más bajos</li>
+                            <li>RSI hace mínimos más altos</li>
+                            <li>Fuerte señal de reversión potencial</li>
+                            <li>Se busca entrada en ruptura de resistencia con volumen</li>
+                        </ul>
+                        <p><strong>Divergencia Bajista (SHORT):</strong></p>
+                        <ul>
+                            <li>Precio hace máximos más altos</li>
+                            <li>RSI hace máximos más bajos</li>
+                            <li>Fuerte señal de reversión potencial</li>
+                            <li>Se busca entrada en ruptura de soporte con volumen</li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -553,57 +479,6 @@
                         </tr>
                     </tbody>
                 </table>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2 class="section-title"><i class="fas fa-chart-area"></i> Ejemplos Gráficos de Trading</h2>
-            
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="trading-example example-long">
-                        <h4><i class="fas fa-arrow-up"></i> Ejemplo de Operación LONG Exitosa</h4>
-                        <p><strong>Patrón ideal:</strong></p>
-                        <ol>
-                            <li>Precio en tendencia alcista (EMAs alineadas hacia arriba)</li>
-                            <li>Retroceso a un nivel de soporte clave</li>
-                            <li>RSI muestra sobreventa (< 30) o divergencia alcista</li>
-                            <li>Volumen aumenta en la recuperación</li>
-                            <li>ADX > 25 confirmando fuerza de tendencia</li>
-                            <li>Entrada: Al romper resistencia cercana o en rebote del soporte</li>
-                            <li>SL: 2 × ATR below entrada</li>
-                            <li>TP: Múltiples objetivos en resistencias superiores</li>
-                        </ol>
-                    </div>
-                </div>
-                
-                <div class="col-md-6">
-                    <div class="trading-example example-short">
-                        <h4><i class="fas fa-arrow-down"></i> Ejemplo de Operación SHORT Exitosa</h4>
-                        <p><strong>Patrón ideal:</strong></p>
-                        <ol>
-                            <li>Precio en tendencia bajista (EMAs alineadas hacia abajo)</li>
-                            <li>Rebote a un nivel de resistencia clave</li>
-                            <li>RSI muestra sobrecompra (> 70) o divergencia bajista</li>
-                            <li>Volumen aumenta en el rechazo</li>
-                            <li>ADX > 25 confirmando fuerza de tendencia</li>
-                            <li>Entrada: Al romper soporte cercano o en rechazo de resistencia</li>
-                            <li>SL: 2 × ATR above entrada</li>
-                            <li>TP: Múltiples objetivos en soportes inferiores</li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="alert alert-info mt-4">
-                <h5><i class="fas fa-lightbulb"></i> Consejos Adicionales:</h5>
-                <ul>
-                    <li>Espere confirmación de velas cerradas antes de operar</li>
-                    <li>Combine señales de múltiples timeframes para mayor confianza</li>
-                    <li>Monitoree el volumen: sin volumen, las señales son menos confiables</li>
-                    <li>Ajuste el tamaño de posición según la volatilidad (ATR)</li>
-                    <li>Practique la gestión emocional: no persiga operaciones perdidas</li>
-                </ul>
             </div>
         </div>
         
