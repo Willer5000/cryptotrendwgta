@@ -109,28 +109,8 @@
             <a href="/chart/{{ symbol }}/{{ signal_type|lower }}" class="btn btn-info">
                 <i class="fas fa-chart-line"></i> Ver señal actual
             </a>
-            <button class="btn btn-warning" onclick="runBacktest('{{ symbol }}')">
-                <i class="fas fa-play-circle"></i> Ejecutar Backtest
-            </button>
         </div>
         <img src="data:image/png;base64,{{ plot_url }}" alt="Gráfico Histórico de {{ symbol }}" class="chart-img">
     </div>
-
-    <script>
-        function runBacktest(symbol) {
-            fetch(`/backtest/${symbol}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        alert('Error en backtest: ' + data.error);
-                    } else {
-                        alert(`Backtest de ${symbol}: ${data.total_trades} operaciones, ${data.win_rate}% de aciertos`);
-                    }
-                })
-                .catch(error => {
-                    alert('Error realizando backtest: ' + error.message);
-                });
-        }
-    </script>
 </body>
 </html>
