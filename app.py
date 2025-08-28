@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 # Configuración
-CRYPTOS_FILE = 'top_cryptos.txt'
+CRYPTOS_FILE = 'cryptos.txt'
 CACHE_TIME = 300
 MAX_RETRIES = 2
 RETRY_DELAY = 1
