@@ -6,6 +6,7 @@
     <title>Manual Técnico - wgta Crypto Trading Signals</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <style>
         body { background-color: #f8f9fa; padding-top: 20px; }
         .manual-container { max-width: 1200px; margin: 0 auto 40px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
@@ -33,6 +34,7 @@
         .chart-example { width: 100%; border: 1px solid #ddd; border-radius: 8px; margin: 15px 0; }
         .example-container { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
         .example-image { max-width: 100%; border: 1px solid #ddd; border-radius: 8px; margin: 10px 0; }
+        .plotly-chart { width: 100%; height: 400px; margin: 20px 0; }
     </style>
 </head>
 <body>
@@ -140,14 +142,14 @@
             <h2 class="section-title"><i class="fas fa-chart-area"></i> Ejemplos Gráficos de Señales</h2>
             
             <div class="row">
-                <div class="col-md-6">
+                <div class="col-md-12">
                     <div class="example-container">
                         <h4><i class="fas fa-arrow-up text-success"></i> Ejemplo de Señal LONG</h4>
-                        <img src="https://via.placeholder.com/600x300/4CAF50/FFFFFF?text=Ejemplo+Señal+LONG" alt="Ejemplo señal LONG" class="example-image">
-                        <p><strong>Características:</strong></p>
+                        <div id="longExampleChart" class="plotly-chart"></div>
+                        <p><strong>Características de una señal LONG:</strong></p>
                         <ol>
                             <li>Precio cerca de soporte identificado</li>
-                            <li>EMA rápida (9) > EMA lenta (20)</li>
+                            <li>EMA rápida (9) > EMA lenta (20) - Tendencia alcista</li>
                             <li>ADX > 25 indicando tendencia fuerte</li>
                             <li>RSI por encima de 30 (sin sobreventa extrema)</li>
                             <li>Volumen por encima del promedio</li>
@@ -157,15 +159,17 @@
                         </ol>
                     </div>
                 </div>
-                
-                <div class="col-md-6">
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-12">
                     <div class="example-container">
                         <h4><i class="fas fa-arrow-down text-danger"></i> Ejemplo de Señal SHORT</h4>
-                        <img src="https://via.placeholder.com/600x300/F44336/FFFFFF?text=Ejemplo+Señal+SHORT" alt="Ejemplo señal SHORT" class="example-image">
-                        <p><strong>Características:</strong></p>
+                        <div id="shortExampleChart" class="plotly-chart"></div>
+                        <p><strong>Características de una señal SHORT:</strong></p>
                         <ol>
                             <li>Precio cerca de resistencia identificada</li>
-                            <li>EMA rápida (9) < EMA lenta (20)</li>
+                            <li>EMA rápida (9) < EMA lenta (20) - Tendencia bajista</li>
                             <li>ADX > 25 indicando tendencia fuerte</li>
                             <li>RSI por debajo de 70 (sin sobrecompra extrema)</li>
                             <li>Volumen por encima del promedio</li>
@@ -181,7 +185,7 @@
                 <div class="col-md-12">
                     <div class="example-container">
                         <h4><i class="fas fa-exchange-alt text-info"></i> Ejemplo de Divergencia</h4>
-                        <img src="https://via.placeholder.com/1000x300/2196F3/FFFFFF?text=Ejemplo+Divergencia+RSI" alt="Ejemplo divergencia" class="example-image">
+                        <div id="divergenceExampleChart" class="plotly-chart"></div>
                         <p><strong>Divergencia Alcista (LONG):</strong></p>
                         <ul>
                             <li>Precio hace mínimos más bajos</li>
@@ -241,7 +245,7 @@
                             <li>ADX bajo (mercado lateral)</li>
                             <li>Volumen decreciente</li>
                             <li>Precio en rango sin dirección clara</li>
-                            <li>+DI y -DI cercanos (sin tendencia definida)</li>
+                            <li>+DI и -DI cercanos (sin tendencia definida)</li>
                         </ul>
                         <p><strong>Estrategia:</strong> Evitar operaciones de tendencia. Considerar scalping o esperar confirmación.</p>
                     </div>
@@ -488,5 +492,319 @@
             </a>
         </div>
     </div>
+
+    <script>
+        // Gráfico de ejemplo para señal LONG
+        const longExampleData = [
+            {
+                x: ['Vela 1', 'Vela 2', 'Vela 3', 'Vela 4', 'Vela 5', 'Vela 6', 'Vela 7', 'Vela 8', 'Vela 9', 'Vela 10'],
+                y: [100, 105, 102, 108, 107, 112, 110, 115, 113, 118],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Precio',
+                line: { color: 'blue', width: 2 }
+            },
+            {
+                x: ['Vela 1', 'Vela 2', 'Vela 3', 'Vela 4', 'Vela 5', 'Vela 6', 'Vela 7', 'Vela 8', 'Vela 9', 'Vela 10'],
+                y: [102, 104, 105, 106, 108, 109, 110, 111, 112, 113],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'EMA Rápida (9)',
+                line: { color: 'orange', width: 2 }
+            },
+            {
+                x: ['Vela 1', 'Vela 2', 'Vela 3', 'Vela 4', 'Vela 5', 'Vela 6', 'Vela 7', 'Vela 8', 'Vela 9', 'Vela 10'],
+                y: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'EMA Lenta (20)',
+                line: { color: 'green', width: 2 }
+            },
+            {
+                x: ['Vela 10'],
+                y: [118],
+                type: 'scatter',
+                mode: 'markers+text',
+                name: 'Entrada LONG',
+                marker: { color: 'green', size: 12 },
+                text: ['ENTRADA'],
+                textposition: 'top'
+            },
+            {
+                x: ['Vela 10'],
+                y: [114],
+                type: 'scatter',
+                mode: 'markers+text',
+                name: 'Stop Loss',
+                marker: { color: 'red', size: 12 },
+                text: ['SL'],
+                textposition: 'bottom'
+            },
+            {
+                x: ['Vela 10'],
+                y: [122],
+                type: 'scatter',
+                mode: 'markers+text',
+                name: 'TP1',
+                marker: { color: 'purple', size: 10 },
+                text: ['TP1'],
+                textposition: 'top'
+            },
+            {
+                x: ['Vela 10'],
+                y: [126],
+                type: 'scatter',
+                mode: 'markers+text',
+                name: 'TP2',
+                marker: { color: 'purple', size: 10 },
+                text: ['TP2'],
+                textposition: 'top'
+            },
+            {
+                x: ['Vela 10'],
+                y: [130],
+                type: 'scatter',
+                mode: 'markers+text',
+                name: 'TP3',
+                marker: { color: 'purple', size: 10 },
+                text: ['TP3'],
+                textposition: 'top'
+            }
+        ];
+
+        const longExampleLayout = {
+            title: 'Ejemplo de Señal LONG - Tendencia Alcista',
+            xaxis: { title: 'Velas' },
+            yaxis: { title: 'Precio' },
+            annotations: [
+                {
+                    x: 'Vela 10',
+                    y: 114,
+                    xref: 'x',
+                    yref: 'y',
+                    text: 'Stop Loss basado en ATR',
+                    showarrow: true,
+                    arrowhead: 7,
+                    ax: 0,
+                    ay: -40
+                },
+                {
+                    x: 'Vela 10',
+                    y: 118,
+                    xref: 'x',
+                    yref: 'y',
+                    text: 'Entrada LONG',
+                    showarrow: true,
+                    arrowhead: 7,
+                    ax: 0,
+                    ay: -40
+                }
+            ]
+        };
+
+        Plotly.newPlot('longExampleChart', longExampleData, longExampleLayout);
+
+        // Gráfico de ejemplo para señal SHORT
+        const shortExampleData = [
+            {
+                x: ['Vela 1', 'Vela 2', 'Vela 3', 'Vela 4', 'Vela 5', 'Vela 6', 'Vela 7', 'Vela 8', 'Vela 9', 'Vela 10'],
+                y: [120, 118, 115, 112, 110, 108, 105, 103, 100, 98],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Precio',
+                line: { color: 'blue', width: 2 }
+            },
+            {
+                x: ['Vela 1', 'Vela 2', 'Vela 3', 'Vela 4', 'Vela 5', 'Vela 6', 'Vela 7', 'Vela 8', 'Vela 9', 'Vela 10'],
+                y: [118, 116, 114, 112, 110, 108, 106, 104, 102, 100],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'EMA Rápida (9)',
+                line: { color: 'orange', width: 2 }
+            },
+            {
+                x: ['Vela 1', 'Vela 2', 'Vela 3', 'Vela 4', 'Vela 5', 'Vela 6', 'Vela 7', 'Vela 8', 'Vela 9', 'Vela 10'],
+                y: [119, 117, 115, 113, 111, 109, 107, 105, 103, 101],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'EMA Lenta (20)',
+                line: { color: 'green', width: 2 }
+            },
+            {
+                x: ['Vela 10'],
+                y: [98],
+                type: 'scatter',
+                mode: 'markers+text',
+                name: 'Entrada SHORT',
+                marker: { color: 'red', size: 12 },
+                text: ['ENTRADA'],
+                textposition: 'bottom'
+            },
+            {
+                x: ['Vela 10'],
+                y: [102],
+                type: 'scatter',
+                mode: 'markers+text',
+                name: 'Stop Loss',
+                marker: { color: 'green', size: 12 },
+                text: ['SL'],
+                textposition: 'top'
+            },
+            {
+                x: ['Vela 10'],
+                y: [94],
+                type: 'scatter',
+                mode: 'markers+text',
+                name: 'TP1',
+                marker: { color: 'purple', size: 10 },
+                text: ['TP1'],
+                textposition: 'bottom'
+            },
+            {
+                x: ['Vela 10'],
+                y: [90],
+                type: 'scatter',
+                mode: 'markers+text',
+                name: 'TP2',
+                marker: { color: 'purple', size: 10 },
+                text: ['TP2'],
+                textposition: 'bottom'
+            },
+            {
+                x: ['Vela 10'],
+                y: [86],
+                type: 'scatter',
+                mode: 'markers+text',
+                name: 'TP3',
+                marker: { color: 'purple', size: 10 },
+                text: ['TP3'],
+                textposition: 'bottom'
+            }
+        ];
+
+        const shortExampleLayout = {
+            title: 'Ejemplo de Señal SHORT - Tendencia Bajista',
+            xaxis: { title: 'Velas' },
+            yaxis: { title: 'Precio' },
+            annotations: [
+                {
+                    x: 'Vela 10',
+                    y: 102,
+                    xref: 'x',
+                    yref: 'y',
+                    text: 'Stop Loss basado en ATR',
+                    showarrow: true,
+                    arrowhead: 7,
+                    ax: 0,
+                    ay: 40
+                },
+                {
+                    x: 'Vela 10',
+                    y: 98,
+                    xref: 'x',
+                    yref: 'y',
+                    text: 'Entrada SHORT',
+                    showarrow: true,
+                    arrowhead: 7,
+                    ax: 0,
+                    ay: 40
+                }
+            ]
+        };
+
+        Plotly.newPlot('shortExampleChart', shortExampleData, shortExampleLayout);
+
+        // Gráfico de ejemplo para divergencia
+        const divergenceExampleData = [
+            {
+                x: ['Vela 1', 'Vela 2', 'Vela 3', 'Vela 4', 'Vela 5', 'Vela 6', 'Vela 7', 'Vela 8', 'Vela 9', 'Vela 10'],
+                y: [100, 95, 90, 85, 80, 75, 70, 75, 80, 85],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Precio',
+                line: { color: 'blue', width: 2 },
+                yaxis: 'y'
+            },
+            {
+                x: ['Vela 1', 'Vela 2', 'Vela 3', 'Vela 4', 'Vela 5', 'Vela 6', 'Vela 7', 'Vela 8', 'Vela 9', 'Vela 10'],
+                y: [40, 38, 35, 32, 30, 28, 25, 32, 38, 42],
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'RSI',
+                line: { color: 'purple', width: 2 },
+                yaxis: 'y2'
+            },
+            {
+                x: ['Vela 7', 'Vela 10'],
+                y: [70, 85],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Tendencia Precio',
+                line: { color: 'red', width: 1, dash: 'dash' },
+                yaxis: 'y'
+            },
+            {
+                x: ['Vela 7', 'Vela 10'],
+                y: [25, 42],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Tendencia RSI',
+                line: { color: 'green', width: 1, dash: 'dash' },
+                yaxis: 'y2'
+            }
+        ];
+
+        const divergenceExampleLayout = {
+            title: 'Ejemplo de Divergencia Alcista',
+            xaxis: { title: 'Velas' },
+            yaxis: { title: 'Precio', side: 'left' },
+            yaxis2: {
+                title: 'RSI',
+                side: 'right',
+                overlaying: 'y',
+                range: [0, 100]
+            },
+            annotations: [
+                {
+                    x: 'Vela 7',
+                    y: 70,
+                    xref: 'x',
+                    yref: 'y',
+                    text: 'Mínimo más bajo en precio',
+                    showarrow: true,
+                    arrowhead: 7,
+                    ax: 0,
+                    ay: -40
+                },
+                {
+                    x: 'Vela 7',
+                    y: 25,
+                    xref: 'x',
+                    yref: 'y2',
+                    text: 'Mínimo más alto en RSI',
+                    showarrow: true,
+                    arrowhead: 7,
+                    ax: 0,
+                    ay: 40
+                },
+                {
+                    x: 'Vela 10',
+                    y: 85,
+                    xref: 'x',
+                    yref: 'y',
+                    text: 'Divergencia Alcista - Señal LONG',
+                    showarrow: true,
+                    arrowhead: 7,
+                    ax: 0,
+                    ay: -40,
+                    bgcolor: 'rgba(46, 204, 113, 0.7)',
+                    bordercolor: 'rgba(0,0,0,0.5)',
+                    borderwidth: 1
+                }
+            ]
+        };
+
+        Plotly.newPlot('divergenceExampleChart', divergenceExampleData, divergenceExampleLayout);
+    </script>
 </body>
 </html>
