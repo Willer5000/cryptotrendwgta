@@ -29,12 +29,12 @@
         .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .scatter-chart-container { height: 600px; position: relative; }
         .zone-label { position: absolute; text-align: center; font-weight: bold; opacity: 0.7; }
-        .volume-extremo { background-color: #006400; color: white; }   /* Verde oscuro */
-        .volume-very-high { background-color: #4CAF50; color: white; }   /* Verde */
-        .volume-high { background-color: #2196F3; color: white; }        /* Azul */
-        .volume-medium { background-color: #FFEB3B; }      /* Amarillo */
-        .volume-low { background-color: #FF9800; }         /* Naranja */
-        .volume-very-low { background-color: #F44336; color: white; }    /* Rojo */
+        .volume-extremo { background-color: #006400; color: white; }
+        .volume-very-high { background-color: #4CAF50; color: white; }
+        .volume-high { background-color: #2196F3; color: white; }
+        .volume-medium { background-color: #FFEB3B; }
+        .volume-low { background-color: #FF9800; }
+        .volume-very-low { background-color: #F44336; color: white; }
         .info-box {
             background-color: #e9f7fe;
             border-left: 4px solid #1e88e5;
@@ -76,6 +76,16 @@
         }
         .backtest-btn {
             margin-top: 10px;
+        }
+        .param-group {
+            margin-bottom: 15px;
+        }
+        .param-group-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #0d6efd;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 5px;
         }
     </style>
 </head>
@@ -150,72 +160,103 @@
             <h2 class="h4 mb-3"><i class="fas fa-filter"></i> Filtros</h2>
             <form id="filters-form" method="POST" action="/update_params">
                 <div class="row g-3">
+                    <!-- Grupo: Temporalidad -->
                     <div class="col-md-3">
-                        <label class="form-label">Temporalidad</label>
-                        <select name="timeframe" class="form-select">
-                            <option value="15m" {% if params.timeframe=='15m' %}selected{% endif %} class="timeframe-option">15m (15 minutos)</option>
-                            <option value="30m" {% if params.timeframe=='30m' %}selected{% endif %} class="timeframe-option">30m (30 minutos)</option>
-                            <option value="1h" {% if params.timeframe=='1h' %}selected{% endif %} class="timeframe-option">1h (1 hora)</option>
-                            <option value="2h" {% if params.timeframe=='2h' %}selected{% endif %} class="timeframe-option">2h (2 horas)</option>
-                            <option value="4h" {% if params.timeframe=='4h' %}selected{% endif %} class="timeframe-option">4h (4 horas)</option>
-                            <option value="1d" {% if params.timeframe=='1d' %}selected{% endif %} class="timeframe-option">1d (1 día)</option>
-                            <option value="1w" {% if params.timeframe=='1w' %}selected{% endif %} class="timeframe-option">1w (1 semana)</option>
-                        </select>
+                        <div class="param-group">
+                            <div class="param-group-title">Temporalidad</div>
+                            <select name="timeframe" class="form-select">
+                                <option value="15m" {% if params.timeframe=='15m' %}selected{% endif %} class="timeframe-option">15m (15 minutos)</option>
+                                <option value="30m" {% if params.timeframe=='30m' %}selected{% endif %} class="timeframe-option">30m (30 minutos)</option>
+                                <option value="1h" {% if params.timeframe=='1h' %}selected{% endif %} class="timeframe-option">1h (1 hora)</option>
+                                <option value="2h" {% if params.timeframe=='2h' %}selected{% endif %} class="timeframe-option">2h (2 horas)</option>
+                                <option value="4h" {% if params.timeframe=='4h' %}selected{% endif %} class="timeframe-option">4h (4 horas)</option>
+                                <option value="1d" {% if params.timeframe=='1d' %}selected{% endif %} class="timeframe-option">1d (1 día)</option>
+                                <option value="1w" {% if params.timeframe=='1w' %}selected{% endif %} class="timeframe-option">1w (1 semana)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Grupo: Medias Móviles -->
+                    <div class="col-md-2">
+                        <div class="param-group">
+                            <div class="param-group-title">EMA Rápida</div>
+                            <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control" min="1" max="50">
+                        </div>
                     </div>
                     
                     <div class="col-md-2">
-                        <label class="form-label">EMA Rápida</label>
-                        <input type="number" name="ema_fast" value="{{ params.ema_fast }}" class="form-control" min="1" max="50">
+                        <div class="param-group">
+                            <div class="param-group-title">EMA Lenta</div>
+                            <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control" min="1" max="100">
+                        </div>
+                    </div>
+                    
+                    <!-- Grupo: ADX -->
+                    <div class="col-md-2">
+                        <div class="param-group">
+                            <div class="param-group-title">ADX Período</div>
+                            <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control" min="1" max="50">
+                        </div>
                     </div>
                     
                     <div class="col-md-2">
-                        <label class="form-label">EMA Lenta</label>
-                        <input type="number" name="ema_slow" value="{{ params.ema_slow }}" class="form-control" min="1" max="100">
+                        <div class="param-group">
+                            <div class="param-group-title">ADX Nivel</div>
+                            <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" min="1" max="100">
+                        </div>
+                    </div>
+                    
+                    <!-- Grupo: RSI -->
+                    <div class="col-md-2">
+                        <div class="param-group">
+                            <div class="param-group-title">RSI Período</div>
+                            <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control" min="1" max="50">
+                        </div>
+                    </div>
+                    
+                    <!-- Grupo: Soportes/Resistencias -->
+                    <div class="col-md-2">
+                        <div class="param-group">
+                            <div class="param-group-title">S/R Ventana</div>
+                            <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control" min="10" max="200">
+                        </div>
                     </div>
                     
                     <div class="col-md-2">
-                        <label class="form-label">ADX Período</label>
-                        <input type="number" name="adx_period" value="{{ params.adx_period }}" class="form-control" min="1" max="50">
+                        <div class="param-group">
+                            <div class="param-group-title">Divergencia Lookback</div>
+                            <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control" min="5" max="50">
+                        </div>
+                    </div>
+                    
+                    <!-- Grupo: ATR -->
+                    <div class="col-md-2">
+                        <div class="param-group">
+                            <div class="param-group-title">ATR Período</div>
+                            <input type="number" name="atr_period" value="{{ params.get('atr_period', 14) }}" class="form-control" min="5" max="50">
+                        </div>
+                    </div>
+                    
+                    <!-- Grupo: Riesgo -->
+                    <div class="col-md-2">
+                        <div class="param-group">
+                            <div class="param-group-title">Máximo Riesgo (%)</div>
+                            <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1" min="0.1" max="5">
+                        </div>
                     </div>
                     
                     <div class="col-md-2">
-                        <label class="form-label">ADX Nivel</label>
-                        <input type="number" name="adx_level" value="{{ params.adx_level }}" class="form-control" min="1" max="100">
+                        <div class="param-group">
+                            <div class="param-group-title">Umbral S/R (%)</div>
+                            <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1" min="0.1" max="5">
+                        </div>
                     </div>
                     
                     <div class="col-md-2">
-                        <label class="form-label">RSI Período</label>
-                        <input type="number" name="rsi_period" value="{{ params.rsi_period }}" class="form-control" min="1" max="50">
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label class="form-label">S/R Ventana</label>
-                        <input type="number" name="sr_window" value="{{ params.sr_window }}" class="form-control" min="10" max="200">
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label class="form-label">Divergencia Lookback</label>
-                        <input type="number" name="divergence_lookback" value="{{ params.divergence_lookback }}" class="form-control" min="5" max="50">
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label class="form-label">ATR Período</label>
-                        <input type="number" name="atr_period" value="{{ params.get('atr_period', 14) }}" class="form-control" min="5" max="50">
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label class="form-label">Máximo Riesgo (%)</label>
-                        <input type="number" name="max_risk_percent" value="{{ params.max_risk_percent }}" class="form-control" step="0.1" min="0.1" max="5">
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label class="form-label">Umbral S/R (%)</label>
-                        <input type="number" name="price_distance_threshold" value="{{ params.price_distance_threshold }}" class="form-control" step="0.1" min="0.1" max="5">
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label class="form-label">Mín. Ratio Volumen</label>
-                        <input type="number" name="min_volume_ratio" value="{{ params.get('min_volume_ratio', 1.2) }}" class="form-control" step="0.1" min="0.5" max="3">
+                        <div class="param-group">
+                            <div class="param-group-title">Mín. Ratio Volumen</div>
+                            <input type="number" name="min_volume_ratio" value="{{ params.get('min_volume_ratio', 1.2) }}" class="form-control" step="0.1" min="0.5" max="3">
+                        </div>
                     </div>
                     
                     <div class="col-md-12 mt-4">
@@ -314,7 +355,6 @@
                                 <th>TP3</th>
                                 <th>ATR</th>
                                 <th>Gráfico</th>
-                                <th>Backtest</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -334,11 +374,6 @@
                                     <a href="/historical_chart/{{ signal.symbol }}/{{ signal.type|lower }}" class="btn btn-sm btn-info">
                                         <i class="fas fa-chart-line"></i>
                                     </a>
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-secondary backtest-btn" data-symbol="{{ signal.symbol }}">
-                                        <i class="fas fa-play-circle"></i>
-                                    </button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -778,25 +813,6 @@
                 } catch (error) {
                     alert('Error de conexión: ' + error.message);
                 }
-            });
-            
-            // Botones de backtest
-            document.querySelectorAll('.backtest-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const symbol = this.getAttribute('data-symbol');
-                    fetch(`/backtest/${symbol}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.error) {
-                                alert('Error en backtest: ' + data.error);
-                            } else {
-                                alert(`Backtest de ${symbol}: ${data.total_trades} operaciones, ${data.win_rate}% de aciertos`);
-                            }
-                        })
-                        .catch(error => {
-                            alert('Error realizando backtest: ' + error.message);
-                        });
-                });
             });
         });
     </script>
