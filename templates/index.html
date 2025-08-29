@@ -77,6 +77,23 @@
         .backtest-btn {
             margin-top: 10px;
         }
+        .saved-signal {
+            background-color: #fff3cd;
+        }
+        .signal-sl { background-color: #f8d7da; }
+        .signal-tp1 { background-color: #d1ecf1; }
+        .signal-tp2 { background-color: #d4edda; }
+        .signal-tp3 { background-color: #c3e6cb; }
+        .signal-expired { background-color: #e2e3e5; }
+        .login-modal { background-color: rgba(0,0,0,0.5); }
+        .user-winrate {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #6c757d;
+        }
+        .winrate-high { color: #28a745; }
+        .winrate-medium { color: #ffc107; }
+        .winrate-low { color: #dc3545; }
     </style>
 </head>
 <body>
@@ -107,7 +124,21 @@
                 {% endif %}
             </div>
             <div class="text-end">
-                <p class="mb-0">Autor: wgta</p>
+                {% if 'username' in session %}
+                <p class="mb-0">Usuario: <strong>{{ session.username }}</strong> 
+                    <span class="user-winrate {{ 'winrate-high' if users[session.username].win_rate > 60 else 'winrate-medium' if users[session.username].win_rate > 40 else 'winrate-low' }}">
+                        (WinRate: {{ users[session.username].win_rate }}%)
+                    </span>
+                </p>
+                <a href="#" onclick="logout()" class="btn btn-sm btn-outline-danger">
+                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                </a>
+                {% else %}
+                <p class="mb-0">No autenticado</p>
+                <a href="#" onclick="showLogin()" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+                </a>
+                {% endif %}
                 <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary">
                     <i class="fab fa-github"></i> GitHub
                 </a>
@@ -116,6 +147,42 @@
                 </a>
             </div>
         </header>
+
+        <!-- Modal de Login -->
+        <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Iniciar Sesión</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="login-form">
+                            <div class="mb-3">
+                                <label class="form-label">Usuario</label>
+                                <select class="form-select" id="username" required>
+                                    <option value="">Seleccionar usuario</option>
+                                    <option value="Willer">Willer</option>
+                                    <option value="Danilo">Danilo</option>
+                                    <option value="Damir">Damir</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Contraseña</label>
+                                <input type="password" class="form-control" id="password" value="1234" required>
+                            </div>
+                            <div class="alert alert-info">
+                                <small>Contraseña predeterminada: 1234 para todos los usuarios</small>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="login()">Iniciar Sesión</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Información de criptomonedas analizadas -->
         <div class="info-box">
@@ -314,6 +381,7 @@
                                 <th>TP3</th>
                                 <th>ATR</th>
                                 <th>Gráfico</th>
+                                <th>Guardar</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -334,6 +402,17 @@
                                         <i class="fas fa-chart-line"></i>
                                     </a>
                                 </td>
+                                <td>
+                                    {% if 'username' in session %}
+                                    <button class="btn btn-sm btn-success" onclick="saveSignal({{ loop.index0 }}, 'historical')">
+                                        <i class="fas fa-save"></i> Guardar
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-sm btn-secondary" disabled title="Inicia sesión para guardar">
+                                        <i class="fas fa-save"></i> Guardar
+                                    </button>
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -346,6 +425,84 @@
                 {% endif %}
             </div>
         </div>
+
+        <!-- Tabla de Señales Guardadas/En Ejecución -->
+        {% if 'username' in session and saved_signals %}
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h2 class="h5 mb-0"><i class="fas fa-bookmark"></i> Señales Guardadas/En Ejecución - {{ session.username }}</h2>
+                <small class="text-muted">Tus operaciones activas y finalizadas</small>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Nomenclatura</th>
+                                <th>Acción</th>
+                                <th>Entrada</th>
+                                <th>SL</th>
+                                <th>TP1</th>
+                                <th>TP2</th>
+                                <th>TP3</th>
+                                <th>Temporalidad</th>
+                                <th>Estado</th>
+                                <th>Recomendación</th>
+                                <th>Gráfico</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for signal in saved_signals %}
+                            <tr class="saved-signal 
+                                {% if signal.status == 'sl_hit' %}signal-sl
+                                {% elif signal.status == 'tp1_hit' %}signal-tp1
+                                {% elif signal.status == 'tp2_hit' or signal.status == 'tp2_tp1' %}signal-tp2
+                                {% elif signal.status == 'tp3_hit' %}signal-tp3
+                                {% elif signal.status == 'expired' %}signal-expired
+                                {% endif %}">
+                                <td>{{ loop.index }}</td>
+                                <td>{{ signal.symbol }}</td>
+                                <td><span class="badge {{ 'badge-long' if signal.type == 'LONG' else 'badge-short' }}">{{ signal.type }}</span></td>
+                                <td>{{ signal.entry }}</td>
+                                <td class="text-danger">{{ signal.sl }}</td>
+                                <td class="text-success">{{ signal.tp1 }}</td>
+                                <td class="text-success">{{ signal.tp2 }}</td>
+                                <td class="text-success">{{ signal.tp3 }}</td>
+                                <td><span class="badge bg-secondary">{{ signal.timeframe }}</span></td>
+                                <td>
+                                    {% if signal.status == 'active' or signal.status == 'in_progress' %}
+                                    <span class="badge bg-primary">Activa</span>
+                                    {% elif signal.status == 'sl_hit' %}
+                                    <span class="badge bg-danger">SL</span>
+                                    {% elif signal.status == 'tp1_hit' %}
+                                    <span class="badge bg-info">TP1</span>
+                                    {% elif signal.status == 'tp2_hit' %}
+                                    <span class="badge bg-warning">TP2</span>
+                                    {% elif signal.status == 'tp3_hit' %}
+                                    <span class="badge bg-success">TP3</span>
+                                    {% elif signal.status == 'expired' %}
+                                    <span class="badge bg-secondary">Expirada</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ signal.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ signal.recommendation }}</small>
+                                </td>
+                                <td>
+                                    <a href="/historical_chart/{{ signal.symbol }}/{{ signal.type|lower }}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-chart-line"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <div class="row">
             <div class="col-md-6">
@@ -374,6 +531,7 @@
                                         <th>RSI</th>
                                         <th>ATR</th>
                                         <th>Gráfico</th>
+                                        <th>Guardar</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -396,6 +554,17 @@
                                             <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
                                                 <i class="fas fa-chart-line"></i>
                                             </a>
+                                        </td>
+                                        <td>
+                                            {% if 'username' in session %}
+                                            <button class="btn btn-sm btn-success" onclick="saveSignal({{ loop.index0 }}, 'current', 'LONG')">
+                                                <i class="fas fa-save"></i>
+                                            </button>
+                                            {% else %}
+                                            <button class="btn btn-sm btn-secondary" disabled title="Inicia sesión para guardar">
+                                                <i class="fas fa-save"></i>
+                                            </button>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -437,6 +606,7 @@
                                         <th>RSI</th>
                                         <th>ATR</th>
                                         <th>Gráfico</th>
+                                        <th>Guardar</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -459,6 +629,17 @@
                                             <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
                                                 <i class="fas fa-chart-line"></i>
                                             </a>
+                                        </td>
+                                        <td>
+                                            {% if 'username' in session %}
+                                            <button class="btn btn-sm btn-success" onclick="saveSignal({{ loop.index0 }}, 'current', 'SHORT')">
+                                                <i class="fas fa-save"></i>
+                                            </button>
+                                            {% else %}
+                                            <button class="btn btn-sm btn-secondary" disabled title="Inicia sesión para guardar">
+                                                <i class="fas fa-save"></i>
+                                            </button>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -774,8 +955,90 @@
                 }
             });
         });
-    </script>
-    <script>
+
+        // Función para mostrar el modal de login
+        function showLogin() {
+            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+            loginModal.show();
+        }
+
+        // Función para hacer login
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Por favor completa todos los campos');
+                return;
+            }
+            
+            fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({username, password})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Cerrar modal y recargar página
+                    const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+                    loginModal.hide();
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error de conexión: ' + error.message);
+            });
+        }
+
+        // Función para hacer logout
+        function logout() {
+            fetch('/logout')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error de conexión: ' + error.message);
+            });
+        }
+
+        // Función para guardar una señal
+        function saveSignal(index, type, signalType = null) {
+            const data = {index, type};
+            if (signalType) {
+                data.signal_type = signalType;
+            }
+            
+            fetch('/save_signal', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Señal guardada correctamente');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error de conexión: ' + error.message);
+            });
+        }
+
         // Función para verificar el estado de actualización
         function checkUpdateStatus() {
             fetch('/status')
