@@ -80,20 +80,34 @@
         .saved-signal {
             background-color: #fff3cd;
         }
-        .signal-sl { background-color: #f8d7da; }
-        .signal-tp1 { background-color: #d1ecf1; }
-        .signal-tp2 { background-color: #d4edda; }
-        .signal-tp3 { background-color: #c3e6cb; }
-        .signal-expired { background-color: #e2e3e5; }
-        .login-modal { background-color: rgba(0,0,0,0.5); }
-        .user-winrate {
-            font-size: 0.8rem;
-            font-weight: bold;
-            color: #6c757d;
+        .saved-signal.sl {
+            background-color: #f8d7da;
         }
-        .winrate-high { color: #28a745; }
-        .winrate-medium { color: #ffc107; }
-        .winrate-low { color: #dc3545; }
+        .saved-signal.tp1 {
+            background-color: #d1ecf1;
+        }
+        .saved-signal.tp2 {
+            background-color: #d4edda;
+        }
+        .saved-signal.tp3 {
+            background-color: #d4edda;
+        }
+        .recommendation-cell {
+            max-width: 250px;
+            font-size: 0.85rem;
+        }
+        .login-form {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .user-info {
+            background-color: #e9f7fe;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -124,61 +138,57 @@
                 {% endif %}
             </div>
             <div class="text-end">
-                {% if 'username' in session %}
-                <p class="mb-0">Usuario: <strong>{{ session.username }}</strong> 
-                    <span class="user-winrate {{ 'winrate-high' if users[session.username].win_rate > 60 else 'winrate-medium' if users[session.username].win_rate > 40 else 'winrate-low' }}">
-                        (WinRate: {{ users[session.username].win_rate }}%)
-                    </span>
-                </p>
-                <a href="#" onclick="logout()" class="btn btn-sm btn-outline-danger">
-                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
-                </a>
-                {% else %}
-                <p class="mb-0">No autenticado</p>
-                <a href="#" onclick="showLogin()" class="btn btn-sm btn-outline-primary">
-                    <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
-                </a>
-                {% endif %}
+                <p class="mb-0">Autor: wgta</p>
                 <a href="https://github.com/Willer5000" target="_blank" class="btn btn-sm btn-outline-primary">
                     <i class="fab fa-github"></i> GitHub
                 </a>
                 <a href="/manual" class="btn btn-sm btn-outline-info">
                     <i class="fas fa-book"></i> Manual
                 </a>
+                {% if 'username' not in session %}
+                <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#loginModal">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+                {% else %}
+                <div class="btn-group">
+                    <span class="btn btn-sm btn-outline-success">
+                        <i class="fas fa-user"></i> {{ session.username }} (Winrate: {{ user_winrate | round(2) }}%)
+                    </span>
+                    <button class="btn btn-sm btn-outline-danger" id="logout-btn">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+                {% endif %}
             </div>
         </header>
 
         <!-- Modal de Login -->
-        <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
+        <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Iniciar Sesión</h5>
+                        <h5 class="modal-title" id="loginModalLabel">Iniciar Sesión</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <form id="login-form">
-                            <div class="mb-3">
-                                <label class="form-label">Usuario</label>
-                                <select class="form-select" id="username" required>
-                                    <option value="">Seleccionar usuario</option>
-                                    <option value="Willer">Willer</option>
-                                    <option value="Danilo">Danilo</option>
-                                    <option value="Damir">Damir</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Contraseña</label>
-                                <input type="password" class="form-control" id="password" value="1234" required>
-                            </div>
-                            <div class="alert alert-info">
-                                <small>Contraseña predeterminada: 1234 para todos los usuarios</small>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-primary" onclick="login()">Iniciar Sesión</button>
+                        <div class="login-form">
+                            <form id="login-form">
+                                <div class="mb-3">
+                                    <label for="username" class="form-label">Usuario</label>
+                                    <select class="form-select" id="username" name="username" required>
+                                        <option value="">Seleccionar usuario</option>
+                                        <option value="Willer">Willer</option>
+                                        <option value="Danilo">Danilo</option>
+                                        <option value="Damir">Damir</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="password" class="form-label">Contraseña</label>
+                                    <input type="password" class="form-control" id="password" name="password" value="1234" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Iniciar Sesión</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -211,6 +221,15 @@
                 </div>
             </div>
         </div>
+
+        <!-- Información del usuario logueado -->
+        {% if 'username' in session %}
+        <div class="user-info">
+            <h5><i class="fas fa-user"></i> Usuario: {{ session.username }}</h5>
+            <p><strong>Winrate:</strong> {{ user_winrate | round(2) }}%</p>
+            <p><strong>Señales guardadas activas:</strong> {{ saved_signals|length }}/10</p>
+        </div>
+        {% endif %}
 
         <!-- Sección de Filtros -->
         <div class="filter-section">
@@ -381,7 +400,9 @@
                                 <th>TP3</th>
                                 <th>ATR</th>
                                 <th>Gráfico</th>
+                                {% if 'username' in session %}
                                 <th>Guardar</th>
+                                {% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -402,17 +423,21 @@
                                         <i class="fas fa-chart-line"></i>
                                     </a>
                                 </td>
+                                {% if 'username' in session %}
                                 <td>
-                                    {% if 'username' in session %}
-                                    <button class="btn btn-sm btn-success" onclick="saveSignal({{ loop.index0 }}, 'historical')">
-                                        <i class="fas fa-save"></i> Guardar
+                                    <button class="btn btn-sm btn-success save-signal-btn" 
+                                            data-symbol="{{ signal.symbol }}" 
+                                            data-type="{{ signal.type }}"
+                                            data-entry="{{ signal.entry }}"
+                                            data-sl="{{ signal.sl }}"
+                                            data-tp1="{{ signal.tp1 }}"
+                                            data-tp2="{{ signal.tp2 }}"
+                                            data-tp3="{{ signal.tp3 }}"
+                                            data-timeframe="{{ signal.timeframe }}">
+                                        <i class="fas fa-save"></i>
                                     </button>
-                                    {% else %}
-                                    <button class="btn btn-sm btn-secondary" disabled title="Inicia sesión para guardar">
-                                        <i class="fas fa-save"></i> Guardar
-                                    </button>
-                                    {% endif %}
                                 </td>
+                                {% endif %}
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -426,12 +451,12 @@
             </div>
         </div>
 
-        <!-- Tabla de Señales Guardadas/En Ejecución -->
+        <!-- Tabla de Señales Guardadas -->
         {% if 'username' in session and saved_signals %}
         <div class="card mb-4">
             <div class="card-header bg-success text-white">
-                <h2 class="h5 mb-0"><i class="fas fa-bookmark"></i> Señales Guardadas/En Ejecución - {{ session.username }}</h2>
-                <small class="text-muted">Tus operaciones activas y finalizadas</small>
+                <h2 class="h5 mb-0"><i class="fas fa-bookmark"></i> Señales Guardadas - {{ session.username }}</h2>
+                <small class="text-muted">Tus operaciones en ejecución (Límite: 10 señales)</small>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -446,54 +471,50 @@
                                 <th>TP1</th>
                                 <th>TP2</th>
                                 <th>TP3</th>
-                                <th>Temporalidad</th>
-                                <th>Estado</th>
+                                <th>Timeframe</th>
+                                <th>Resultado</th>
                                 <th>Recomendación</th>
                                 <th>Gráfico</th>
+                                <th>Eliminar</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for signal in saved_signals %}
-                            <tr class="saved-signal 
-                                {% if signal.status == 'sl_hit' %}signal-sl
-                                {% elif signal.status == 'tp1_hit' %}signal-tp1
-                                {% elif signal.status == 'tp2_hit' or signal.status == 'tp2_tp1' %}signal-tp2
-                                {% elif signal.status == 'tp3_hit' %}signal-tp3
-                                {% elif signal.status == 'expired' %}signal-expired
-                                {% endif %}">
+                            <tr class="saved-signal {{ signal.result if signal.result }}">
                                 <td>{{ loop.index }}</td>
                                 <td>{{ signal.symbol }}</td>
-                                <td><span class="badge {{ 'badge-long' if signal.type == 'LONG' else 'badge-short' }}">{{ signal.type }}</span></td>
-                                <td>{{ signal.entry }}</td>
-                                <td class="text-danger">{{ signal.sl }}</td>
-                                <td class="text-success">{{ signal.tp1 }}</td>
-                                <td class="text-success">{{ signal.tp2 }}</td>
-                                <td class="text-success">{{ signal.tp3 }}</td>
+                                <td><span class="badge {{ 'badge-long' if signal.signal_type == 'LONG' else 'badge-short' }}">{{ signal.signal_type }}</span></td>
+                                <td>{{ signal.entry_price }}</td>
+                                <td class="text-danger">{{ signal.sl_price }}</td>
+                                <td class="text-success">{{ signal.tp1_price }}</td>
+                                <td class="text-success">{{ signal.tp2_price }}</td>
+                                <td class="text-success">{{ signal.tp3_price }}</td>
                                 <td><span class="badge bg-secondary">{{ signal.timeframe }}</span></td>
                                 <td>
-                                    {% if signal.status == 'active' or signal.status == 'in_progress' %}
-                                    <span class="badge bg-primary">Activa</span>
-                                    {% elif signal.status == 'sl_hit' %}
+                                    {% if signal.result == 'sl' %}
                                     <span class="badge bg-danger">SL</span>
-                                    {% elif signal.status == 'tp1_hit' %}
+                                    {% elif signal.result == 'tp1' %}
                                     <span class="badge bg-info">TP1</span>
-                                    {% elif signal.status == 'tp2_hit' %}
-                                    <span class="badge bg-warning">TP2</span>
-                                    {% elif signal.status == 'tp3_hit' %}
+                                    {% elif signal.result == 'tp2' %}
+                                    <span class="badge bg-primary">TP2</span>
+                                    {% elif signal.result == 'tp3' %}
                                     <span class="badge bg-success">TP3</span>
-                                    {% elif signal.status == 'expired' %}
-                                    <span class="badge bg-secondary">Expirada</span>
+                                    {% elif signal.result == 'expired' %}
+                                    <span class="badge bg-warning">Expirada</span>
                                     {% else %}
-                                    <span class="badge bg-secondary">{{ signal.status }}</span>
+                                    <span class="badge bg-secondary">Activa</span>
                                     {% endif %}
                                 </td>
+                                <td class="recommendation-cell">{{ signal.recommendation if signal.recommendation else 'Sin recomendación' }}</td>
                                 <td>
-                                    <small>{{ signal.recommendation }}</small>
-                                </td>
-                                <td>
-                                    <a href="/historical_chart/{{ signal.symbol }}/{{ signal.type|lower }}" class="btn btn-sm btn-info">
+                                    <a href="/historical_chart/{{ signal.symbol }}/{{ signal.signal_type|lower }}" class="btn btn-sm btn-info">
                                         <i class="fas fa-chart-line"></i>
                                     </a>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger remove-signal-btn" data-signal-id="{{ signal.id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -531,7 +552,6 @@
                                         <th>RSI</th>
                                         <th>ATR</th>
                                         <th>Gráfico</th>
-                                        <th>Guardar</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -554,17 +574,6 @@
                                             <a href="/chart/{{ signal.symbol }}/long" class="btn btn-sm btn-info">
                                                 <i class="fas fa-chart-line"></i>
                                             </a>
-                                        </td>
-                                        <td>
-                                            {% if 'username' in session %}
-                                            <button class="btn btn-sm btn-success" onclick="saveSignal({{ loop.index0 }}, 'current', 'LONG')">
-                                                <i class="fas fa-save"></i>
-                                            </button>
-                                            {% else %}
-                                            <button class="btn btn-sm btn-secondary" disabled title="Inicia sesión para guardar">
-                                                <i class="fas fa-save"></i>
-                                            </button>
-                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -606,7 +615,6 @@
                                         <th>RSI</th>
                                         <th>ATR</th>
                                         <th>Gráfico</th>
-                                        <th>Guardar</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -629,17 +637,6 @@
                                             <a href="/chart/{{ signal.symbol }}/short" class="btn btn-sm btn-info">
                                                 <i class="fas fa-chart-line"></i>
                                             </a>
-                                        </td>
-                                        <td>
-                                            {% if 'username' in session %}
-                                            <button class="btn btn-sm btn-success" onclick="saveSignal({{ loop.index0 }}, 'current', 'SHORT')">
-                                                <i class="fas fa-save"></i>
-                                            </button>
-                                            {% else %}
-                                            <button class="btn btn-sm btn-secondary" disabled title="Inicia sesión para guardar">
-                                                <i class="fas fa-save"></i>
-                                            </button>
-                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -954,91 +951,116 @@
                     alert('Error de conexión: ' + error.message);
                 }
             });
+            
+            // Manejar login
+            document.getElementById('login-form').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const params = Object.fromEntries(formData.entries());
+                
+                try {
+                    const response = await fetch('/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams(params)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        alert('Login exitoso. La página se recargará.');
+                        location.reload();
+                    } else {
+                        alert('Error en login: ' + result.message);
+                    }
+                } catch (error) {
+                    alert('Error de conexión: ' + error.message);
+                }
+            });
+            
+            // Manejar logout
+            document.getElementById('logout-btn').addEventListener('click', async function() {
+                try {
+                    const response = await fetch('/logout');
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        alert('Logout exitoso. La página se recargará.');
+                        location.reload();
+                    } else {
+                        alert('Error en logout: ' + result.message);
+                    }
+                } catch (error) {
+                    alert('Error de conexión: ' + error.message);
+                }
+            });
+            
+            // Manejar guardado de señales
+            document.querySelectorAll('.save-signal-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const signalData = {
+                        symbol: this.getAttribute('data-symbol'),
+                        type: this.getAttribute('data-type'),
+                        entry: parseFloat(this.getAttribute('data-entry')),
+                        sl: parseFloat(this.getAttribute('data-sl')),
+                        tp1: parseFloat(this.getAttribute('data-tp1')),
+                        tp2: parseFloat(this.getAttribute('data-tp2')),
+                        tp3: parseFloat(this.getAttribute('data-tp3')),
+                        timeframe: this.getAttribute('data-timeframe')
+                    };
+                    
+                    fetch('/save_signal', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(signalData)
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.status === 'success') {
+                            alert('Señal guardada correctamente.');
+                            location.reload();
+                        } else {
+                            alert('Error al guardar señal: ' + result.message);
+                        }
+                    })
+                    .catch(error => {
+                        alert('Error de conexión: ' + error.message);
+                    });
+                });
+            });
+            
+            // Manejar eliminación de señales
+            document.querySelectorAll('.remove-signal-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const signalId = this.getAttribute('data-signal-id');
+                    
+                    if (confirm('¿Estás seguro de que quieres eliminar esta señal?')) {
+                        fetch('/remove_signal/' + signalId, {
+                            method: 'POST'
+                        })
+                        .then(response => response.json())
+                        .then(result => {
+                            if (result.status === 'success') {
+                                alert('Señal eliminada correctamente.');
+                                location.reload();
+                            } else {
+                                alert('Error al eliminar señal: ' + result.message);
+                            }
+                        })
+                        .catch(error => {
+                            alert('Error de conexión: ' + error.message);
+                        });
+                    }
+                });
+            });
         });
-
-        // Función para mostrar el modal de login
-        function showLogin() {
-            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-            loginModal.show();
-        }
-
-        // Función para hacer login
-        function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            
-            if (!username || !password) {
-                alert('Por favor completa todos los campos');
-                return;
-            }
-            
-            fetch('/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({username, password})
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    // Cerrar modal y recargar página
-                    const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
-                    loginModal.hide();
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            })
-            .catch(error => {
-                alert('Error de conexión: ' + error.message);
-            });
-        }
-
-        // Función para hacer logout
-        function logout() {
-            fetch('/logout')
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            })
-            .catch(error => {
-                alert('Error de conexión: ' + error.message);
-            });
-        }
-
-        // Función para guardar una señal
-        function saveSignal(index, type, signalType = null) {
-            const data = {index, type};
-            if (signalType) {
-                data.signal_type = signalType;
-            }
-            
-            fetch('/save_signal', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert('Señal guardada correctamente');
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            })
-            .catch(error => {
-                alert('Error de conexión: ' + error.message);
-            });
-        }
-
+    </script>
+    <script>
         // Función para verificar el estado de actualización
         function checkUpdateStatus() {
             fetch('/status')
