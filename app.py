@@ -18,7 +18,8 @@ import traceback
 from threading import Lock, Event, Thread
 from collections import deque
 import pytz
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import sqlite3
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -42,13 +43,6 @@ try:
 except:
     NY_TZ = pytz.timezone('UTC')
     logger.warning("No se pudo cargar la zona horaria de NY, usando UTC")
-
-# Usuarios del sistema
-USERS = {
-    'Willer': {'password': '1234', 'win_rate': 0, 'trades': []},
-    'Danilo': {'password': '1234', 'win_rate': 0, 'trades': []},
-    'Damir': {'password': '1234', 'win_rate': 0, 'trades': []}
-}
 
 DEFAULTS = {
     'timeframe': '1h',
@@ -76,15 +70,15 @@ KUCOIN_TIMEFRAMES = {
     '1w': '1week'
 }
 
-# Duración de las señales guardadas por timeframe (en horas)
-SIGNAL_DURATION = {
-    '15m': 2,    # 2 horas
-    '30m': 4,    # 4 horas
-    '1h': 8,     # 8 horas
-    '2h': 16,    # 16 horas
-    '4h': 24,    # 24 horas
-    '1d': 48,    # 48 horas
-    '1w': 168    # 1 semana
+# Duración de señales guardadas por timeframe (en horas)
+SIGNAL_DURATIONS = {
+    '15m': 4,    # 4 horas (16 velas)
+    '30m': 8,    # 8 horas (16 velas)
+    '1h': 16,    # 16 horas (16 velas)
+    '2h': 32,    # 32 horas (16 velas)
+    '4h': 64,    # 64 horas (16 velas)
+    '1d': 384,   # 16 días (16 velas)
+    '1w': 2688   # 16 semanas (16 velas)
 }
 
 # Estado global
@@ -96,7 +90,6 @@ class AnalysisState:
         self.scatter_data = []
         self.historical_signals = deque(maxlen=50)
         self.current_signals = deque(maxlen=50)
-        self.saved_signals = deque(maxlen=30)  # Máximo 30 señales guardadas
         self.last_update = datetime.now()
         self.cryptos_analyzed = 0
         self.is_updating = False
@@ -114,7 +107,6 @@ class AnalysisState:
             'scatter_data': self.scatter_data,
             'historical_signals': list(self.historical_signals),
             'current_signals': list(self.current_signals),
-            'saved_signals': list(self.saved_signals),
             'last_update': self.last_update,
             'cryptos_analyzed': self.cryptos_analyzed,
             'is_updating': self.is_updating,
@@ -124,6 +116,62 @@ class AnalysisState:
         }
 
 analysis_state = AnalysisState()
+
+# Inicializar base de datos
+def init_db():
+    conn = sqlite3.connect('trading_signals.db')
+    c = conn.cursor()
+    
+    # Tabla de usuarios
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            winrate REAL DEFAULT 0
+        )
+    ''')
+    
+    # Tabla de señales guardadas
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS saved_signals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            symbol TEXT NOT NULL,
+            signal_type TEXT NOT NULL,
+            entry_price REAL NOT NULL,
+            sl_price REAL NOT NULL,
+            tp1_price REAL NOT NULL,
+            tp2_price REAL NOT NULL,
+            tp3_price REAL NOT NULL,
+            timeframe TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            expiration DATETIME NOT NULL,
+            status TEXT DEFAULT 'active',
+            result TEXT,
+            recommendation TEXT,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    # Insertar usuarios predeterminados si no existen
+    users = [
+        ('Willer', '1234'),
+        ('Danilo', '1234'),
+        ('Damir', '1234')
+    ]
+    
+    for username, password in users:
+        c.execute('SELECT id FROM users WHERE username = ?', (username,))
+        if c.fetchone() is None:
+            password_hash = generate_password_hash(password)
+            c.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', 
+                     (username, password_hash))
+    
+    conn.commit()
+    conn.close()
+
+init_db()
 
 # Leer lista de criptomonedas
 def load_cryptos():
@@ -627,148 +675,208 @@ def process_crypto_batch(batch, params, previous_candle_start, timeframe_data):
     
     return long_signals, short_signals, scatter_data
 
-# Verificar estado de una señal guardada
-def check_saved_signal_status(signal):
-    try:
-        # Obtener datos actuales
-        df = get_kucoin_data(signal['symbol'], signal['timeframe'])
+# Obtener señales guardadas para un usuario
+def get_saved_signals(user_id):
+    conn = sqlite3.connect('trading_signals.db')
+    c = conn.cursor()
+    
+    # Obtener señales activas
+    c.execute('''
+        SELECT * FROM saved_signals 
+        WHERE user_id = ? AND status = 'active' 
+        ORDER BY timestamp DESC
+    ''', (user_id,))
+    
+    signals = []
+    for row in c.fetchall():
+        signals.append({
+            'id': row[0],
+            'symbol': row[2],
+            'signal_type': row[3],
+            'entry_price': row[4],
+            'sl_price': row[5],
+            'tp1_price': row[6],
+            'tp2_price': row[7],
+            'tp3_price': row[8],
+            'timeframe': row[9],
+            'timestamp': row[10],
+            'expiration': row[11],
+            'result': row[13],
+            'recommendation': row[14]
+        })
+    
+    conn.close()
+    return signals
+
+# Guardar una señal para un usuario
+def save_signal_for_user(user_id, signal):
+    conn = sqlite3.connect('trading_signals.db')
+    c = conn.cursor()
+    
+    # Verificar si ya existe una señal similar activa
+    c.execute('''
+        SELECT COUNT(*) FROM saved_signals 
+        WHERE user_id = ? AND symbol = ? AND signal_type = ? AND status = 'active'
+    ''', (user_id, signal['symbol'], signal['type']))
+    
+    if c.fetchone()[0] > 0:
+        conn.close()
+        return False, "Ya existe una señal activa para este par"
+    
+    # Verificar límite de 10 señales por usuario
+    c.execute('''
+        SELECT COUNT(*) FROM saved_signals 
+        WHERE user_id = ? AND status = 'active'
+    ''', (user_id,))
+    
+    if c.fetchone()[0] >= 10:
+        conn.close()
+        return False, "Límite de 10 señales activas alcanzado"
+    
+    # Calcular fecha de expiración
+    timeframe = signal['timeframe']
+    duration_hours = SIGNAL_DURATIONS.get(timeframe, 16)  # Default 16 horas
+    expiration = datetime.now() + timedelta(hours=duration_hours)
+    
+    # Insertar señal
+    c.execute('''
+        INSERT INTO saved_signals 
+        (user_id, symbol, signal_type, entry_price, sl_price, tp1_price, tp2_price, tp3_price, timeframe, expiration)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        user_id, 
+        signal['symbol'], 
+        signal['type'], 
+        signal['entry'], 
+        signal['sl'], 
+        signal['tp1'], 
+        signal['tp2'], 
+        signal['tp3'], 
+        timeframe,
+        expiration
+    ))
+    
+    conn.commit()
+    conn.close()
+    return True, "Señal guardada correctamente"
+
+# Eliminar una señal guardada
+def remove_saved_signal(signal_id, user_id):
+    conn = sqlite3.connect('trading_signals.db')
+    c = conn.cursor()
+    
+    c.execute('''
+        DELETE FROM saved_signals 
+        WHERE id = ? AND user_id = ?
+    ''', (signal_id, user_id))
+    
+    conn.commit()
+    conn.close()
+    return c.rowcount > 0
+
+# Actualizar recomendaciones para señales guardadas
+def update_saved_signals_recommendations():
+    conn = sqlite3.connect('trading_signals.db')
+    c = conn.cursor()
+    
+    # Obtener todas las señales activas
+    c.execute('SELECT * FROM saved_signals WHERE status = "active"')
+    signals = c.fetchall()
+    
+    for signal in signals:
+        signal_id, user_id, symbol, signal_type, entry, sl, tp1, tp2, tp3, timeframe, timestamp, expiration, status, result, recommendation = signal
+        
+        # Obtener datos actuales del mercado
+        df = get_kucoin_data(symbol, timeframe)
         if df is None or len(df) < 10:
-            return signal  # No se pueden obtener datos, mantener señal igual
+            continue
         
         current_price = df['close'].iloc[-1]
-        signal_time = datetime.fromisoformat(signal['timestamp'].replace('Z', '+00:00'))
-        current_time = datetime.now().replace(tzinfo=None)
-        hours_passed = (current_time - signal_time).total_seconds() / 3600
+        previous_price = df['close'].iloc[-2] if len(df) > 1 else current_price
         
-        # Duración máxima de la señal
-        max_duration = SIGNAL_DURATION.get(signal['timeframe'], 8)
+        # Determinar la recomendación basada en el precio actual
+        new_recommendation = None
+        new_result = result
         
         # Verificar si la señal ha expirado
-        if hours_passed > max_duration:
-            signal['status'] = 'expired'
-            signal['recommendation'] = 'Señal expirada'
-            return signal
+        if datetime.now() > datetime.strptime(expiration, '%Y-%m-%d %H:%M:%S'):
+            if result is None:
+                new_result = 'expired'
+                new_recommendation = "Señal expirada sin resultado claro"
+            status = 'inactive'
         
         # Verificar SL
-        if signal['type'] == 'LONG' and current_price <= signal['sl']:
-            signal['status'] = 'sl_hit'
-            signal['recommendation'] = 'Tocó Stop Loss, esta fue una falsa señal. Lo siento'
-            signal['expiry_countdown'] = 1  # Expirará después de 1 vela más
-            return signal
-        
-        if signal['type'] == 'SHORT' and current_price >= signal['sl']:
-            signal['status'] = 'sl_hit'
-            signal['recommendation'] = 'Tocó Stop Loss, esta fue una falsa señal. Lo siento'
-            signal['expiry_countdown'] = 1
-            return signal
+        elif (signal_type == 'LONG' and current_price <= sl) or (signal_type == 'SHORT' and current_price >= sl):
+            new_result = 'sl'
+            new_recommendation = "Toco Stop Loss, esta fue una falsa señal. Lo siento"
+            status = 'inactive'
         
         # Verificar TP1
-        if signal['type'] == 'LONG' and current_price >= signal['tp1']:
-            if signal.get('tp1_hit', False) and current_price <= signal['entry']:
-                signal['status'] = 'tp1_be'
-                signal['recommendation'] = 'Operación exitosa, tocó TP1 y luego Break Even'
-                signal['expiry_countdown'] = 1
-            elif not signal.get('tp1_hit', False):
-                signal['tp1_hit'] = True
-                signal['tp1_time'] = datetime.now().isoformat()
-                signal['recommendation'] = 'Tocó Take Profit 1, coloca tu SL a break even'
-            return signal
-        
-        if signal['type'] == 'SHORT' and current_price <= signal['tp1']:
-            if signal.get('tp1_hit', False) and current_price >= signal['entry']:
-                signal['status'] = 'tp1_be'
-                signal['recommendation'] = 'Operación exitosa, tocó TP1 y luego Break Even'
-                signal['expiry_countdown'] = 1
-            elif not signal.get('tp1_hit', False):
-                signal['tp1_hit'] = True
-                signal['tp1_time'] = datetime.now().isoformat()
-                signal['recommendation'] = 'Tocó Take Profit 1, coloca tu SL a break even'
-            return signal
+        elif (signal_type == 'LONG' and current_price >= tp1) or (signal_type == 'SHORT' and current_price <= tp1):
+            if result != 'tp1':
+                new_result = 'tp1'
+                new_recommendation = "Toco Take Profit 1, coloca tu SL a break even"
         
         # Verificar TP2
-        if signal['type'] == 'LONG' and current_price >= signal['tp2']:
-            if signal.get('tp2_hit', False) and current_price <= signal['tp1']:
-                signal['status'] = 'tp2_tp1'
-                signal['recommendation'] = 'Si no te saliste y colocaste SL en TP1, felicidades. Caso contrario sal con discreción'
-                signal['expiry_countdown'] = 1
-            elif not signal.get('tp2_hit', False):
-                signal['tp2_hit'] = True
-                signal['tp2_time'] = datetime.now().isoformat()
-                signal['recommendation'] = 'Tocó Take Profit 2, si gustas sal con buenas ganancias o coloca SL en TP1'
-            return signal
-        
-        if signal['type'] == 'SHORT' and current_price <= signal['tp2']:
-            if signal.get('tp2_hit', False) and current_price >= signal['tp1']:
-                signal['status'] = 'tp2_tp1'
-                signal['recommendation'] = 'Si no te saliste y colocaste SL en TP1, felicidades. Caso contrario sal con discreción'
-                signal['expiry_countdown'] = 1
-            elif not signal.get('tp2_hit', False):
-                signal['tp2_hit'] = True
-                signal['tp2_time'] = datetime.now().isoformat()
-                signal['recommendation'] = 'Tocó Take Profit 2, si gustas sal con buenas ganancias o coloca SL en TP1'
-            return signal
+        elif (signal_type == 'LONG' and current_price >= tp2) or (signal_type == 'SHORT' and current_price <= tp2):
+            if result != 'tp2':
+                new_result = 'tp2'
+                new_recommendation = "Toco Take Profit 2, si gustas salte de la operación con buenas ganancias o coloca SL en Take Profit 1"
         
         # Verificar TP3
-        if signal['type'] == 'LONG' and current_price >= signal['tp3']:
-            signal['status'] = 'tp3_hit'
-            signal['recommendation'] = 'Tocó Take Profit 3, Felicidades la operación fue todo un éxito'
-            signal['expiry_countdown'] = 1
-            return signal
+        elif (signal_type == 'LONG' and current_price >= tp3) or (signal_type == 'SHORT' and current_price <= tp3):
+            new_result = 'tp3'
+            new_recommendation = "Toco Take Profit 3, Felicidades la operación fue todo un éxito"
+            status = 'inactive'
         
-        if signal['type'] == 'SHORT' and current_price <= signal['tp3']:
-            signal['status'] = 'tp3_hit'
-            signal['recommendation'] = 'Tocó Take Profit 3, Felicidades la operación fue todo un éxito'
-            signal['expiry_countdown'] = 1
-            return signal
-        
-        # Verificar si la operación está tardando demasiado
-        expected_duration = max_duration / 2  # Mitad del tiempo máximo
-        if hours_passed > expected_duration and not signal.get('tp1_hit', False):
-            signal['status'] = 'taking_too_long'
-            signal['recommendation'] = 'Esta operación está durando mucho, sal con discreción'
-            signal['expiry_countdown'] = 1
-            return signal
-        
-        # Verificar si tocó TP1 pero no avanza
-        if signal.get('tp1_hit', False) and not signal.get('tp2_hit', False):
-            tp1_time = datetime.fromisoformat(signal['tp1_time'].replace('Z', '+00:00'))
-            tp1_hours = (current_time - tp1_time).total_seconds() / 3600
+        # Verificar si la operación está durando demasiado
+        else:
+            signal_age = datetime.now() - datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+            half_duration = timedelta(hours=SIGNAL_DURATIONS.get(timeframe, 16) / 2)
             
-            if tp1_hours > (max_duration / 4):  # 25% del tiempo total después de TP1
-                signal['status'] = 'stalled_after_tp1'
-                signal['recommendation'] = 'No creo que toque TP2, sal con discreción con ganancias. Felicidades'
-                signal['expiry_countdown'] = 1
-                return signal
+            if signal_age > half_duration and result is None:
+                new_recommendation = "Esta operación está durando mucho, sal de esta con discreción"
         
-        # Si no ha pasado nada especial
-        signal['status'] = 'in_progress'
-        signal['recommendation'] = 'Sé paciente, tu operación se está ejecutando con normalidad'
-        return signal
-        
-    except Exception as e:
-        logger.error(f"Error verificando señal {signal['symbol']}: {str(e)}")
-        signal['status'] = 'error'
-        signal['recommendation'] = f'Error verificando estado: {str(e)}'
-        return signal
+        # Actualizar la señal en la base de datos
+        update_query = '''
+            UPDATE saved_signals 
+            SET recommendation = ?, result = ?, status = ?
+            WHERE id = ?
+        '''
+        c.execute(update_query, (new_recommendation, new_result, status, signal_id))
+    
+    conn.commit()
+    conn.close()
 
-# Actualizar win rate de un usuario
-def update_user_win_rate(username):
-    try:
-        user = USERS[username]
-        trades = user['trades']
-        
-        if not trades:
-            user['win_rate'] = 0
-            return
-        
-        winning_trades = 0
-        for trade in trades:
-            if trade.get('status') in ['tp1_hit', 'tp1_be', 'tp2_hit', 'tp2_tp1', 'tp3_hit']:
-                winning_trades += 1
-        
-        user['win_rate'] = round((winning_trades / len(trades)) * 100, 2)
-    except Exception as e:
-        logger.error(f"Error actualizando win rate para {username}: {str(e)}")
+# Calcular winrate de un usuario
+def calculate_user_winrate(user_id):
+    conn = sqlite3.connect('trading_signals.db')
+    c = conn.cursor()
+    
+    # Contar señales con resultado
+    c.execute('''
+        SELECT result, COUNT(*) FROM saved_signals 
+        WHERE user_id = ? AND result IS NOT NULL
+        GROUP BY result
+    ''', (user_id,))
+    
+    results = c.fetchall()
+    total_signals = 0
+    winning_signals = 0
+    
+    for result, count in results:
+        total_signals += count
+        if result in ['tp1', 'tp2', 'tp3']:
+            winning_signals += count
+    
+    winrate = (winning_signals / total_signals * 100) if total_signals > 0 else 0
+    
+    # Actualizar winrate del usuario
+    c.execute('UPDATE users SET winrate = ? WHERE id = ?', (winrate, user_id))
+    conn.commit()
+    conn.close()
+    
+    return winrate
 
 # Tarea de actualización optimizada
 def update_task():
@@ -830,26 +938,14 @@ def update_task():
                 timeframe_data['short_signals'] = all_short_signals
                 timeframe_data['scatter_data'] = all_scatter_data
                 
-                # Actualizar estado de señales guardadas
-                updated_saved_signals = deque()
-                for signal in analysis_state.saved_signals:
-                    updated_signal = check_saved_signal_status(signal.copy())
-                    
-                    # Manejar contador de expiración
-                    if 'expiry_countdown' in updated_signal:
-                        if updated_signal['expiry_countdown'] <= 0:
-                            continue  # Eliminar señal
-                        else:
-                            updated_signal['expiry_countdown'] -= 1
-                    
-                    updated_saved_signals.append(updated_signal)
-                
-                analysis_state.saved_signals = updated_saved_signals
                 analysis_state.cryptos_analyzed = total
                 analysis_state.last_update = datetime.now()
                 analysis_state.is_updating = False
                 
-                logger.info(f"Análisis completado: {len(all_long_signals)} LONG, {len(all_short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas, {len(analysis_state.saved_signals)} guardadas")
+                logger.info(f"Análisis completado: {len(all_long_signals)} LONG, {len(all_short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas")
+                
+                # Actualizar recomendaciones de señales guardadas
+                update_saved_signals_recommendations()
                 
         except Exception as e:
             logger.error(f"Error crítico en actualización: {str(e)}")
@@ -884,12 +980,6 @@ def index():
             scatter_data = []
             historical_signals = []
         
-        # Obtener señales guardadas del usuario actual si está logueado
-        user_saved_signals = []
-        if 'username' in session and session['username'] in USERS:
-            user_data = USERS[session['username']]
-            user_saved_signals = user_data['trades'][-10:]  # Últimas 10 señales
-        
         last_update = analysis_state.last_update
         cryptos_analyzed = analysis_state.cryptos_analyzed
         
@@ -909,11 +999,18 @@ def index():
         
         historical_signals.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
         
+        # Obtener señales guardadas si el usuario está logueado
+        saved_signals = []
+        user_winrate = 0
+        if 'user_id' in session:
+            saved_signals = get_saved_signals(session['user_id'])
+            user_winrate = calculate_user_winrate(session['user_id'])
+        
         return render_template('index.html', 
                                long_signals=long_signals, 
                                short_signals=short_signals,
                                historical_signals=historical_signals,
-                               saved_signals=user_saved_signals,
+                               saved_signals=saved_signals,
                                last_update=last_update,
                                params=params,
                                avg_adx_long=round(avg_adx_long, 1),
@@ -922,75 +1019,60 @@ def index():
                                cryptos_analyzed=cryptos_analyzed,
                                is_updating=analysis_state.is_updating,
                                update_progress=analysis_state.update_progress,
-                               users=USERS)
+                               user_winrate=user_winrate)
 
 @app.route('/login', methods=['POST'])
 def login():
-    try:
-        data = request.get_json()
-        username = data.get('username', '')
-        password = data.get('password', '')
-        
-        if username in USERS and USERS[username]['password'] == password:
-            session['username'] = username
-            return jsonify({'status': 'success', 'message': 'Login exitoso', 'username': username})
-        else:
-            return jsonify({'status': 'error', 'message': 'Usuario o contraseña incorrectos'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': f'Error en login: {str(e)}'})
+    username = request.form.get('username')
+    password = request.form.get('password')
+    
+    conn = sqlite3.connect('trading_signals.db')
+    c = conn.cursor()
+    
+    c.execute('SELECT id, password_hash FROM users WHERE username = ?', (username,))
+    user = c.fetchone()
+    conn.close()
+    
+    if user and check_password_hash(user[1], password):
+        session['user_id'] = user[0]
+        session['username'] = username
+        return jsonify({'status': 'success', 'message': 'Login exitoso'})
+    else:
+        return jsonify({'status': 'error', 'message': 'Credenciales inválidas'})
 
 @app.route('/logout')
 def logout():
+    session.pop('user_id', None)
     session.pop('username', None)
     return jsonify({'status': 'success', 'message': 'Logout exitoso'})
 
 @app.route('/save_signal', methods=['POST'])
 def save_signal():
-    try:
-        if 'username' not in session:
-            return jsonify({'status': 'error', 'message': 'Usuario no autenticado'})
-        
-        username = session['username']
-        data = request.get_json()
-        signal_index = data.get('index')
-        signal_type = data.get('type')  # 'historical' or 'current'
-        
-        with analysis_state.lock:
-            if signal_type == 'historical':
-                if signal_index < len(analysis_state.timeframe_data[analysis_state.params['timeframe']]['historical_signals']):
-                    signal = analysis_state.timeframe_data[analysis_state.params['timeframe']]['historical_signals'][signal_index]
-                else:
-                    return jsonify({'status': 'error', 'message': 'Señal histórica no encontrada'})
-            else:
-                # Para señales actuales (long o short)
-                signals = (analysis_state.timeframe_data[analysis_state.params['timeframe']]['long_signals'] 
-                          if data.get('signal_type') == 'LONG' else 
-                          analysis_state.timeframe_data[analysis_state.params['timeframe']]['short_signals'])
-                if signal_index < len(signals):
-                    signal = signals[signal_index]
-                else:
-                    return jsonify({'status': 'error', 'message': 'Señal no encontrada'})
-            
-            # Crear copia de la señal para el usuario
-            user_signal = signal.copy()
-            user_signal['saved_timestamp'] = datetime.now().isoformat()
-            user_signal['status'] = 'active'
-            user_signal['recommendation'] = 'Señal guardada, monitoreando...'
-            
-            # Guardar en el usuario
-            if len(USERS[username]['trades']) >= 10:
-                USERS[username]['trades'].pop(0)  # Eliminar la más antigua si hay más de 10
-            
-            USERS[username]['trades'].append(user_signal)
-            
-            # También guardar en el estado global (para seguimiento)
-            analysis_state.saved_signals.append(user_signal)
-            
-            return jsonify({'status': 'success', 'message': 'Señal guardada correctamente'})
-            
-    except Exception as e:
-        logger.error(f"Error guardando señal: {str(e)}")
-        return jsonify({'status': 'error', 'message': f'Error guardando señal: {str(e)}'})
+    if 'user_id' not in session:
+        return jsonify({'status': 'error', 'message': 'Debe iniciar sesión para guardar señales'})
+    
+    signal_data = request.get_json()
+    if not signal_data:
+        return jsonify({'status': 'error', 'message': 'Datos de señal no válidos'})
+    
+    success, message = save_signal_for_user(session['user_id'], signal_data)
+    
+    if success:
+        return jsonify({'status': 'success', 'message': message})
+    else:
+        return jsonify({'status': 'error', 'message': message})
+
+@app.route('/remove_signal/<int:signal_id>', methods=['POST'])
+def remove_signal(signal_id):
+    if 'user_id' not in session:
+        return jsonify({'status': 'error', 'message': 'Debe iniciar sesión para eliminar señales'})
+    
+    success = remove_saved_signal(signal_id, session['user_id'])
+    
+    if success:
+        return jsonify({'status': 'success', 'message': 'Señal eliminada correctamente'})
+    else:
+        return jsonify({'status': 'error', 'message': 'Error al eliminar la señal'})
 
 @app.route('/chart/<symbol>/<signal_type>')
 def get_chart(symbol, signal_type):
@@ -1253,7 +1335,7 @@ def update_params():
         logger.error(f"Error actualizando parámetros: {str(e)}")
         return jsonify({
             'status': 'error',
-            'message': f'Error actualizando parámetros: {str(e)}'
+            'message': f"Error actualizando parámetros: {str(e)}"
         }), 500
 
 @app.route('/status')
