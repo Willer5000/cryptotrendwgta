@@ -6,7 +6,7 @@ import numpy as np
 import json
 import threading
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, session
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
+app.secret_key = 'wgta_crypto_trading_secret_key_2024'
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -33,7 +34,7 @@ CRYPTOS_FILE = 'cryptos.txt'
 CACHE_TIME = 300
 MAX_RETRIES = 2
 RETRY_DELAY = 1
-MAX_WORKERS = 3  # Reducido para evitar problemas de memoria
+MAX_WORKERS = 3
 
 # Zona horaria
 try:
@@ -41,6 +42,13 @@ try:
 except:
     NY_TZ = pytz.timezone('UTC')
     logger.warning("No se pudo cargar la zona horaria de NY, usando UTC")
+
+# Usuarios del sistema
+USERS = {
+    'Willer': {'password': '1234', 'win_rate': 0, 'trades': []},
+    'Danilo': {'password': '1234', 'win_rate': 0, 'trades': []},
+    'Damir': {'password': '1234', 'win_rate': 0, 'trades': []}
+}
 
 DEFAULTS = {
     'timeframe': '1h',
@@ -68,6 +76,17 @@ KUCOIN_TIMEFRAMES = {
     '1w': '1week'
 }
 
+# Duración de las señales guardadas por timeframe (en horas)
+SIGNAL_DURATION = {
+    '15m': 2,    # 2 horas
+    '30m': 4,    # 4 horas
+    '1h': 8,     # 8 horas
+    '2h': 16,    # 16 horas
+    '4h': 24,    # 24 horas
+    '1d': 48,    # 48 horas
+    '1w': 168    # 1 semana
+}
+
 # Estado global
 class AnalysisState:
     def __init__(self):
@@ -77,6 +96,7 @@ class AnalysisState:
         self.scatter_data = []
         self.historical_signals = deque(maxlen=50)
         self.current_signals = deque(maxlen=50)
+        self.saved_signals = deque(maxlen=30)  # Máximo 30 señales guardadas
         self.last_update = datetime.now()
         self.cryptos_analyzed = 0
         self.is_updating = False
@@ -94,6 +114,7 @@ class AnalysisState:
             'scatter_data': self.scatter_data,
             'historical_signals': list(self.historical_signals),
             'current_signals': list(self.current_signals),
+            'saved_signals': list(self.saved_signals),
             'last_update': self.last_update,
             'cryptos_analyzed': self.cryptos_analyzed,
             'is_updating': self.is_updating,
@@ -606,6 +627,149 @@ def process_crypto_batch(batch, params, previous_candle_start, timeframe_data):
     
     return long_signals, short_signals, scatter_data
 
+# Verificar estado de una señal guardada
+def check_saved_signal_status(signal):
+    try:
+        # Obtener datos actuales
+        df = get_kucoin_data(signal['symbol'], signal['timeframe'])
+        if df is None or len(df) < 10:
+            return signal  # No se pueden obtener datos, mantener señal igual
+        
+        current_price = df['close'].iloc[-1]
+        signal_time = datetime.fromisoformat(signal['timestamp'].replace('Z', '+00:00'))
+        current_time = datetime.now().replace(tzinfo=None)
+        hours_passed = (current_time - signal_time).total_seconds() / 3600
+        
+        # Duración máxima de la señal
+        max_duration = SIGNAL_DURATION.get(signal['timeframe'], 8)
+        
+        # Verificar si la señal ha expirado
+        if hours_passed > max_duration:
+            signal['status'] = 'expired'
+            signal['recommendation'] = 'Señal expirada'
+            return signal
+        
+        # Verificar SL
+        if signal['type'] == 'LONG' and current_price <= signal['sl']:
+            signal['status'] = 'sl_hit'
+            signal['recommendation'] = 'Tocó Stop Loss, esta fue una falsa señal. Lo siento'
+            signal['expiry_countdown'] = 1  # Expirará después de 1 vela más
+            return signal
+        
+        if signal['type'] == 'SHORT' and current_price >= signal['sl']:
+            signal['status'] = 'sl_hit'
+            signal['recommendation'] = 'Tocó Stop Loss, esta fue una falsa señal. Lo siento'
+            signal['expiry_countdown'] = 1
+            return signal
+        
+        # Verificar TP1
+        if signal['type'] == 'LONG' and current_price >= signal['tp1']:
+            if signal.get('tp1_hit', False) and current_price <= signal['entry']:
+                signal['status'] = 'tp1_be'
+                signal['recommendation'] = 'Operación exitosa, tocó TP1 y luego Break Even'
+                signal['expiry_countdown'] = 1
+            elif not signal.get('tp1_hit', False):
+                signal['tp1_hit'] = True
+                signal['tp1_time'] = datetime.now().isoformat()
+                signal['recommendation'] = 'Tocó Take Profit 1, coloca tu SL a break even'
+            return signal
+        
+        if signal['type'] == 'SHORT' and current_price <= signal['tp1']:
+            if signal.get('tp1_hit', False) and current_price >= signal['entry']:
+                signal['status'] = 'tp1_be'
+                signal['recommendation'] = 'Operación exitosa, tocó TP1 y luego Break Even'
+                signal['expiry_countdown'] = 1
+            elif not signal.get('tp1_hit', False):
+                signal['tp1_hit'] = True
+                signal['tp1_time'] = datetime.now().isoformat()
+                signal['recommendation'] = 'Tocó Take Profit 1, coloca tu SL a break even'
+            return signal
+        
+        # Verificar TP2
+        if signal['type'] == 'LONG' and current_price >= signal['tp2']:
+            if signal.get('tp2_hit', False) and current_price <= signal['tp1']:
+                signal['status'] = 'tp2_tp1'
+                signal['recommendation'] = 'Si no te saliste y colocaste SL en TP1, felicidades. Caso contrario sal con discreción'
+                signal['expiry_countdown'] = 1
+            elif not signal.get('tp2_hit', False):
+                signal['tp2_hit'] = True
+                signal['tp2_time'] = datetime.now().isoformat()
+                signal['recommendation'] = 'Tocó Take Profit 2, si gustas sal con buenas ganancias o coloca SL en TP1'
+            return signal
+        
+        if signal['type'] == 'SHORT' and current_price <= signal['tp2']:
+            if signal.get('tp2_hit', False) and current_price >= signal['tp1']:
+                signal['status'] = 'tp2_tp1'
+                signal['recommendation'] = 'Si no te saliste y colocaste SL en TP1, felicidades. Caso contrario sal con discreción'
+                signal['expiry_countdown'] = 1
+            elif not signal.get('tp2_hit', False):
+                signal['tp2_hit'] = True
+                signal['tp2_time'] = datetime.now().isoformat()
+                signal['recommendation'] = 'Tocó Take Profit 2, si gustas sal con buenas ganancias o coloca SL en TP1'
+            return signal
+        
+        # Verificar TP3
+        if signal['type'] == 'LONG' and current_price >= signal['tp3']:
+            signal['status'] = 'tp3_hit'
+            signal['recommendation'] = 'Tocó Take Profit 3, Felicidades la operación fue todo un éxito'
+            signal['expiry_countdown'] = 1
+            return signal
+        
+        if signal['type'] == 'SHORT' and current_price <= signal['tp3']:
+            signal['status'] = 'tp3_hit'
+            signal['recommendation'] = 'Tocó Take Profit 3, Felicidades la operación fue todo un éxito'
+            signal['expiry_countdown'] = 1
+            return signal
+        
+        # Verificar si la operación está tardando demasiado
+        expected_duration = max_duration / 2  # Mitad del tiempo máximo
+        if hours_passed > expected_duration and not signal.get('tp1_hit', False):
+            signal['status'] = 'taking_too_long'
+            signal['recommendation'] = 'Esta operación está durando mucho, sal con discreción'
+            signal['expiry_countdown'] = 1
+            return signal
+        
+        # Verificar si tocó TP1 pero no avanza
+        if signal.get('tp1_hit', False) and not signal.get('tp2_hit', False):
+            tp1_time = datetime.fromisoformat(signal['tp1_time'].replace('Z', '+00:00'))
+            tp1_hours = (current_time - tp1_time).total_seconds() / 3600
+            
+            if tp1_hours > (max_duration / 4):  # 25% del tiempo total después de TP1
+                signal['status'] = 'stalled_after_tp1'
+                signal['recommendation'] = 'No creo que toque TP2, sal con discreción con ganancias. Felicidades'
+                signal['expiry_countdown'] = 1
+                return signal
+        
+        # Si no ha pasado nada especial
+        signal['status'] = 'in_progress'
+        signal['recommendation'] = 'Sé paciente, tu operación se está ejecutando con normalidad'
+        return signal
+        
+    except Exception as e:
+        logger.error(f"Error verificando señal {signal['symbol']}: {str(e)}")
+        signal['status'] = 'error'
+        signal['recommendation'] = f'Error verificando estado: {str(e)}'
+        return signal
+
+# Actualizar win rate de un usuario
+def update_user_win_rate(username):
+    try:
+        user = USERS[username]
+        trades = user['trades']
+        
+        if not trades:
+            user['win_rate'] = 0
+            return
+        
+        winning_trades = 0
+        for trade in trades:
+            if trade.get('status') in ['tp1_hit', 'tp1_be', 'tp2_hit', 'tp2_tp1', 'tp3_hit']:
+                winning_trades += 1
+        
+        user['win_rate'] = round((winning_trades / len(trades)) * 100, 2)
+    except Exception as e:
+        logger.error(f"Error actualizando win rate para {username}: {str(e)}")
+
 # Tarea de actualización optimizada
 def update_task():
     while True:
@@ -666,11 +830,26 @@ def update_task():
                 timeframe_data['short_signals'] = all_short_signals
                 timeframe_data['scatter_data'] = all_scatter_data
                 
+                # Actualizar estado de señales guardadas
+                updated_saved_signals = deque()
+                for signal in analysis_state.saved_signals:
+                    updated_signal = check_saved_signal_status(signal.copy())
+                    
+                    # Manejar contador de expiración
+                    if 'expiry_countdown' in updated_signal:
+                        if updated_signal['expiry_countdown'] <= 0:
+                            continue  # Eliminar señal
+                        else:
+                            updated_signal['expiry_countdown'] -= 1
+                    
+                    updated_saved_signals.append(updated_signal)
+                
+                analysis_state.saved_signals = updated_saved_signals
                 analysis_state.cryptos_analyzed = total
                 analysis_state.last_update = datetime.now()
                 analysis_state.is_updating = False
                 
-                logger.info(f"Análisis completado: {len(all_long_signals)} LONG, {len(all_short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas")
+                logger.info(f"Análisis completado: {len(all_long_signals)} LONG, {len(all_short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas, {len(analysis_state.saved_signals)} guardadas")
                 
         except Exception as e:
             logger.error(f"Error crítico en actualización: {str(e)}")
@@ -705,6 +884,12 @@ def index():
             scatter_data = []
             historical_signals = []
         
+        # Obtener señales guardadas del usuario actual si está logueado
+        user_saved_signals = []
+        if 'username' in session and session['username'] in USERS:
+            user_data = USERS[session['username']]
+            user_saved_signals = user_data['trades'][-10:]  # Últimas 10 señales
+        
         last_update = analysis_state.last_update
         cryptos_analyzed = analysis_state.cryptos_analyzed
         
@@ -728,6 +913,7 @@ def index():
                                long_signals=long_signals, 
                                short_signals=short_signals,
                                historical_signals=historical_signals,
+                               saved_signals=user_saved_signals,
                                last_update=last_update,
                                params=params,
                                avg_adx_long=round(avg_adx_long, 1),
@@ -735,7 +921,76 @@ def index():
                                scatter_data=scatter_ready,
                                cryptos_analyzed=cryptos_analyzed,
                                is_updating=analysis_state.is_updating,
-                               update_progress=analysis_state.update_progress)
+                               update_progress=analysis_state.update_progress,
+                               users=USERS)
+
+@app.route('/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+        username = data.get('username', '')
+        password = data.get('password', '')
+        
+        if username in USERS and USERS[username]['password'] == password:
+            session['username'] = username
+            return jsonify({'status': 'success', 'message': 'Login exitoso', 'username': username})
+        else:
+            return jsonify({'status': 'error', 'message': 'Usuario o contraseña incorrectos'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'Error en login: {str(e)}'})
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return jsonify({'status': 'success', 'message': 'Logout exitoso'})
+
+@app.route('/save_signal', methods=['POST'])
+def save_signal():
+    try:
+        if 'username' not in session:
+            return jsonify({'status': 'error', 'message': 'Usuario no autenticado'})
+        
+        username = session['username']
+        data = request.get_json()
+        signal_index = data.get('index')
+        signal_type = data.get('type')  # 'historical' or 'current'
+        
+        with analysis_state.lock:
+            if signal_type == 'historical':
+                if signal_index < len(analysis_state.timeframe_data[analysis_state.params['timeframe']]['historical_signals']):
+                    signal = analysis_state.timeframe_data[analysis_state.params['timeframe']]['historical_signals'][signal_index]
+                else:
+                    return jsonify({'status': 'error', 'message': 'Señal histórica no encontrada'})
+            else:
+                # Para señales actuales (long o short)
+                signals = (analysis_state.timeframe_data[analysis_state.params['timeframe']]['long_signals'] 
+                          if data.get('signal_type') == 'LONG' else 
+                          analysis_state.timeframe_data[analysis_state.params['timeframe']]['short_signals'])
+                if signal_index < len(signals):
+                    signal = signals[signal_index]
+                else:
+                    return jsonify({'status': 'error', 'message': 'Señal no encontrada'})
+            
+            # Crear copia de la señal para el usuario
+            user_signal = signal.copy()
+            user_signal['saved_timestamp'] = datetime.now().isoformat()
+            user_signal['status'] = 'active'
+            user_signal['recommendation'] = 'Señal guardada, monitoreando...'
+            
+            # Guardar en el usuario
+            if len(USERS[username]['trades']) >= 10:
+                USERS[username]['trades'].pop(0)  # Eliminar la más antigua si hay más de 10
+            
+            USERS[username]['trades'].append(user_signal)
+            
+            # También guardar en el estado global (para seguimiento)
+            analysis_state.saved_signals.append(user_signal)
+            
+            return jsonify({'status': 'success', 'message': 'Señal guardada correctamente'})
+            
+    except Exception as e:
+        logger.error(f"Error guardando señal: {str(e)}")
+        return jsonify({'status': 'error', 'message': f'Error guardando señal: {str(e)}'})
 
 @app.route('/chart/<symbol>/<signal_type>')
 def get_chart(symbol, signal_type):
@@ -998,7 +1253,7 @@ def update_params():
         logger.error(f"Error actualizando parámetros: {str(e)}")
         return jsonify({
             'status': 'error',
-            'message': f"Error actualizando parámetros: {str(e)}"
+            'message': f'Error actualizando parámetros: {str(e)}'
         }), 500
 
 @app.route('/status')
