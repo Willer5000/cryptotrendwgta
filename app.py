@@ -21,7 +21,9 @@ import pytz
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # Import database models
-from database import db, User, SavedSignal, SIGNAL_DURATIONS, init_app
+from database import db, User, SavedSignal, SIGNAL_DURATIONS, init_app, \
+                    update_signal_status, check_signal_duration, calculate_winrate, \
+                    SignalStatus, SignalResult
 
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -35,7 +37,7 @@ logger = logging.getLogger(__name__)
 # Configuración
 CRYPTOS_FILE = 'cryptos.txt'
 CACHE_TIME = 300
-MAX_RETRIES = 3
+MAX_RETRIES = 2
 RETRY_DELAY = 1
 MAX_WORKERS = 3
 
@@ -61,7 +63,7 @@ DEFAULTS = {
     'min_volume_ratio': 1.2
 }
 
-# Mapeo de timeframes de KuCoin - CORREGIDO según tu indicador de referencia
+# Mapeo de timeframes de KuCoin - CORREGIDO según API actual
 KUCOIN_TIMEFRAMES = {
     '15m': '15min',
     '30m': '30min', 
@@ -75,6 +77,12 @@ KUCOIN_TIMEFRAMES = {
 # Configuración de la base de datos
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///trading_signals.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_recycle': 300,
+    'pool_pre_ping': True,
+    'pool_size': 10,
+    'max_overflow': 20,
+}
 
 # Inicializar la base de datos
 init_app(app)
@@ -115,38 +123,42 @@ class AnalysisState:
 
 analysis_state = AnalysisState()
 
-# Leer lista de criptomonedas
+# Leer lista de criptomonedas (filtrando pares no soportados)
 def load_cryptos():
     try:
         with open(CRYPTOS_FILE, 'r') as f:
             cryptos = [line.strip() for line in f.readlines() if line.strip()]
-            logger.info(f"Cargadas {len(cryptos)} criptomonedas")
-            return cryptos
+            
+        # Filtrar pares que sabemos que no están soportados
+        unsupported_pairs = ['RNDR', 'EOS', 'GALA', 'FTM', 'KLAY', 'GNO']
+        cryptos = [crypto for crypto in cryptos if crypto not in unsupported_pairs]
+        
+        logger.info(f"Cargadas {len(cryptos)} criptomonedas después de filtrar")
+        return cryptos
     except Exception as e:
         logger.error(f"Error cargando criptomonedas: {str(e)}")
         return ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'AVAX', 'DOT', 'LINK', 'MATIC']
 
-# Obtener datos de KuCoin optimizado - CORREGIDO según tu indicador de referencia
+# Obtener datos de KuCoin optimizado con mejor manejo de errores
 def get_kucoin_data(symbol, timeframe):
     if timeframe not in KUCOIN_TIMEFRAMES:
         logger.error(f"Timeframe {timeframe} no soportado")
         return None
         
     kucoin_tf = KUCOIN_TIMEFRAMES[timeframe]
-    # Usar el formato de URL de tu indicador de referencia
     url = f"https://api.kucoin.com/api/v1/market/candles?type={kucoin_tf}&symbol={symbol}-USDT"
     
     for attempt in range(MAX_RETRIES):
         try:
-            response = requests.get(url, timeout=15)
+            response = requests.get(url, timeout=10)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('code') == '200000' and data.get('data'):
                     candles = data['data']
                     if not candles:
+                        logger.warning(f"No hay datos para {symbol}-USDT en timeframe {timeframe}")
                         return None
                     
-                    # Invertir para orden cronológico (como en tu indicador de referencia)
                     candles.reverse()
                     
                     df = pd.DataFrame(candles, columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'turnover'])
@@ -157,17 +169,21 @@ def get_kucoin_data(symbol, timeframe):
                     
                     df = df.dropna()
                     
-                    if len(df) < 100:
+                    if len(df) < 50:  # Reducido el mínimo requerido
                         logger.warning(f"Datos insuficientes para {symbol}: {len(df)} velas")
                         return None
                     
-                    # Convertir timestamp (como en tu indicador de referencia)
+                    # Convertir timestamp
                     df['timestamp'] = pd.to_datetime(df['timestamp'].astype(float), unit='s', utc=True)
                     df['timestamp'] = df['timestamp'].dt.tz_convert(NY_TZ)
                     
                     return df
                 else:
-                    logger.warning(f"Respuesta API no válida para {symbol}: {data.get('msg', 'Unknown error')}")
+                    error_msg = data.get('msg', 'Unknown error')
+                    if 'Unsupported trading pair' in error_msg:
+                        logger.warning(f"Par no soportado: {symbol}-USDT")
+                        return None
+                    logger.warning(f"Respuesta API no válida para {symbol}: {error_msg}")
                     return None
             else:
                 logger.warning(f"Error HTTP {response.status_code} para {symbol}")
@@ -431,12 +447,12 @@ def format_xaxis_by_timeframe(timeframe, ax):
 # Analizar una criptomoneda (versión optimizada)
 def analyze_crypto(symbol, params, analyze_previous=False):
     df = get_kucoin_data(symbol, params['timeframe'])
-    if df is None or len(df) < 100:
+    if df is None or len(df) < 50:  # Reducido el mínimo requerido
         return None, None, 0, 0, 'Muy Bajo'
     
     try:
         df = calculate_indicators(df, params)
-        if df is None or len(df) < 50:
+        if df is None or len(df) < 30:  # Reducido el mínimo requerido
             return None, None, 0, 0, 'Muy Bajo'
         
         # Seleccionar vela actual o anterior
@@ -623,7 +639,7 @@ def process_crypto_batch(batch, params, previous_candle_start, timeframe_data):
 def get_saved_signals(user_id):
     try:
         signals = SavedSignal.query.filter_by(user_id=user_id).order_by(SavedSignal.timestamp.desc()).all()
-        return signals
+        return [signal.to_dict() for signal in signals]
     except Exception as e:
         logger.error(f"Error obteniendo señales guardadas: {str(e)}")
         return []
@@ -636,20 +652,20 @@ def save_signal_for_user(user_id, signal_data):
             user_id=user_id, 
             symbol=signal_data['symbol'], 
             signal_type=signal_data['type'],
-            status='active'
+            status=SignalStatus.ACTIVE.value
         ).first()
         
         if existing:
             return False, "Ya existe una señal activa para este par"
         
         # Verificar límite de 10 señales por usuario
-        count = SavedSignal.query.filter_by(user_id=user_id, status='active').count()
+        count = SavedSignal.query.filter_by(user_id=user_id, status=SignalStatus.ACTIVE.value).count()
         if count >= 10:
             return False, "Límite de 10 señales activas alcanzado"
         
         # Calcular fecha de expiración
         timeframe = signal_data['timeframe']
-        duration_hours = SIGNAL_DURATIONS.get(timeframe, 16)
+        duration_hours = SIGNAL_DURATIONS.get(timeframe, 24)
         expiration = datetime.utcnow() + timedelta(hours=duration_hours)
         
         # Crear señal
@@ -663,8 +679,7 @@ def save_signal_for_user(user_id, signal_data):
             tp2_price=signal_data['tp2'],
             tp3_price=signal_data['tp3'],
             timeframe=timeframe,
-            expiration=expiration,
-            status='active'
+            expiration=expiration
         )
         
         db.session.add(signal)
@@ -681,7 +696,17 @@ def remove_saved_signal(signal_id, user_id):
     try:
         signal = SavedSignal.query.filter_by(id=signal_id, user_id=user_id).first()
         if signal:
-            db.session.delete(signal)
+            # Si la señal estaba activa, actualizar estadísticas
+            if signal.status == SignalStatus.ACTIVE.value:
+                user = User.query.get(user_id)
+                user.total_trades += 1
+                # Marcar como salida manual
+                signal.result = SignalResult.MANUAL_EXIT.value
+                signal.status = SignalStatus.COMPLETED.value
+                signal.recommendation = "Salida manual de la operación"
+            else:
+                db.session.delete(signal)
+            
             db.session.commit()
             return True
         return False
@@ -690,124 +715,61 @@ def remove_saved_signal(signal_id, user_id):
         logger.error(f"Error eliminando señal: {str(e)}")
         return False
 
-# Actualizar recomendaciones para señales guardadas
-def update_saved_signals_recommendations():
+# Actualizar todas las señales guardadas
+def update_all_saved_signals():
     try:
-        signals = SavedSignal.query.filter_by(status='active').all()
+        signals = SavedSignal.query.filter(SavedSignal.status.in_([SignalStatus.ACTIVE.value, SignalStatus.COMPLETED.value])).all()
         
         for signal in signals:
-            # Obtener datos actuales del mercado
-            df = get_kucoin_data(signal.symbol, signal.timeframe)
-            if df is None or len(df) < 10:
-                continue
-            
-            current_price = df['close'].iloc[-1]
-            current_high = df['high'].iloc[-1]
-            current_low = df['low'].iloc[-1]
-            
-            # Verificar el estado de la señal según las reglas específicas
-            result, recommendation = check_signal_status(signal, current_price, current_high, current_low)
-            
-            if result or recommendation:
-                signal.result = result
-                signal.recommendation = recommendation
+            try:
+                # Obtener precio actual
+                df = get_kucoin_data(signal.symbol, signal.timeframe)
+                if df is None or len(df) < 5:
+                    continue
                 
-                # Si la señal terminó (SL, TP3 o expirada), marcarla como inactiva después de 1 vela
-                if result in ['sl', 'tp3']:
-                    # Extender la expiración por 1 vela más
-                    timeframe_delta = {
-                        '15m': timedelta(minutes=15),
-                        '30m': timedelta(minutes=30),
-                        '1h': timedelta(hours=1),
-                        '2h': timedelta(hours=2),
-                        '4h': timedelta(hours=4),
-                        '1d': timedelta(days=1),
-                        '1w': timedelta(weeks=1)
-                    }.get(signal.timeframe, timedelta(hours=1))
+                current_price = df['close'].iloc[-1]
+                signal.current_price = current_price
+                signal.price_updated = datetime.utcnow()
+                
+                # Incrementar contador de velas
+                signal.candles_since_entry += 1
+                
+                # Si la señal está activa, verificar niveles de precio
+                if signal.status == SignalStatus.ACTIVE.value:
+                    result, recommendation = signal.check_price_levels(current_price)
                     
-                    signal.expiration = datetime.utcnow() + timeframe_delta
-                    signal.status = 'inactive'
+                    if result:
+                        update_signal_status(signal, result.value, recommendation)
+                        
+                        # Actualizar flags según el resultado
+                        if result == SignalResult.TP1:
+                            signal.hit_tp1 = True
+                        elif result == SignalResult.TP2:
+                            signal.hit_tp2 = True
+                        elif result == SignalResult.TP3:
+                            signal.hit_tp3 = True
+                        elif result == SignalResult.BREAK_EVEN:
+                            signal.moved_sl_to_be = True
+                    
+                    # Verificar si la señal está durando demasiado
+                    duration_warning = check_signal_duration(signal)
+                    if duration_warning and not signal.recommendation:
+                        signal.recommendation = duration_warning
+                        db.session.commit()
+                
+                # Verificar si la señal expiró
+                if signal.is_expired() and signal.status == SignalStatus.ACTIVE.value:
+                    update_signal_status(signal, SignalResult.NONE.value, "Señal expirada sin resultado claro")
+                    signal.status = SignalStatus.EXPIRED.value
+            
+            except Exception as e:
+                logger.error(f"Error actualizando señal {signal.id}: {str(e)}")
+                continue
         
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error actualizando recomendaciones: {str(e)}")
-
-# Verificar el estado de una señal según las reglas específicas
-def check_signal_status(signal, current_price, current_high, current_low):
-    result = signal.result
-    recommendation = signal.recommendation
-    
-    # Regla 1: Si toca SL
-    if (signal.signal_type == 'LONG' and current_low <= signal.sl_price) or \
-       (signal.signal_type == 'SHORT' and current_high >= signal.sl_price):
-        return 'sl', "Toco Stop Loss, esta fue una falsa señal. Lo siento"
-    
-    # Regla 3: Si toca TP1
-    if (signal.signal_type == 'LONG' and current_high >= signal.tp1_price) or \
-       (signal.signal_type == 'SHORT' and current_low <= signal.tp1_price):
-        if result != 'tp1':
-            return 'tp1', "Toco Take Profit 1, coloca tu SL a break even"
-    
-    # Regla 4: Si toca TP1 y luego break even (precio de entrada)
-    if result == 'tp1':
-        if (signal.signal_type == 'LONG' and current_low <= signal.entry_price) or \
-           (signal.signal_type == 'SHORT' and current_high >= signal.entry_price):
-            return 'tp1_be', "Operación exitosa, toco TP1 y luego Break Even"
-    
-    # Regla 5: Si toca TP1 y no toca TP2 después de un tiempo
-    if result == 'tp1':
-        # Verificar si ha pasado la mitad del tiempo de la señal
-        half_time = signal.timestamp + (signal.expiration - signal.timestamp) / 2
-        if datetime.utcnow() > half_time:
-            return 'tp1_exit', "No creo que toque TP2, salte con discreción con ganancias. Felicidades"
-    
-    # Regla 6: Si toca TP2
-    if (signal.signal_type == 'LONG' and current_high >= signal.tp2_price) or \
-       (signal.signal_type == 'SHORT' and current_low <= signal.tp2_price):
-        if result != 'tp2':
-            return 'tp2', "Toco Take Profit 2, si gustas salte de la operación con buenas ganancias o coloca SL en Take Profit 1"
-    
-    # Regla 7: Si toca TP2 y luego TP1
-    if result == 'tp2':
-        if (signal.signal_type == 'LONG' and current_low <= signal.tp1_price) or \
-           (signal.signal_type == 'SHORT' and current_high >= signal.tp1_price):
-            return 'tp2_tp1', "Si no te saliste de la operación anterior y colocaste tu SL en TP1, felicidades de todas maneras tuviste una buena utilidad, caso contrario salte con discreción"
-    
-    # Regla 8: Si toca TP3
-    if (signal.signal_type == 'LONG' and current_high >= signal.tp3_price) or \
-       (signal.signal_type == 'SHORT' and current_low <= signal.tp3_price):
-        return 'tp3', "Toco Take Profit 3, Felicidades la operación fue todo un éxito"
-    
-    # Regla 2: Si la operación no toca nada y ha pasado la mitad del tiempo
-    half_time = signal.timestamp + (signal.expiration - signal.timestamp) / 2
-    if datetime.utcnow() > half_time and result is None:
-        return None, "Esta operación está durando mucho, sal de esta con discreción"
-    
-    # Si no hay cambios
-    return result, recommendation
-
-# Calcular winrate de un usuario
-def calculate_user_winrate(user_id):
-    try:
-        # Obtener todas las señales con resultado
-        signals = SavedSignal.query.filter(
-            SavedSignal.user_id == user_id,
-            SavedSignal.result.isnot(None)
-        ).all()
-        
-        total_signals = len(signals)
-        if total_signals == 0:
-            return 0
-        
-        # Contar señales ganadoras (cualquier TP)
-        winning_signals = sum(1 for s in signals if s.result.startswith('tp'))
-        
-        winrate = (winning_signals / total_signals) * 100
-        return winrate
-    except Exception as e:
-        logger.error(f"Error calculando winrate: {str(e)}")
-        return 0
+        logger.error(f"Error actualizando todas las señales: {str(e)}")
 
 # Tarea de actualización optimizada
 def update_task():
@@ -841,8 +803,8 @@ def update_task():
                 
                 previous_candle_start = get_previous_candle_start(current_timeframe)
                 
-                # Procesar en lotes secuenciales (más estable que paralelo)
-                batch_size = 5  # Reducido para mayor estabilidad
+                # Procesar en lotes más pequeños para evitar timeout
+                batch_size = 5
                 batches = [cryptos[i:i+batch_size] for i in range(0, len(cryptos), batch_size)]
                 
                 for batch in batches:
@@ -875,8 +837,8 @@ def update_task():
                 
                 logger.info(f"Análisis completado: {len(all_long_signals)} LONG, {len(all_short_signals)} SHORT, {len(timeframe_data['historical_signals'])} históricas")
                 
-                # Actualizar recomendaciones de señales guardadas
-                update_saved_signals_recommendations()
+                # Actualizar todas las señales guardadas
+                update_all_saved_signals()
                 
         except Exception as e:
             logger.error(f"Error crítico en actualización: {str(e)}")
@@ -895,62 +857,66 @@ logger.info("Hilo de actualización iniciado")
 # Rutas de Flask
 @app.route('/')
 def index():
-    with analysis_state.lock:
-        params = analysis_state.params
-        current_timeframe = params['timeframe']
-        
-        if current_timeframe in analysis_state.timeframe_data:
-            timeframe_data = analysis_state.timeframe_data[current_timeframe]
-            long_signals = timeframe_data['long_signals'][:50]
-            short_signals = timeframe_data['short_signals'][:50]
-            scatter_data = timeframe_data['scatter_data']
-            historical_signals = list(timeframe_data['historical_signals'])[-20:]
-        else:
-            long_signals = []
-            short_signals = []
-            scatter_data = []
-            historical_signals = []
-        
-        last_update = analysis_state.last_update
-        cryptos_analyzed = analysis_state.cryptos_analyzed
-        
-        avg_adx_long = np.mean([s['adx'] for s in long_signals]) if long_signals else 0
-        avg_adx_short = np.mean([s['adx'] for s in short_signals]) if short_signals else 0
-        
-        scatter_ready = []
-        for item in scatter_data:
-            long_prob = max(0, min(100, item.get('long_prob', 0)))
-            short_prob = max(0, min(100, item.get('short_prob', 0)))
-            scatter_ready.append({
-                'symbol': item['symbol'],
-                'long_prob': long_prob,
-                'short_prob': short_prob,
-                'volume': item['volume']
-            })
-        
-        historical_signals.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
-        
-        # Obtener señales guardadas si el usuario está logueado
-        saved_signals = []
-        user_winrate = 0
-        if 'user_id' in session:
-            saved_signals = get_saved_signals(session['user_id'])
-            user_winrate = calculate_user_winrate(session['user_id'])
-        
-        return render_template('index.html', 
-                               long_signals=long_signals, 
-                               short_signals=short_signals,
-                               historical_signals=historical_signals,
-                               saved_signals=saved_signals,
-                               last_update=last_update,
-                               params=params,
-                               avg_adx_long=round(avg_adx_long, 1),
-                               avg_adx_short=round(avg_adx_short, 1),
-                               scatter_data=scatter_ready,
-                               cryptos_analyzed=cryptos_analyzed,
-                               is_updating=analysis_state.is_updating,
-                               update_progress=analysis_state.update_progress,
-                               user_winrate=user_winrate)
+    try:
+        with analysis_state.lock:
+            params = analysis_state.params
+            current_timeframe = params['timeframe']
+            
+            if current_timeframe in analysis_state.timeframe_data:
+                timeframe_data = analysis_state.timeframe_data[current_timeframe]
+                long_signals = timeframe_data['long_signals'][:50]
+                short_signals = timeframe_data['short_signals'][:50]
+                scatter_data = timeframe_data['scatter_data']
+                historical_signals = list(timeframe_data['historical_signals'])[-20:]
+            else:
+                long_signals = []
+                short_signals = []
+                scatter_data = []
+                historical_signals = []
+            
+            last_update = analysis_state.last_update
+            cryptos_analyzed = analysis_state.cryptos_analyzed
+            
+            avg_adx_long = np.mean([s['adx'] for s in long_signals]) if long_signals else 0
+            avg_adx_short = np.mean([s['adx'] for s in short_signals]) if short_signals else 0
+            
+            scatter_ready = []
+            for item in scatter_data:
+                long_prob = max(0, min(100, item.get('long_prob', 0)))
+                short_prob = max(0, min(100, item.get('short_prob', 0)))
+                scatter_ready.append({
+                    'symbol': item['symbol'],
+                    'long_prob': long_prob,
+                    'short_prob': short_prob,
+                    'volume': item['volume']
+                })
+            
+            historical_signals.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+            
+            # Obtener señales guardadas si el usuario está logueado
+            saved_signals = []
+            user_winrate = 0
+            if 'user_id' in session:
+                saved_signals = get_saved_signals(session['user_id'])
+                user_winrate = calculate_winrate(session['user_id'])
+            
+            return render_template('index.html', 
+                                   long_signals=long_signals, 
+                                   short_signals=short_signals,
+                                   historical_signals=historical_signals,
+                                   saved_signals=saved_signals,
+                                   last_update=last_update,
+                                   params=params,
+                                   avg_adx_long=round(avg_adx_long, 1),
+                                   avg_adx_short=round(avg_adx_short, 1),
+                                   scatter_data=scatter_ready,
+                                   cryptos_analyzed=cryptos_analyzed,
+                                   is_updating=analysis_state.is_updating,
+                                   update_progress=analysis_state.update_progress,
+                                   user_winrate=user_winrate)
+    except Exception as e:
+        logger.error(f"Error en página principal: {str(e)}")
+        return "Error interno del servidor", 500
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -964,9 +930,8 @@ def login():
             session['user_id'] = user.id
             session['username'] = username
             
-            # Calcular winrate actual
-            winrate = calculate_user_winrate(user.id)
-            user.winrate = winrate
+            # Actualizar última conexión
+            user.last_login = datetime.utcnow()
             db.session.commit()
             
             return jsonify({'status': 'success', 'message': 'Login exitoso'})
@@ -1015,11 +980,11 @@ def get_chart(symbol, signal_type):
     try:
         params = analysis_state.params
         df = get_kucoin_data(symbol, params['timeframe'])
-        if df is None or len(df) < 100:
+        if df is None or len(df) < 50:
             return "Datos no disponibles", 404
         
         df = calculate_indicators(df, params)
-        if df is None or len(df) < 50:
+        if df is None or len(df) < 30:
             return "Datos insuficientes", 404
         
         current_timeframe = params['timeframe']
@@ -1116,11 +1081,11 @@ def get_historical_chart(symbol, signal_type):
     try:
         params = analysis_state.params
         df = get_kucoin_data(symbol, params['timeframe'])
-        if df is None or len(df) < 100:
+        if df is None or len(df) < 50:
             return "Datos no disponibles", 404
         
         df = calculate_indicators(df, params)
-        if df is None or len(df) < 50:
+        if df is None or len(df) < 30:
             return "Datos insuficientes", 404
         
         current_timeframe = params['timeframe']
