@@ -33,35 +33,103 @@ class SavedSignal(db.Model):
     status = db.Column(db.String(20), default='active')
     result = db.Column(db.String(20))
     recommendation = db.Column(db.Text)
+    last_alert = db.Column(db.DateTime)
     
     def is_expired(self):
         return datetime.utcnow() > self.expiration
     
-    def check_status(self, current_price):
-        if self.signal_type == 'LONG':
-            if current_price <= self.sl_price:
-                return 'sl', "Toco Stop Loss, esta fue una falsa señal. Lo siento"
-            elif current_price >= self.tp3_price:
-                return 'tp3', "Toco Take Profit 3, Felicidades la operación fue todo un éxito"
-            elif current_price >= self.tp2_price:
-                return 'tp2', "Toco Take Profit 2, si gustas salte de la operación con buenas ganancias o coloca SL en Take Profit 1"
-            elif current_price >= self.tp1_price:
-                return 'tp1', "Toco Take Profit 1, coloca tu SL a break even"
-        else:  # SHORT
-            if current_price >= self.sl_price:
-                return 'sl', "Toco Stop Loss, esta fue una falsa señal. Lo siento"
-            elif current_price <= self.tp3_price:
-                return 'tp3', "Toco Take Profit 3, Felicidades la operación fue todo un éxito"
-            elif current_price <= self.tp2_price:
-                return 'tp2', "Toco Take Profit 2, si gustas salte de la operación con buenas ganancias o coloca SL en Take Profit 1"
-            elif current_price <= self.tp1_price:
-                return 'tp1', "Toco Take Profit 1, coloca tu SL a break even"
+    def check_status(self, current_price, high_price, low_price):
+        # Si ya hay un resultado final, no hacer nada
+        if self.result in ['sl', 'tp3', 'expired']:
+            return self.result, self.recommendation
+
+        # Regla 1: Si toca SL
+        if (self.signal_type == 'LONG' and low_price <= self.sl_price) or \
+           (self.signal_type == 'SHORT' and high_price >= self.sl_price):
+            self.result = 'sl'
+            self.recommendation = "Toco Stop Loss, esta fue una falsa señal. Lo siento"
+            # Extender expiración por 1 vela más
+            self.extend_expiration(1)
+            return self.result, self.recommendation
+
+        # Regla 3: Si toca TP1
+        if (self.signal_type == 'LONG' and high_price >= self.tp1_price) or \
+           (self.signal_type == 'SHORT' and low_price <= self.tp1_price):
+            if self.result != 'tp1':
+                self.result = 'tp1'
+                self.recommendation = "Toco Take Profit 1, coloca tu SL a break even"
+                self.last_alert = datetime.utcnow()
+            return self.result, self.recommendation
+
+        # Regla 4: Si toca TP1 y luego break even (precio de entrada)
+        if self.result == 'tp1':
+            if (self.signal_type == 'LONG' and low_price <= self.entry_price) or \
+               (self.signal_type == 'SHORT' and high_price >= self.entry_price):
+                self.result = 'tp1_be'
+                self.recommendation = "Operación exitosa, toco TP1 y luego Break Even"
+                self.extend_expiration(1)
+                return self.result, self.recommendation
+
+        # Regla 5: Si toca TP1 y no toca TP2 después de un tiempo
+        if self.result == 'tp1' and self.last_alert:
+            # Verificar si ha pasado la mitad del tiempo de la señal
+            half_time = self.timestamp + (self.expiration - self.timestamp) / 2
+            if datetime.utcnow() > half_time:
+                self.result = 'tp1_exit'
+                self.recommendation = "No creo que toque TP2, salte con discreción con ganancias. Felicidades"
+                self.extend_expiration(1)
+                return self.result, self.recommendation
+
+        # Regla 6: Si toca TP2
+        if (self.signal_type == 'LONG' and high_price >= self.tp2_price) or \
+           (self.signal_type == 'SHORT' and low_price <= self.tp2_price):
+            if self.result != 'tp2':
+                self.result = 'tp2'
+                self.recommendation = "Toco Take Profit 2, si gustas salte de la operación con buenas ganancias o coloca SL en Take Profit 1"
+                self.last_alert = datetime.utcnow()
+            return self.result, self.recommendation
+
+        # Regla 7: Si toca TP2 y luego TP1
+        if self.result == 'tp2':
+            if (self.signal_type == 'LONG' and low_price <= self.tp1_price) or \
+               (self.signal_type == 'SHORT' and high_price >= self.tp1_price):
+                self.result = 'tp2_tp1'
+                self.recommendation = "Si no te saliste de la operación anterior y colocaste tu SL en TP1, felicidades de todas maneras tuviste una buena utilidad, caso contrario salte con discreción"
+                self.extend_expiration(1)
+                return self.result, self.recommendation
+
+        # Regla 8: Si toca TP3
+        if (self.signal_type == 'LONG' and high_price >= self.tp3_price) or \
+           (self.signal_type == 'SHORT' and low_price <= self.tp3_price):
+            self.result = 'tp3'
+            self.recommendation = "Toco Take Profit 3, Felicidades la operación fue todo un éxito"
+            self.extend_expiration(1)
+            return self.result, self.recommendation
+
+        # Regla 2: Si la operación no toca nada y ha pasado la mitad del tiempo
+        half_time = self.timestamp + (self.expiration - self.timestamp) / 2
+        if datetime.utcnow() > half_time and self.result is None:
+            self.recommendation = "Esta operación está durando mucho, sal de esta con discreción"
+            self.last_alert = datetime.utcnow()
+            # No cambiamos el resultado, solo la recomendación
+            return self.result, self.recommendation
+
+        # Si no hay cambios
+        return self.result, self.recommendation
+
+    def extend_expiration(self, candles=1):
+        # Extender la expiración por un número de velas
+        timeframe_delta = {
+            '15m': timedelta(minutes=15),
+            '30m': timedelta(minutes=30),
+            '1h': timedelta(hours=1),
+            '2h': timedelta(hours=2),
+            '4h': timedelta(hours=4),
+            '1d': timedelta(days=1),
+            '1w': timedelta(weeks=1)
+        }.get(self.timeframe, timedelta(hours=1))
         
-        # Check if signal expired
-        if self.is_expired():
-            return 'expired', "Señal expirada sin resultado claro"
-            
-        return None, None
+        self.expiration = datetime.utcnow() + candles * timeframe_delta
 
 # Duración de señales guardadas por timeframe (en horas)
 SIGNAL_DURATIONS = {
