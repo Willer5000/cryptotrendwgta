@@ -8,3 +8,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.6
+      - key: DATABASE_URL
+        fromService:
+          type: postgres
+          name: wgta-crypto-db
+          property: connectionString
+
+  - type: postgres
+    name: wgta-crypto-db
+    plan: free
+    ipAllowList: []  # Allow all IPs
