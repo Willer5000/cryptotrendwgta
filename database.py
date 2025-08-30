@@ -1,8 +1,24 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 import pytz
+from enum import Enum
 
 db = SQLAlchemy()
+
+class SignalStatus(Enum):
+    ACTIVE = 'active'
+    COMPLETED = 'completed'
+    EXPIRED = 'expired'
+    CANCELLED = 'cancelled'
+
+class SignalResult(Enum):
+    NONE = 'none'
+    SL = 'sl'
+    TP1 = 'tp1'
+    TP2 = 'tp2'
+    TP3 = 'tp3'
+    BREAK_EVEN = 'break_even'
+    MANUAL_EXIT = 'manual_exit'
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -10,8 +26,11 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(120), nullable=False)
+    total_trades = db.Column(db.Integer, default=0)
+    winning_trades = db.Column(db.Integer, default=0)
     winrate = db.Column(db.Float, default=0.0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_login = db.Column(db.DateTime, default=datetime.utcnow)
     
     signals = db.relationship('SavedSignal', backref='user', lazy=True)
 
@@ -30,116 +49,100 @@ class SavedSignal(db.Model):
     timeframe = db.Column(db.String(10), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     expiration = db.Column(db.DateTime, nullable=False)
-    status = db.Column(db.String(20), default='active')
-    result = db.Column(db.String(20))
+    status = db.Column(db.String(20), default=SignalStatus.ACTIVE.value)
+    result = db.Column(db.String(20), default=SignalResult.NONE.value)
     recommendation = db.Column(db.Text)
-    last_alert = db.Column(db.DateTime)
+    current_price = db.Column(db.Float)
+    price_updated = db.Column(db.DateTime)
+    candles_since_entry = db.Column(db.Integer, default=0)
+    
+    # Campos para seguimiento de estado
+    hit_tp1 = db.Column(db.Boolean, default=False)
+    hit_tp2 = db.Column(db.Boolean, default=False)
+    hit_tp3 = db.Column(db.Boolean, default=False)
+    moved_sl_to_be = db.Column(db.Boolean, default=False)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'symbol': self.symbol,
+            'signal_type': self.signal_type,
+            'entry_price': self.entry_price,
+            'sl_price': self.sl_price,
+            'tp1_price': self.tp1_price,
+            'tp2_price': self.tp2_price,
+            'tp3_price': self.tp3_price,
+            'timeframe': self.timeframe,
+            'timestamp': self.timestamp.isoformat(),
+            'expiration': self.expiration.isoformat(),
+            'status': self.status,
+            'result': self.result,
+            'recommendation': self.recommendation,
+            'current_price': self.current_price,
+            'candles_since_entry': self.candles_since_entry
+        }
     
     def is_expired(self):
         return datetime.utcnow() > self.expiration
     
-    def check_status(self, current_price, high_price, low_price):
-        # Si ya hay un resultado final, no hacer nada
-        if self.result in ['sl', 'tp3', 'expired']:
-            return self.result, self.recommendation
-
-        # Regla 1: Si toca SL
-        if (self.signal_type == 'LONG' and low_price <= self.sl_price) or \
-           (self.signal_type == 'SHORT' and high_price >= self.sl_price):
-            self.result = 'sl'
-            self.recommendation = "Toco Stop Loss, esta fue una falsa señal. Lo siento"
-            # Extender expiración por 1 vela más
-            self.extend_expiration(1)
-            return self.result, self.recommendation
-
-        # Regla 3: Si toca TP1
-        if (self.signal_type == 'LONG' and high_price >= self.tp1_price) or \
-           (self.signal_type == 'SHORT' and low_price <= self.tp1_price):
-            if self.result != 'tp1':
-                self.result = 'tp1'
-                self.recommendation = "Toco Take Profit 1, coloca tu SL a break even"
-                self.last_alert = datetime.utcnow()
-            return self.result, self.recommendation
-
-        # Regla 4: Si toca TP1 y luego break even (precio de entrada)
-        if self.result == 'tp1':
-            if (self.signal_type == 'LONG' and low_price <= self.entry_price) or \
-               (self.signal_type == 'SHORT' and high_price >= self.entry_price):
-                self.result = 'tp1_be'
-                self.recommendation = "Operación exitosa, toco TP1 y luego Break Even"
-                self.extend_expiration(1)
-                return self.result, self.recommendation
-
-        # Regla 5: Si toca TP1 y no toca TP2 después de un tiempo
-        if self.result == 'tp1' and self.last_alert:
-            # Verificar si ha pasado la mitad del tiempo de la señal
-            half_time = self.timestamp + (self.expiration - self.timestamp) / 2
-            if datetime.utcnow() > half_time:
-                self.result = 'tp1_exit'
-                self.recommendation = "No creo que toque TP2, salte con discreción con ganancias. Felicidades"
-                self.extend_expiration(1)
-                return self.result, self.recommendation
-
-        # Regla 6: Si toca TP2
-        if (self.signal_type == 'LONG' and high_price >= self.tp2_price) or \
-           (self.signal_type == 'SHORT' and low_price <= self.tp2_price):
-            if self.result != 'tp2':
-                self.result = 'tp2'
-                self.recommendation = "Toco Take Profit 2, si gustas salte de la operación con buenas ganancias o coloca SL en Take Profit 1"
-                self.last_alert = datetime.utcnow()
-            return self.result, self.recommendation
-
-        # Regla 7: Si toca TP2 y luego TP1
-        if self.result == 'tp2':
-            if (self.signal_type == 'LONG' and low_price <= self.tp1_price) or \
-               (self.signal_type == 'SHORT' and high_price >= self.tp1_price):
-                self.result = 'tp2_tp1'
-                self.recommendation = "Si no te saliste de la operación anterior y colocaste tu SL en TP1, felicidades de todas maneras tuviste una buena utilidad, caso contrario salte con discreción"
-                self.extend_expiration(1)
-                return self.result, self.recommendation
-
-        # Regla 8: Si toca TP3
-        if (self.signal_type == 'LONG' and high_price >= self.tp3_price) or \
-           (self.signal_type == 'SHORT' and low_price <= self.tp3_price):
-            self.result = 'tp3'
-            self.recommendation = "Toco Take Profit 3, Felicidades la operación fue todo un éxito"
-            self.extend_expiration(1)
-            return self.result, self.recommendation
-
-        # Regla 2: Si la operación no toca nada y ha pasado la mitad del tiempo
-        half_time = self.timestamp + (self.expiration - self.timestamp) / 2
-        if datetime.utcnow() > half_time and self.result is None:
-            self.recommendation = "Esta operación está durando mucho, sal de esta con discreción"
-            self.last_alert = datetime.utcnow()
-            # No cambiamos el resultado, solo la recomendación
-            return self.result, self.recommendation
-
-        # Si no hay cambios
-        return self.result, self.recommendation
-
-    def extend_expiration(self, candles=1):
-        # Extender la expiración por un número de velas
-        timeframe_delta = {
-            '15m': timedelta(minutes=15),
-            '30m': timedelta(minutes=30),
-            '1h': timedelta(hours=1),
-            '2h': timedelta(hours=2),
-            '4h': timedelta(hours=4),
-            '1d': timedelta(days=1),
-            '1w': timedelta(weeks=1)
-        }.get(self.timeframe, timedelta(hours=1))
+    def check_price_levels(self, current_price):
+        """Verificar si el precio ha tocado niveles importantes"""
+        if self.signal_type == 'LONG':
+            # Check for SL
+            if current_price <= self.sl_price:
+                return SignalResult.SL, "Toco Stop Loss, esta fue una falsa señal. Lo siento"
+            
+            # Check for TP levels
+            if current_price >= self.tp3_price and not self.hit_tp3:
+                return SignalResult.TP3, "Toco Take Profit 3, Felicidades la operación fue todo un éxito"
+            elif current_price >= self.tp2_price and not self.hit_tp2:
+                return SignalResult.TP2, "Toco Take Profit 2, si gustas salte de la operación con buenas ganancias o coloca SL en Take Profit 1"
+            elif current_price >= self.tp1_price and not self.hit_tp1:
+                return SignalResult.TP1, "Toco Take Profit 1, coloca tu SL a break even"
+            
+            # Check if price returned to entry after hitting TP1
+            if self.hit_tp1 and current_price <= self.entry_price and not self.moved_sl_to_be:
+                return SignalResult.BREAK_EVEN, "Operación exitosa, toco TP1 y luego Break Even"
+                
+        else:  # SHORT
+            # Check for SL
+            if current_price >= self.sl_price:
+                return SignalResult.SL, "Toco Stop Loss, esta fue una falsa señal. Lo siento"
+            
+            # Check for TP levels
+            if current_price <= self.tp3_price and not self.hit_tp3:
+                return SignalResult.TP3, "Toco Take Profit 3, Felicidades la operación fue todo un éxito"
+            elif current_price <= self.tp2_price and not self.hit_tp2:
+                return SignalResult.TP2, "Toco Take Profit 2, si gustas salte de la operación con buenas ganancias o coloca SL en Take Profit 1"
+            elif current_price <= self.tp1_price and not self.hit_tp1:
+                return SignalResult.TP1, "Toco Take Profit 1, coloca tu SL a break even"
+            
+            # Check if price returned to entry after hitting TP1
+            if self.hit_tp1 and current_price >= self.entry_price and not self.moved_sl_to_be:
+                return SignalResult.BREAK_EVEN, "Operación exitosa, toco TP1 y luego Break Even"
         
-        self.expiration = datetime.utcnow() + candles * timeframe_delta
+        return None, None
 
 # Duración de señales guardadas por timeframe (en horas)
 SIGNAL_DURATIONS = {
-    '15m': 4,    # 4 horas (16 velas)
-    '30m': 8,    # 8 horas (16 velas)
-    '1h': 16,    # 16 horas (16 velas)
-    '2h': 32,    # 32 horas (16 velas)
-    '4h': 64,    # 64 horas (16 velas)
-    '1d': 384,   # 16 días (16 velas)
-    '1w': 2688   # 16 semanas (16 velas)
+    '15m': 6,    # 6 horas (24 velas de 15m)
+    '30m': 12,   # 12 horas (24 velas de 30m)
+    '1h': 24,    # 24 horas (24 velas de 1h)
+    '2h': 48,    # 48 horas (24 velas de 2h)
+    '4h': 96,    # 96 horas (24 velas de 4h)
+    '1d': 576,   # 24 días (24 velas de 1d)
+    '1w': 4032   # 24 semanas (24 velas de 1w)
+}
+
+# Tiempo de vela adicional después de alertas (en horas)
+EXTRA_CANDLE_DURATION = {
+    '15m': 0.25,  # 15 minutos
+    '30m': 0.5,   # 30 minutos
+    '1h': 1,      # 1 hora
+    '2h': 2,      # 2 horas
+    '4h': 4,      # 4 horas
+    '1d': 24,     # 1 día
+    '1w': 168     # 1 semana
 }
 
 def init_app(app):
@@ -165,3 +168,58 @@ def init_app(app):
                 db.session.add(user)
         
         db.session.commit()
+
+def calculate_winrate(user_id):
+    """Calcular winrate actualizado para un usuario"""
+    user = User.query.get(user_id)
+    if not user:
+        return 0.0
+    
+    if user.total_trades > 0:
+        user.winrate = (user.winning_trades / user.total_trades) * 100
+    else:
+        user.winrate = 0.0
+    
+    db.session.commit()
+    return user.winrate
+
+def update_signal_status(signal, result, recommendation):
+    """Actualizar el estado de una señal y ajustar estadísticas del usuario"""
+    if result != signal.result:  # Solo actualizar si el resultado cambió
+        user = signal.user
+        
+        # Si era una operación activa y ahora tiene resultado, actualizar stats
+        if signal.status == SignalStatus.ACTIVE.value and result != SignalResult.NONE.value:
+            user.total_trades += 1
+            
+            # Considerar operaciones ganadoras
+            if result in [SignalResult.TP1.value, SignalResult.TP2.value, 
+                         SignalResult.TP3.value, SignalResult.BREAK_EVEN.value]:
+                user.winning_trades += 1
+        
+        signal.result = result
+        signal.recommendation = recommendation
+        
+        # Si el resultado finaliza la operación, marcar como completada
+        if result in [SignalResult.SL.value, SignalResult.TP3.value, 
+                     SignalResult.MANUAL_EXIT.value, SignalResult.BREAK_EVEN.value]:
+            signal.status = SignalStatus.COMPLETED.value
+            # Añadir tiempo extra de vela
+            extra_hours = EXTRA_CANDLE_DURATION.get(signal.timeframe, 1)
+            signal.expiration = datetime.utcnow() + timedelta(hours=extra_hours)
+        
+        db.session.commit()
+        calculate_winrate(user.id)
+
+def check_signal_duration(signal):
+    """Verificar si la señal está durando demasiado"""
+    timeframe = signal.timeframe
+    expected_duration = SIGNAL_DURATIONS.get(timeframe, 24)
+    half_duration = expected_duration / 2
+    
+    time_since_creation = (datetime.utcnow() - signal.timestamp).total_seconds() / 3600  # horas
+    
+    if time_since_creation > half_duration and signal.result == SignalResult.NONE.value:
+        return "Esta operación está durando mucho, sal de esta con discreción"
+    
+    return None
